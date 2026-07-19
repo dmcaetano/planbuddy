@@ -35,6 +35,11 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, repairNo
         messages,
         response_format: { type: "json_object" },
         temperature: 0.7,
+        max_tokens: 3000,
+        // OpenRouter otherwise prioritizes its lowest-price provider pool.
+        // PlanBuddy is interactive, so route this same model by measured
+        // throughput and keep provider fallback enabled for resilience.
+        provider: { sort: "throughput", allow_fallbacks: true },
       }),
       signal: controller.signal,
     });
