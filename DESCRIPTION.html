@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PlanBuddy — MVP Description</title>
+<style>
+  :root {
+    --paper: #FAF6EF; --ink: #26221B; --clay: #C75B39; --pine: #2F5D50; --honey: #E8A13D; --sky: #7FA8C9;
+    --hairline: rgba(38,34,27,0.14);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    line-height: 1.55;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 24px 96px; }
+  h1, h2, h3 { font-family: Georgia, 'Iowan Old Style', serif; font-weight: 600; line-height: 1.2; }
+  h1 { font-size: 2.1rem; color: var(--clay); margin-bottom: 4px; }
+  .tagline { color: rgba(38,34,27,0.62); margin-top: 0; margin-bottom: 32px; font-size: 1.05rem; }
+  h2 { font-size: 1.3rem; margin-top: 40px; border-bottom: 2px solid var(--hairline); padding-bottom: 8px; }
+  h3 { font-size: 1.05rem; margin-top: 24px; }
+  code, pre { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; }
+  pre { background: #fff; border: 1px solid var(--hairline); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 0.85rem; }
+  code { background: rgba(38,34,27,0.06); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+  ul, ol { padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+  .badge { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; }
+  .b-pine { background: rgba(47,93,80,0.12); color: var(--pine); }
+  .b-clay { background: rgba(199,91,57,0.12); color: var(--clay); }
+  .b-honey { background: rgba(232,161,61,0.16); color: #8a5a13; }
+  .b-sky { background: rgba(127,168,201,0.16); color: #35566d; }
+  .card { background: #fff; border: 1px solid var(--hairline); border-radius: 14px; padding: 18px 20px; margin: 14px 0; box-shadow: 0 1px 2px rgba(38,34,27,0.06), 0 6px 20px rgba(38,34,27,0.06); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--hairline); color: rgba(38,34,27,0.46); font-size: 0.85rem; }
+  a { color: var(--pine); }
+</style>
+</head>
+<body>
+<main>
+  <h1>PlanBuddy</h1>
+  <p class="tagline">One confident, lockable plan for the people involved — Day off, Weekend, Getaway, or Vacation.</p>
+
+  <div class="badges">
+    <span class="badge b-pine">React + Vite + TS</span>
+    <span class="badge b-clay">Express + TS</span>
+    <span class="badge b-honey">Neon / PGlite</span>
+    <span class="badge b-sky">DeepSeek V4 Flash + demo AI</span>
+  </div>
+
+  <p>PlanBuddy turns "what should we do?" into one lockable plan. This is the
+  local v1 MVP built to the frozen product contract: a single-package React
+  client and Express API, normalized Postgres with a zero-setup local
+  fallback, secure auth, full-CRUD household memory, four planning modes,
+  and a deterministic recommendation engine sitting on top of a pluggable
+  AI proposer.</p>
+
+  <h2>The smallest lovable loop</h2>
+  <ol>
+    <li>Pick a scale, the people (and pets) involved, and a date window; add an optional context note.</li>
+    <li>Press <strong>Plan it</strong>.</li>
+    <li>Get one confident recommendation with an honest, memory-grounded rationale.</li>
+    <li>Lock it, browse a diverse alternate, say <strong>Not this</strong> with a reason, or tweak the spec.</li>
+    <li>Rate it afterward and optionally comment.</li>
+    <li>Anything learned shows up in Memory with full provenance and full CRUD.</li>
+  </ol>
+
+  <h2>Stack</h2>
+  <div class="grid">
+    <div class="card"><strong>Client</strong><br>React + Vite + TypeScript, mobile-first (≤640px), no raster assets — warm "daylight editorial" design system + lucide-react vector icons.</div>
+    <div class="card"><strong>Server</strong><br>Express + TypeScript, serves the built client and a JSON API under <code>/api</code>.</div>
+    <div class="card"><strong>Database</strong><br>Normalized Postgres, Neon-ready. No <code>DATABASE_URL</code>? Falls back to an embedded PGlite database — same schema, zero setup.</div>
+    <div class="card"><strong>Auth</strong><br>Argon2id (bcrypt cost-12 fallback), 256-bit opaque session tokens in a signed httpOnly SameSite=Lax cookie.</div>
+    <div class="card"><strong>AI</strong><br>DeepSeek V4 Flash via OpenRouter when a key is set; otherwise a deterministic local demo AI — fully usable offline.</div>
+    <div class="card"><strong>Weather / Places</strong><br>Open-Meteo (no key). Pluggable place resolver; defaults to explicit Inspiration mode.</div>
+  </div>
+
+  <h2>Deterministic recommendation pipeline</h2>
+  <p>Per the contract's core doctrine — <em>DeepSeek proposes, server code disposes</em> — every AI-proposed candidate passes a deterministic, replayable pipeline before it's shown:</p>
+  <ul>
+    <li><strong>Constraint filter</strong> — mechanical keyword/structure check, independent of the model's own self-report. Rejects constraint violations, invalid citations, duplicates, impossible travel radius, and venue-firewall violations.</li>
+    <li><strong>Scoring</strong> — base fit 0.5 per participant; loves/avoids shift it; hunches contribute at most ±0.15 and never appear in rationales; group fit is the <strong>minimum</strong> per-participant fit (least misery); feasibility folds in weather/travel; novelty penalizes recent repeats. Final score = 55% group fit + 25% feasibility + 20% novelty.</li>
+    <li><strong>Alternates</strong> — drawn from the same filtered batch, category-diverse from the winner.</li>
+  </ul>
+
+  <h2>Memory model</h2>
+  <ul>
+    <li><strong>Constraints</strong> — hard vetoes. Typed constraints are verified immediately. Chat-extracted constraints become <code>active_unverified</code> (and start protecting immediately) only after the server verifies the model's quote is a verbatim substring of the source message at the claimed offsets — <em>quote or demote</em>. A failed quote becomes a non-filtering hunch instead.</li>
+    <li><strong>Tastes</strong> — loves/avoids that shape scoring but never veto.</li>
+    <li><strong>Hunches</strong> — weak, decaying, non-citable. Promote to a taste (never a constraint) after three independent evidence events from distinct plans/sessions; decay after six unreinforced generations or 90 days.</li>
+  </ul>
+
+  <h2>Running it</h2>
+  <pre>npm install
+npm run dev      # Vite (5173) + Express (4000), proxied
+# or:
+npm run build
+npm start          # single process on PORT</pre>
+  <p>No <code>.env</code> is required — copy <code>.env.example</code> for a real Neon DB or OpenRouter key.</p>
+
+  <h2>Verifying it</h2>
+  <pre>npm run typecheck   # strict TS, client + server
+npm run lint          # ESLint
+npm run build          # vite build + tsc build
+npm test                 # Vitest: unit + AI-contract + Supertest integration
+npm run test:e2e        # Playwright: signup → onboard → generate → reject → lock → feedback → Memory</pre>
+  <p>All green as of this build: 59 Vitest tests, 1 Playwright scenario, zero TypeScript/ESLint errors.</p>
+
+  <h2>Out of scope for v1</h2>
+  <ul>
+    <li>No live place-resolver provider wired up (interface is pluggable; Inspiration mode by default).</li>
+    <li>No Render/Neon deployment performed — local, build-verified work on <code>build-mvp</code>, not pushed.</li>
+    <li>No booking or detailed itinerary generation, by design.</li>
+  </ul>
+
+  <footer>See <code>PRODUCT-CONTRACT.md</code>, <code>DB_SCHEMA.md</code>, and <code>DESCRIPTION.md</code> in the repository root for full detail.</footer>
+</main>
+</body>
+</html>

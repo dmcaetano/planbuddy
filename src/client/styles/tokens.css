@@ -1,0 +1,87 @@
+:root {
+  --paper: #faf6ef;
+  --ink: #26221b;
+  --clay: #c75b39;
+  --pine: #2f5d50;
+  --honey: #e8a13d;
+  --sky: #7fa8c9;
+
+  --paper-raised: #ffffff;
+  --hairline: rgba(38, 34, 27, 0.14);
+  --hairline-strong: rgba(38, 34, 27, 0.28);
+  --ink-soft: rgba(38, 34, 27, 0.62);
+  --ink-faint: rgba(38, 34, 27, 0.4);
+
+  --clay-soft: rgba(199, 91, 57, 0.12);
+  --pine-soft: rgba(47, 93, 80, 0.12);
+  --honey-soft: rgba(232, 161, 61, 0.16);
+  --sky-soft: rgba(127, 168, 201, 0.16);
+
+  --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-ui: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  --radius-card: 14px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(38, 34, 27, 0.06), 0 6px 20px rgba(38, 34, 27, 0.08);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --content-max: 640px;
+  --nav-height: 64px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1c1a15;
+    --paper-raised: #262319;
+    --ink: #f4efe4;
+    --ink-soft: rgba(244, 239, 228, 0.68);
+    --ink-faint: rgba(244, 239, 228, 0.46);
+    --hairline: rgba(244, 239, 228, 0.16);
+    --hairline-strong: rgba(244, 239, 228, 0.3);
+    --clay: #e07752;
+    --pine: #5ba58f;
+    --honey: #f0b559;
+    --sky: #9bc2e3;
+    --clay-soft: rgba(224, 119, 82, 0.18);
+    --pine-soft: rgba(91, 165, 143, 0.18);
+    --honey-soft: rgba(240, 181, 89, 0.18);
+    --sky-soft: rgba(155, 194, 227, 0.18);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #1c1a15;
+  --paper-raised: #262319;
+  --ink: #f4efe4;
+  --ink-soft: rgba(244, 239, 228, 0.68);
+  --ink-faint: rgba(244, 239, 228, 0.46);
+  --hairline: rgba(244, 239, 228, 0.16);
+  --hairline-strong: rgba(244, 239, 228, 0.3);
+  --clay: #e07752;
+  --pine: #5ba58f;
+  --honey: #f0b559;
+  --sky: #9bc2e3;
+}
+
+:root[data-theme="light"] {
+  --paper: #faf6ef;
+  --paper-raised: #ffffff;
+  --ink: #26221b;
+  --ink-soft: rgba(38, 34, 27, 0.62);
+  --ink-faint: rgba(38, 34, 27, 0.4);
+  --hairline: rgba(38, 34, 27, 0.14);
+  --hairline-strong: rgba(38, 34, 27, 0.28);
+  --clay: #c75b39;
+  --pine: #2f5d50;
+  --honey: #e8a13d;
+  --sky: #7fa8c9;
+}
