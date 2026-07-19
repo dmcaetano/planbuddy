@@ -40,8 +40,14 @@ export function buildPublicSnapshot(
   const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const redact = (value: string): string => {
     let safe = value;
+    const publicPronouns = new Set(["i", "me", "my", "you", "your", "yours", "self", "owner"]);
     for (const term of privateTerms.filter((item) => item.trim().length >= 3)) {
-      safe = safe.replace(new RegExp(escapeRegex(term.trim()), "gi"), "your group");
+      const normalized = term.trim().toLowerCase();
+      if (publicPronouns.has(normalized)) continue;
+      safe = safe.replace(
+        new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegex(term.trim())}(?![\\p{L}\\p{N}])`, "giu"),
+        "your group"
+      );
     }
     return safe;
   };
