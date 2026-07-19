@@ -2,6 +2,7 @@ import { getDb } from "../db/client.js";
 import { newId } from "../db/id.js";
 import { toDateOnlyString } from "../db/dateUtil.js";
 import type { Beat, Citation, PlanRecord, PlanStatus, WeatherSnapshot } from "../../shared/types.js";
+import { stringifyJsonForDb } from "../db/json.js";
 
 interface PlanRow {
   id: string;
@@ -88,11 +89,11 @@ export async function insertPlan(input: PlanInsert): Promise<PlanRecord> {
       input.title,
       input.rationale,
       input.category,
-      JSON.stringify(input.beats),
-      input.weather ? JSON.stringify(input.weather) : null,
+      stringifyJsonForDb(input.beats),
+      input.weather ? stringifyJsonForDb(input.weather) : null,
       input.distanceKm,
-      JSON.stringify(input.placeProvenance),
-      JSON.stringify(input.activeConstraints),
+      stringifyJsonForDb(input.placeProvenance),
+      stringifyJsonForDb(input.activeConstraints),
       input.rejectionReason,
       input.locked ? new Date().toISOString() : null,
     ]

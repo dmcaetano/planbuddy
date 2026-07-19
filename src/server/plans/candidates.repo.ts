@@ -2,6 +2,7 @@ import { getDb } from "../db/client.js";
 import { newId } from "../db/id.js";
 import type { AiCandidate } from "../../shared/schemas.js";
 import type { Candidate, ScoreBreakdown } from "../../shared/types.js";
+import { stringifyJsonForDb } from "../db/json.js";
 
 interface CandidateRow {
   id: string;
@@ -71,8 +72,8 @@ export async function insertCandidates(planSpecId: string, items: CandidateInser
       [
         id,
         planSpecId,
-        JSON.stringify(item.payload),
-        item.scoreBreakdown ? JSON.stringify(item.scoreBreakdown) : null,
+        stringifyJsonForDb(item.payload),
+        item.scoreBreakdown ? stringifyJsonForDb(item.scoreBreakdown) : null,
         item.rank,
         item.rejected,
         item.rejectionReason,

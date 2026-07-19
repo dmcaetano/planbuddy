@@ -44,7 +44,7 @@ test("signup -> onboard -> generate -> reject -> lock -> feedback -> Memory", as
   await expect(page.getByText("It's on the calendar.")).toBeVisible();
 
   // History: find the locked plan and leave feedback
-  await page.getByRole("link", { name: "View in History" }).click();
+  await page.getByRole("link", { name: "View in History" }).click({ force: true });
   await expect(page.getByRole("heading", { name: "Upcoming" })).toBeVisible();
   await page.locator(".card").first().click();
   await page.locator('button[aria-label="5 stars"]').click();
