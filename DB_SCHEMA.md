@@ -4,8 +4,8 @@ Normalized Postgres schema, Neon-ready. On a real Postgres connection every
 query is pinned to the sanitized `DB_SCHEMA` namespace (`planbuddy` by
 default), so a shared Neon database remains isolated. It runs unmodified against a real
 Postgres connection string or against the embedded local PGlite fallback
-used when `DATABASE_URL` is unset (see `.env.example`). Source of truth:
-`src/server/db/migrations/0001_init.sql`.
+used when `DATABASE_URL` is unset (see `.env.example`). Sources of truth are
+the ordered SQL files under `src/server/db/migrations/`.
 
 IDs are application-generated UUID v4 strings (`TEXT` columns) rather than
 DB-generated UUIDs, so the schema has no dependency on the `pgcrypto` or
@@ -33,8 +33,13 @@ the repository layer (returns 404, never leaks existence).
 | `candidates` | Every AI-proposed candidate for a spec, pre- and post-filter. | `payload` (jsonb), `score_breakdown` (jsonb), `rank`, `rejected`, `rejection_reason` |
 | `plans` | Locked or explicitly-rejected outcomes of a spec. | `status` (`locked`\|`rejected`), `beats` (jsonb), `weather` (jsonb), `place_provenance` (jsonb), `active_constraints` (jsonb) |
 | `citations` | Normalized fact citations backing a locked plan's rationale. | `plan_id`, `fact_id`, `quote`, `source` |
-| `feedback` | Post-plan rating/comment; source of learning evidence. | `plan_id`, `rating`, `comment` |
+| `feedback` | Post-plan rating/comment plus Like/Dislike/Love learning summary. | `plan_id`, `rating`, `reaction`, `feature_summary`, `features` |
 | `resolver_venues` | Cache of live place-resolver lookups (empty in Inspiration mode). | `external_id` (unique), `cache` (jsonb) |
+| `candidate_reactions` | Idempotent Like/Dislike/Love state for unlocked or revised candidates. | unique (`user_id`, `candidate_id`), `reaction`, extracted feature summary |
+| `friend_invites` | One-time, expiring friend invitations; raw tokens are never stored. | `token_hash`, `expires_at`, `accepted_at` |
+| `friendships` | Canonical mutual account connection used only when explicitly selected for a plan. | unique canonical user pair, `status` |
+| `plan_shares` | Immutable, privacy-scrubbed itinerary snapshots behind private links. | `token_hash`, `snapshot`, `expires_at`, `revoked_at` |
+| `plan_chat_messages` | Persistent plan-scoped edit/action conversation. | `plan_spec_id`, `candidate_id`, `role`, `action` |
 
 ## Cascades and retention
 
@@ -48,6 +53,11 @@ the repository layer (returns 404, never leaks existence).
 - `candidates.payload` retains the full generation trace (all 8 raw AI
   candidates, validation/rejection reasons) for replay and QA, independent
   of which candidate was ultimately locked.
+- Friend planning reads verified constraints and explicit tastes from each
+  selected account, but never exposes raw memory, hunches, history, or chat.
+- Share snapshots strip citations, constraint compliance, per-person scores,
+  participant names, hard-constraint text, and the home-origin directions leg.
+  Tokens are SHA-256 hashed, expire after 30 days, and can be revoked.
 
 ## Local zero-setup fallback
 

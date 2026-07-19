@@ -1,8 +1,8 @@
 # PlanBuddy — State
 
 ## Status
-v0.1.1 “Lisbon Field Guide” is live at https://planbuddy.onrender.com from
-`main` (`f21acad`), with dedicated Neon Postgres persistence. Gemini 3.5 Flash
+v0.1.4 “Social Learning” is live at https://planbuddy.onrender.com from
+`main` (`4f28b38`), with dedicated Neon Postgres persistence. Gemini 3.5 Flash
 plus Google Search grounds real places; DeepSeek V4 Flash powers chat,
 feedback, and grounded fallback. Local and production QA are green.
 
@@ -32,11 +32,21 @@ Use the product with a real household and review recommendation/feedback quality
   pet kits, checks, and a compact fallback.
 - 2026-07-19 — A grounding outage may retry Gemini and then DeepSeek web search,
   but production never substitutes generic demo content for a real plan.
+- 2026-07-19 — Love is the strongest explicit preference signal and stores a
+  visible summary of reusable event features; Like remains a light signal.
+- 2026-07-19 — Plan revisions are append-only and reversible. Restaurant and
+  budget edits freeze non-meal stops; meal-time edits coherently retime the route.
+- 2026-07-19 — Buddy can run every plan-level UI action: react, lock, share,
+  show another, invite a friend, explain, and make scoped edits.
+- 2026-07-19 — Friend connections grant planning participation, not access to
+  raw memory, chat, history, hunches, or account editing.
+- 2026-07-19 — Shared plans are immutable, scrubbed snapshots behind hashed,
+  expiring, revocable tokens; they are not collaborative access grants.
 
 ## Future ideas
 
 - Calendar connection and conflict-aware dates
 - Booking/deep-link integrations
-- Shared household invitations and per-member accounts
+- Calendar-aware friend availability
 - Notifications and post-plan reminders
 - Detailed itinerary generation after the one-pick loop proves valuable

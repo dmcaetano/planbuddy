@@ -21,8 +21,14 @@ or unsafe rules.
   bring lists, a pet kit, operational checks, and one compact fallback.
 - Remembers household members and pets, hard constraints, loved/avoided tastes,
   and weak feedback-derived hunches with visible provenance and CRUD controls.
-- Uses thumbs, ratings, comments, and “Not this” reasons in a guarded
-  self-improvement loop; hunches can become tastes but never safety constraints.
+- Uses Like, Dislike, Love, ratings, comments, and rejection reasons in a
+  guarded self-improvement loop. Love extracts a visible summary of reusable
+  event features; hunches can become tastes but never safety constraints.
+- Lets Buddy run every plan-level action and make reversible, surgical edits:
+  swap only the restaurant, retime lunch to dinner, lower cost, or reduce walking.
+- Connects friends through one-time invites. Selected friends contribute their
+  verified needs and explicit tastes without exposing raw memory or history.
+- Shares immutable, privacy-scrubbed itineraries through private expiring links.
 - Persists accounts and planning history in Neon Postgres and runs publicly on
   Render with email/password login.
 
@@ -44,14 +50,15 @@ winner. Enrichment creates Google Maps URLs, reconciles total walking time with
 an explicit remembered range, adds an operational checklist, chooses an
 attributed Wikimedia Commons image, and derives weather-aware clothing and pet
 preparation. The full candidate JSON is persisted, so a locked plan reopens in
-History with the same rich itinerary. DeepSeek V4 Flash separately powers chat
-and feedback interpretation.
+History with the same rich itinerary. DeepSeek V4 Flash separately powers chat,
+Love feature extraction, and plan-action interpretation. Plan-scoped chat stores
+an append-only revision trail, so the original is always one tap away.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    User["User in browser"] --> UI["React Plan / Chat / Memory / History"]
+    User["User in browser"] --> UI["React Plan / Chat / Memory / History / Friends"]
     UI --> API["Express JSON API"]
     API --> DB[("Neon Postgres or local PGlite")]
     API --> Weather["Open-Meteo forecast"]
@@ -62,8 +69,10 @@ flowchart TD
     Enrich --> Commons["Wikimedia Commons image"]
     Enrich --> UI
     API --> DeepSeek["DeepSeek V4 Flash via OpenRouter"]
-    DeepSeek --> Chat["Chat extraction + feedback evidence"]
+    DeepSeek --> Chat["Memory chat + plan actions + Love extraction"]
     Chat --> DB
+    API --> Share["Scrubbed immutable share"]
+    API --> Friends["Invite + consented group planning"]
 ```
 
 ```mermaid
@@ -102,10 +111,12 @@ sequenceDiagram
 
 | Path | Responsibility |
 |---|---|
-| `src/client/routes/` | Plan, Chat, Memory, History, authentication, and onboarding screens |
+| `src/client/routes/` | Plan, Chat, Memory, History, Friends, invite, share, authentication, and onboarding screens |
 | `src/client/components/TicketCard.tsx` | Rich recommendation and saved-plan presentation |
 | `src/server/grounding/geminiPlaces.ts` | Google Search dossier and structured plan composition |
 | `src/server/plans/engine/` | Constraint firewall, scoring, generation pipeline, Maps/preparation enrichment |
+| `src/server/plans/plan-chat.routes.ts` | Persistent action-capable Buddy and reversible plan revisions |
+| `src/server/friends/` / `src/server/shares/` | Friend consent, private group planning, and scrubbed share snapshots |
 | `src/server/media/wikimedia.ts` | Cached, attributable Commons place-image selection |
 | `src/server/ai/` | DeepSeek calls, prompts, guarded JSON parsing, deterministic demo AI |
 | `src/server/weather/` | Open-Meteo forecast retrieval and cache |
@@ -134,6 +145,10 @@ erDiagram
     HUNCHES ||--o{ HUNCH_EVIDENCE : accumulates
     USERS ||--o{ CHAT_SESSIONS : opens
     CHAT_SESSIONS ||--o{ CHAT_MESSAGES : contains
+    USERS ||--o{ FRIENDSHIPS : connects
+    USERS ||--o{ FRIEND_INVITES : creates
+    USERS ||--o{ PLAN_SHARES : shares
+    PLAN_SPECS ||--o{ PLAN_CHAT_MESSAGES : discusses
 ```
 
 ## External integrations
@@ -166,9 +181,10 @@ npm start
 
 ## Status
 
-Version 0.1.1 is live on Render and production-verified with the exact Lisbon,
-grilled-fish, walking, and Pom scenario. See `STATE.md`, `PROGRESS.md`, and
-`QA-REPORT.md` for release evidence and next work.
+Version 0.1.4 is live on Render and production-verified with the Lisbon,
+grilled-fish, walking, and Pom scenario; Love learning; a restaurant-only swap;
+reversible versions; and private itinerary sharing. See `STATE.md`,
+`PROGRESS.md`, and `QA-REPORT.md` for release evidence and next work.
 
 ## Glossary
 

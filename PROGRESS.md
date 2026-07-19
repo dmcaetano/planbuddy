@@ -27,9 +27,13 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 - [x] Structured memory capture with visible provenance
 - [x] History with upcoming/past plans
 - [x] Post-plan feedback and self-improvement loop (feedback -> hunch evidence -> promotion)
+- [x] Like/Dislike/Love on suggestions and History; Love extracts reusable venue-agnostic features
+- [x] Persistent plan-scoped Buddy that runs all plan actions and makes reversible surgical edits
+- [x] Friend invites, mutual connections, explicit group selection, and private cross-account fit
+- [x] Immutable privacy-safe itinerary sharing with native share/clipboard support
 
 ### Phase 5 — Ship quality
-- [x] Unit, contract, integration, and Playwright tests (77 Vitest + 1 Playwright, all green)
+- [x] Unit, contract, integration, and Playwright tests (86 Vitest + 1 Playwright, all green)
 - [x] Visual verification via Playwright (mobile viewport) and manual smoke testing
 - [x] Security/privacy pass (see below)
 - [x] Render deployment with a dedicated persistent Neon database: https://planbuddy.onrender.com
@@ -38,21 +42,24 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 
 ## Current state
 
-**Version 0.1.1 is live on Render from `main` and backed by a dedicated Neon project.** A fresh
+**Version 0.1.4 is live on Render from `main` and backed by a dedicated Neon project.** A fresh
 user can sign up, onboard a home base and participants (including pets),
 generate a plan for any of the four scales, have a typed or chat-quoted hard
 constraint mechanically enforced (peanut-allergy filtering demonstrated in
 both unit and integration tests), browse alternates without touching memory,
 reject with a reason, lock a plan, find it in History, leave feedback that
 creates an inspectable hunch, and see everything in Memory with provenance
-and full CRUD. All four tabs (Plan/Chat/Memory/History) work end-to-end.
+and full CRUD. Users can connect friends, explicitly include them in a plan,
+share a scrubbed itinerary, teach the system with Love, and ask Buddy to change
+one venue, meal time, budget, or walking detail without losing the original.
+All four primary tabs plus Friends, invite, and public-share routes work end-to-end.
 
 Verified green in this session:
 - `npm run typecheck` — client + server, strict TypeScript, zero errors.
 - `npm run lint` — ESLint, zero errors/warnings.
 - `npm run build` — Vite client build + tsc server build + migration asset copy.
-- `npm test` — 77 Vitest tests (unit engine tests, AI-contract/schema tests, Supertest integration tests against an in-memory PGlite DB), stable across repeated runs.
-- `npm run test:e2e` — Playwright happy path (signup → onboard → generate → reject → lock → feedback → Memory) against the production build, in a mobile viewport.
+- `npm test` — 86 Vitest tests across 14 files, including social privacy and surgical-edit regression coverage.
+- `npm run test:e2e` — Playwright mobile journey: signup → generate → Love → Buddy restaurant edit → share → dislike → lock → feedback → Memory.
 - A strict production canary confirmed a real Gemini-grounded three-stop Lisbon
   route with Google Maps links, an attributed photo, 60 reconciled walking
   minutes, clothing and Pom preparation, operational checks, lock, feedback →
@@ -73,7 +80,7 @@ covered implicitly by the plan.test.ts lock→history assertion.
    current prices, accessibility, and pet policy remain explicit checks until a
    transactional place/booking API is added.
 2. **Calendar/booking integrations** — intentionally deferred until the one-pick and learning loop has real usage evidence.
-3. **Broader browser coverage** — add separate Playwright scenarios for dead ends, trip modes, and hunch promotion.
+3. **Broader browser coverage** — add separate Playwright scenarios for dead ends, trip modes, friend acceptance, and hunch promotion.
 
 ## Next steps
 1. Collect real household feedback on recommendation quality and response time.

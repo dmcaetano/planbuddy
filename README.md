@@ -13,7 +13,9 @@ Gemini, then uses deterministic server-side filtering and least-misery scoring
 to choose the winner. Every result includes real named stops, Google Maps
 routes, attributed Commons imagery, distances, live weather, clothing and pet
 preparation, operational checks, and a compact fallback. DeepSeek V4 Flash
-powers chat and feedback learning.
+powers memory chat, plan actions, and Love feature learning. Users can make
+reversible one-detail edits, connect friends for private group planning, and
+share scrubbed itineraries through expiring private links.
 
 ## Local development
 

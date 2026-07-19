@@ -11,7 +11,8 @@ The smallest lovable loop is:
 1. Select the scale, people, and date/window; optionally add one sentence of context.
 2. Press **Plan my weekend** (or the equivalent label for the selected scale).
 3. Receive one confident, feasible, decision-ready recommendation grounded in visible memory and current sources.
-4. Lock it, show a diverse alternative, explicitly reject it with a reason, or tweak the spec.
+4. Lock it, share it, react with Like/Dislike/Love, show a diverse alternative,
+   or ask Buddy for a reversible, scoped change.
 5. Afterward, rate it and optionally comment.
 6. See any learned taste or constraint in Memory, with provenance and full CRUD.
 
@@ -27,6 +28,16 @@ The smallest lovable loop is:
 8. No silent learning and no silent loss: raw events persist before AI extraction; failures remain visible/retryable.
 9. Any named place or closable business must come from the current source-backed place dossier; the server rejects names and source URLs outside that dossier. Unverified operational facts remain visible checks.
 10. Every scale returns exactly three chronological beats and one compact fallback. Getaway/Vacation add a destination anchor; no booking transaction occurs in v1.
+11. Love stores visible, venue-agnostic event features. Repeating Love is
+    idempotent; changing the reaction removes Love-origin evidence.
+12. Plan revisions never overwrite the current ticket. Restaurant/budget swaps
+    freeze non-meal stops; timing edits preserve venues where viable; the prior
+    version remains directly restorable.
+13. A friendship grants planning participation only. It does not expose or
+    permit editing another account's raw memory, hunches, chat, or history.
+14. A share is an immutable scrubbed snapshot, not collaborative access. It
+    uses a hashed high-entropy token, expires, can be revoked, and excludes
+    constraints, participant-fit data, citations, and the home-origin leg.
 
 ## Primary navigation
 
@@ -34,6 +45,8 @@ The smallest lovable loop is:
 - **Chat** — free-form planning and knowledge capture; planning intent routes into the same recommendation pipeline.
 - **Memory** — constraints, tastes, hunches, provenance, confirmation, and complete CRUD.
 - **History** — upcoming and past locked plans, feedback, and the visible source of novelty.
+- **Friends** (from Plan/Memory) — invite, connect, remove, and explicitly select
+  people for a plan without revealing their private profile.
 
 ## Onboarding
 
@@ -90,6 +103,10 @@ All responses are JSON, Zod-validated, repaired once, and logged only with non-s
 - **Generate:** exactly one candidate with three beats, exact dossier place objects, category/indoor tags, walking/spend estimates, operational checks, fallback, optional destination anchor, rationale citations, and constraint compliance.
 - **Chat:** reply, spec updates, and structured extractions with participant, kind, text, quote/offsets, polarity, and confidence.
 - **Feedback:** maps free text to guarded preference evidence only; it can never emit a constraint.
+- **Love features:** extracts only reusable event shape, pace, setting, budget,
+  group, and preparation traits—never venue names, dates, weather, or geography.
+- **Plan actions:** routes chat into react, lock, share, show another, invite,
+  explain, restaurant, meal-time, budget, walking, or general edit operations.
 
 Use `MODEL_ID`, defaulting to the verified live OpenRouter slug `deepseek/deepseek-v4-flash`. Keys stay server-side.
 
@@ -107,6 +124,10 @@ Normalized Postgres entities:
 - generated candidates with score breakdowns
 - locked plans
 - feedback
+- candidate reactions and extracted Love summaries
+- friend invites and canonical friendships
+- immutable plan shares
+- persistent plan-scoped action chat
 - resolver venues/cache
 - citations
 
@@ -132,6 +153,8 @@ Every query is tenant-scoped. Participant deletion cascades their personal memor
 - No trackers or third-party analytics in v1.
 - Memory is the durable model: deleting a memory removes it from future prompt assembly.
 - Raw chat is not ranking memory and is retained only for 30 days after its bounded session.
+- Friend constraints participate as private vetoes only after explicit selection.
+- Public share responses are noindex/noarchive and contain an allowlisted snapshot.
 
 ## Visual direction
 
@@ -149,11 +172,22 @@ Every query is tenant-scoped. Participant deletion cascades their personal memor
 1. Typecheck and lint clean.
 2. Unit and AI-contract tests green.
 3. Auth/ownership and happy-path integration tests green.
-4. Playwright path green: signup → onboard → generate → reject → lock → feedback → Memory.
-5. Render live canary: one real generate and one real chat extraction validate.
+4. Playwright path green: signup → generate → Love → Buddy edit → share →
+   dislike → lock → feedback → Memory.
+5. Render live canary: real generate, Love extraction, surgical restaurant swap,
+   and private share validate.
 6. Security checklist passes; keys remain server-only.
 7. Mobile visual verification, no console errors, and Lighthouse target ≥85 where available.
 
 ## Definition of done for v1
 
-A fresh user on the Render URL can sign up, onboard a home, people, and pets, then receive one grounded three-beat plan with real places, Maps links, an attributed image, distance/walking/spend estimates, detailed apparel and pet preparation, operational checks, and a fallback. A typed constraint is mechanically enforced; quoted Chat memory protects immediately; locked plans reopen richly in History; feedback creates an inspectable hunch. Getaway and Vacation add a destination anchor. All four tabs work, data persists in Neon, and all release gates are green.
+A fresh user on the Render URL can sign up, onboard a home, people, and pets,
+then receive one grounded three-beat plan with real places, Maps links, an
+attributed image, distance/walking/spend estimates, detailed apparel and pet
+preparation, operational checks, and a fallback. A typed constraint is
+mechanically enforced; quoted Chat memory protects immediately; locked plans
+reopen richly in History; Love creates visible reusable learning. Buddy can run
+every plan action and revise one detail without losing the original. Users can
+connect friends for private group fit and share a scrubbed itinerary. Getaway
+and Vacation add a destination anchor. Data persists in Neon and all release
+gates are green.

@@ -119,3 +119,32 @@ directions links, one full route, an attributed photo, €35–50 per person, an
 60 independently recomputed walking minutes. Lock, rich History, feedback, and
 hunch evidence persisted in Neon. All 77 Vitest tests, the mobile Playwright
 journey, typecheck, lint, build, and live 390×844 visual inspection are green.
+
+## 2026-07-19 — v0.1.4 “Social Learning” release
+
+### What we did
+Added Like, Dislike, and Love across suggestions and History. Love extracts a
+visible, reusable feature summary and writes idempotent evidence into the
+existing hunch loop. Added private, immutable itinerary sharing; expiring
+one-time friend invites and mutual connections; explicit friend selection with
+private least-misery group planning; and a persistent plan-scoped Buddy that can
+run every plan-level action. Tweak is now append-only and reversible. Restaurant,
+meal-time, budget, and walking edits preserve the smallest possible scope.
+
+### Live issues found and fixed
+Mobile visual QA caught a meal detector replacing an arrival walk when every
+beat inherited the candidate's `food` category. The live canary then caught a
+temporary Gemini demand spike during a restaurant swap; common swaps now use
+the plan's already-grounded nearby fallback immediately, preserving the two
+route anchors and the source firewall. Public-share inspection caught a generic
+`You` label corrupting the word `your`; redaction now uses whole-word matching
+and excludes pronouns, with regression coverage.
+
+### Result
+Final Render deploy `dep-d9ek30bbc2fs7383judg` at commit `4f28b38` is live.
+A real Lisbon canary learned four venue-agnostic preferences from Love, replaced
+only Saldanha Mar with Baía do Peixe while keeping Parque Eduardo VII and Jardim
+Amália Rodrigues, refreshed the Maps route, kept “Back to original,” and created
+a privacy-safe share link. All 86 Vitest tests across 14 files, the full mobile
+Playwright journey, typecheck, lint, build, dependency audit, and visual review
+are green.
