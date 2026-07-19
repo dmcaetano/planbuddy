@@ -10,12 +10,17 @@ export type {
   HunchEvidence,
   ChatSession,
   ChatMessage,
+  PlanChatMessage,
   PlanSpec,
   Candidate,
   Beat,
   Citation,
   PlanRecord,
   Feedback,
+  Reaction,
+  FeatureSummary,
+  CandidateReaction,
+  Friend,
   WeatherSnapshot,
 } from "@shared/types";
 export type { Scale } from "@shared/scale";

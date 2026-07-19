@@ -131,6 +131,16 @@ export async function recordHunchEvidence(
   let hunch: HunchRow;
   if (matches[0]) {
     hunch = matches[0];
+    if (input.planId || input.sessionId) {
+      const { rows: duplicateOrigins } = await db.query<{ id: string }>(
+        `SELECT id FROM hunch_evidence
+         WHERE hunch_id = $1
+           AND (($2::text IS NOT NULL AND plan_id = $2) OR ($3::text IS NOT NULL AND session_id = $3))
+         LIMIT 1`,
+        [hunch.id, input.planId ?? null, input.sessionId ?? null]
+      );
+      if (duplicateOrigins[0]) return toDomain(hunch);
+    }
     const { rows } = await db.query<HunchRow>(
       `UPDATE hunches
        SET evidence_count = evidence_count + 1,
@@ -180,6 +190,39 @@ export async function recordHunchEvidence(
   }
 
   return toDomain(hunch);
+}
+
+export async function removeReactionEvidence(userId: string, candidateId: string): Promise<void> {
+  const db = await getDb();
+  const { rows } = await db.query<{ hunch_id: string }>(
+    `DELETE FROM hunch_evidence he
+     USING hunches h
+     WHERE he.hunch_id = h.id
+       AND h.user_id = $1
+       AND he.session_id = $2
+       AND he.note LIKE 'Love:%'
+     RETURNING he.hunch_id`,
+    [userId, candidateId]
+  );
+  for (const hunchId of new Set(rows.map((row) => row.hunch_id))) {
+    const { rows: counts } = await db.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM hunch_evidence WHERE hunch_id = $1",
+      [hunchId]
+    );
+    const count = Number(counts[0]?.count ?? 0);
+    if (count === 0) {
+      await db.query("DELETE FROM hunches WHERE id = $1 AND user_id = $2 AND status = 'active'", [hunchId, userId]);
+    } else {
+      await db.query(
+        `UPDATE hunches
+         SET evidence_count = $3,
+             confidence = GREATEST(0.3, LEAST(1, 0.1 + $3 * 0.2)),
+             updated_at = now()
+         WHERE id = $1 AND user_id = $2 AND status = 'active'`,
+        [hunchId, userId, count]
+      );
+    }
+  }
 }
 
 export async function listHunchEvidence(hunchId: string): Promise<HunchEvidence[]> {

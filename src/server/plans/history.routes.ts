@@ -7,6 +7,10 @@ import { getPlanSpec } from "./specs.repo.js";
 import { insertFeedback, listFeedbackForPlan } from "./feedback.repo.js";
 import { recordHunchEvidence } from "../memory/hunches.repo.js";
 import { feedbackExtract } from "../ai/index.js";
+import { getCandidate } from "./candidates.repo.js";
+import { applyCandidateReaction } from "./reactions.service.js";
+import { listParticipants } from "../participants/repo.js";
+import type { Reaction } from "../../shared/types.js";
 
 export const historyRouter = Router();
 historyRouter.use(requireAuth);
@@ -38,32 +42,37 @@ historyRouter.post(
   asyncHandler(async (req, res) => {
     const plan = await getPlan(req.user!.id, req.params.planId);
     if (!plan) throw notFound();
-    const feedback = await insertFeedback(plan.id, req.body.rating, req.body.comment ?? null);
+    const reaction: Reaction = req.body.reaction ?? (req.body.rating <= 2 ? "dislike" : req.body.rating >= 5 ? "love" : "like");
+    const rating = req.body.rating ?? (reaction === "dislike" ? 1 : reaction === "love" ? 5 : 4);
+    const candidate = await getCandidate(plan.candidateId);
+    if (!candidate) throw notFound();
+    const savedReaction = await applyCandidateReaction(req.user!.id, candidate, reaction);
+    const learned = reaction === "love"
+      ? { summary: savedReaction.featureSummary, features: savedReaction.features }
+      : null;
+    const feedback = await insertFeedback(plan.id, rating, reaction, req.body.comment ?? null, learned);
 
-    const { response } = await feedbackExtract(req.body.rating, req.body.comment ?? null);
+    const { response } = await feedbackExtract(rating, req.body.comment ?? null);
     const ratingFallback =
-      response.evidence.length === 0 && req.body.rating >= 4
-        ? [{ text: `plans like "${plan.title}" (${plan.category})`, polarity: "love" as const }]
-        : response.evidence.length === 0 && req.body.rating <= 2
-          ? [{ text: `plans like "${plan.title}" (${plan.category})`, polarity: "avoid" as const }]
+      response.evidence.length === 0 && reaction === "like"
+        ? [{ text: `Plans in the ${plan.category} style`, polarity: "love" as const }]
+        : response.evidence.length === 0 && reaction === "dislike"
+          ? [{ text: `Plans in the ${plan.category} style`, polarity: "avoid" as const }]
           : [];
     const evidenceItems = response.evidence.length > 0 ? response.evidence : ratingFallback;
-    const spec = await getPlanSpec(req.user!.id, plan.planSpecId);
-    const participantIds = spec?.participantIds ?? [];
-    const targets: (string | null)[] = participantIds.length > 0 ? participantIds : [null];
+    await getPlanSpec(req.user!.id, plan.planSpecId);
+    const owner = (await listParticipants(req.user!.id)).find((participant) => participant.isOwner);
     for (const evidence of evidenceItems) {
-      for (const participantId of targets) {
-        await recordHunchEvidence(req.user!.id, {
-          participantId,
-          text: evidence.text,
-          polarity: evidence.polarity,
-          planId: plan.id,
-          sessionId: null,
-          note: `Feedback (${req.body.rating}/5): ${req.body.comment ?? ""}`.trim(),
-        });
-      }
+      await recordHunchEvidence(req.user!.id, {
+        participantId: owner?.id ?? null,
+        text: evidence.text,
+        polarity: evidence.polarity,
+        planId: plan.id,
+        sessionId: null,
+        note: `${reaction}: ${req.body.comment ?? ""}`.trim(),
+      });
     }
 
-    res.status(201).json({ feedback });
+    res.status(201).json({ feedback, learned });
   })
 );

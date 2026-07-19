@@ -15,3 +15,11 @@ export const aiRateLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many AI requests, please slow down." },
 });
+
+export const publicTokenRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Not found" },
+});

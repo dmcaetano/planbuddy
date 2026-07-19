@@ -2,7 +2,7 @@ import { Router } from "express";
 import { asyncHandler, HttpError, notFound, validateBody } from "../http.js";
 import { requireAuth } from "../auth/middleware.js";
 import { aiRateLimiter } from "../rateLimit.js";
-import { planSpecCreateSchema, notThisSchema } from "../../shared/schemas.js";
+import { candidateReactionSchema, planSpecCreateSchema, notThisSchema } from "../../shared/schemas.js";
 import { createPlanSpec, getPlanSpec, incrementGenerationCount } from "./specs.repo.js";
 import { getCandidate, listCandidatesForSpec } from "./candidates.repo.js";
 import { insertPlan } from "./plans.repo.js";
@@ -16,18 +16,20 @@ import {
 import { recordHunchEvidence } from "../memory/hunches.repo.js";
 import { z } from "zod";
 import type { Candidate } from "../../shared/types.js";
+import { planningParticipantIdsAreAuthorized } from "../friends/repo.js";
+import { applyCandidateReaction } from "./reactions.service.js";
 
 export const planSpecsRouter = Router();
 planSpecsRouter.use(requireAuth);
 
 const MAX_GENERATIONS = 2; // initial batch + one regeneration batch
 
-function planView(candidate: Candidate, context: PipelineResult["context"]) {
+function planView(candidate: Candidate, context: PipelineResult["context"], viewerUserId: string) {
   return {
     candidate,
     weather: context.weather,
     placeProvenance: placeProvenanceView(context.resolver, context.groundingSources),
-    activeConstraints: activeConstraintsView(context.scopedConstraints),
+    activeConstraints: activeConstraintsView(context.scopedConstraints, viewerUserId),
   };
 }
 
@@ -43,14 +45,14 @@ function candidateGroundingSources(candidate: Candidate) {
   return Array.from(new Map(sources.map((source) => [source.url, source])).values());
 }
 
-function pipelineResponse(spec: Awaited<ReturnType<typeof createPlanSpec>>, result: PipelineResult) {
+function pipelineResponse(spec: Awaited<ReturnType<typeof createPlanSpec>>, result: PipelineResult, viewerUserId: string) {
   return {
     spec,
     aiMode: result.aiMode,
     deadEnd: result.deadEnd,
     deadEndReasons: result.deadEndReasons,
-    winner: result.winner ? planView(result.winner, result.context) : null,
-    alternates: result.alternates.map((c) => planView(c, result.context)),
+    winner: result.winner ? planView(result.winner, result.context, viewerUserId) : null,
+    alternates: result.alternates.map((c) => planView(c, result.context, viewerUserId)),
     generationsUsed: spec.generationCount,
     generationsRemaining: Math.max(0, MAX_GENERATIONS - spec.generationCount),
   };
@@ -61,10 +63,13 @@ planSpecsRouter.post(
   aiRateLimiter,
   validateBody(planSpecCreateSchema),
   asyncHandler(async (req, res) => {
+    if (!(await planningParticipantIdsAreAuthorized(req.user!.id, req.body.participantIds))) {
+      throw new HttpError(403, "One or more selected participants are not available to this account");
+    }
     const spec = await createPlanSpec(req.user!.id, req.body);
     const result = await runGeneration(req.user!.id, spec, 0);
     const count = await incrementGenerationCount(spec.id);
-    res.status(201).json(pipelineResponse({ ...spec, generationCount: count }, result));
+    res.status(201).json(pipelineResponse({ ...spec, generationCount: count }, result, req.user!.id));
   })
 );
 
@@ -104,7 +109,7 @@ planSpecsRouter.post(
     }
     const result = await runGeneration(req.user!.id, spec, spec.generationCount);
     const count = await incrementGenerationCount(spec.id);
-    res.json(pipelineResponse({ ...spec, generationCount: count }, result));
+    res.json(pipelineResponse({ ...spec, generationCount: count }, result, req.user!.id));
   })
 );
 
@@ -119,6 +124,7 @@ planSpecsRouter.post(
     const candidate = await getCandidate(req.body.candidateId);
     if (!candidate || candidate.planSpecId !== spec.id) throw notFound();
 
+    await applyCandidateReaction(req.user!.id, candidate, "dislike");
     const context = await gatherPlanContext(req.user!.id, spec);
     const rejectedPlan = await insertPlan({
       userId: req.user!.id,
@@ -132,22 +138,23 @@ planSpecsRouter.post(
       weather: context.weather,
       distanceKm: candidate.travelEstimateKm,
       placeProvenance: placeProvenanceView(context.resolver, candidateGroundingSources(candidate)),
-      activeConstraints: activeConstraintsView(context.scopedConstraints),
+      activeConstraints: activeConstraintsView(context.scopedConstraints, req.user!.id),
       citations: candidate.citations,
       rejectionReason: req.body.reason,
       locked: false,
     });
 
-    for (const participant of context.selectedParticipants) {
-      await recordHunchEvidence(req.user!.id, {
-        participantId: participant.id,
-        text: `plans like "${candidate.title}" (${candidate.category})`,
-        polarity: "avoid",
-        planId: rejectedPlan.id,
-        sessionId: null,
-        note: `Not-this: ${req.body.reason}`,
-      });
-    }
+    const owner = context.selectedParticipants.find(
+      (participant) => participant.userId === req.user!.id && participant.isOwner
+    );
+    await recordHunchEvidence(req.user!.id, {
+      participantId: owner?.id ?? null,
+      text: `Plans in the ${candidate.category} style`,
+      polarity: "avoid",
+      planId: rejectedPlan.id,
+      sessionId: null,
+      note: `Dislike: ${req.body.reason}`,
+    });
 
     res.status(201).json({ ok: true });
   })
@@ -180,7 +187,7 @@ planSpecsRouter.post(
       weather: context.weather,
       distanceKm: candidate.travelEstimateKm,
       placeProvenance: placeProvenanceView(context.resolver, candidateGroundingSources(candidate)),
-      activeConstraints: activeConstraintsView(context.scopedConstraints),
+      activeConstraints: activeConstraintsView(context.scopedConstraints, req.user!.id),
       citations: candidate.citations,
       rejectionReason: null,
       locked: true,
@@ -190,7 +197,7 @@ planSpecsRouter.post(
   })
 );
 
-const tweakBody = planSpecCreateSchema.partial({ startDate: true, endDate: true, participantIds: true });
+const tweakBody = planSpecCreateSchema.partial();
 
 planSpecsRouter.post(
   "/:id/tweak",
@@ -200,19 +207,41 @@ planSpecsRouter.post(
     const original = await getPlanSpec(req.user!.id, req.params.id);
     if (!original) throw notFound();
 
+    const participantIds = req.body.participantIds ?? original.participantIds;
+    if (!(await planningParticipantIdsAreAuthorized(req.user!.id, participantIds))) {
+      throw new HttpError(403, "One or more selected participants are no longer available");
+    }
+
     const spec = await createPlanSpec(req.user!.id, {
       scale: req.body.scale ?? original.scale,
       startDate: req.body.startDate ?? original.startDate,
       endDate: req.body.endDate ?? original.endDate,
       radiusKm: req.body.radiusKm ?? original.radiusKm,
       moodContext: req.body.moodContext !== undefined ? req.body.moodContext : original.moodContext,
-      participantIds: req.body.participantIds ?? original.participantIds,
+      participantIds,
       parentSpecId: original.id,
       version: original.version + 1,
     });
 
     const result = await runGeneration(req.user!.id, spec, 0);
     const count = await incrementGenerationCount(spec.id);
-    res.status(201).json(pipelineResponse({ ...spec, generationCount: count }, result));
+    res.status(201).json(pipelineResponse({ ...spec, generationCount: count }, result, req.user!.id));
+  })
+);
+
+planSpecsRouter.post(
+  "/:id/react",
+  aiRateLimiter,
+  validateBody(candidateReactionSchema),
+  asyncHandler(async (req, res) => {
+    const spec = await getPlanSpec(req.user!.id, req.params.id);
+    if (!spec) throw notFound();
+    const candidate = await getCandidate(req.body.candidateId);
+    if (!candidate || candidate.planSpecId !== spec.id) throw notFound();
+    const reaction = await applyCandidateReaction(req.user!.id, candidate, req.body.reaction);
+    res.json({ reaction, learned: reaction.reaction === "love" ? {
+      summary: reaction.featureSummary,
+      features: reaction.features,
+    } : null });
   })
 );

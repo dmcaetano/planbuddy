@@ -1,6 +1,6 @@
 import type { Constraint, Participant, PlanSpec, Taste, Hunch, WeatherSnapshot } from "../../../shared/types.js";
 import { isTripScale } from "../../../shared/scale.js";
-import { listParticipants } from "../../participants/repo.js";
+import { listAuthorizedPlanningParticipants } from "../../friends/repo.js";
 import { listActiveConstraints } from "../../memory/constraints.repo.js";
 import { listTastes } from "../../memory/tastes.repo.js";
 import { listActiveHunches, bumpPlansSinceEvidence } from "../../memory/hunches.repo.js";
@@ -15,6 +15,8 @@ import { scoreCandidates, pickDiverseAlternates, type ParticipantMemory, type Sc
 import type { Candidate } from "../../../shared/types.js";
 import type { GroundingSource } from "../../ai/deepseek.js";
 import { enrichCandidate } from "./enrich.js";
+import { HttpError } from "../../http.js";
+import type { AiCandidate } from "../../../shared/schemas.js";
 
 export interface PlanContext {
   selectedParticipants: Participant[];
@@ -28,24 +30,63 @@ export interface PlanContext {
   homeBaseLat: number | null;
   homeBaseLng: number | null;
   groundingSources: GroundingSource[];
+  privateMemoryFactIds: Set<string>;
 }
 
 export async function gatherPlanContext(userId: string, spec: PlanSpec): Promise<PlanContext> {
-  const [allParticipants, allConstraints, allTastes, allHunches, user] = await Promise.all([
-    listParticipants(userId),
-    listActiveConstraints(userId),
-    listTastes(userId),
-    listActiveHunches(userId),
+  const [authorizedParticipants, user] = await Promise.all([
+    listAuthorizedPlanningParticipants(userId),
     getUserById(userId),
   ]);
+  const selectedParticipants = authorizedParticipants.filter((participant) => spec.participantIds.includes(participant.id));
+  if (selectedParticipants.length !== new Set(spec.participantIds).size) {
+    throw new HttpError(409, "A selected friend is no longer available for planning. Update who's in and try again.");
+  }
 
-  const selectedParticipants = allParticipants.filter((p) => spec.participantIds.includes(p.id));
-  const inScope = (participantId: string | null) =>
-    participantId === null || spec.participantIds.includes(participantId);
+  const selectedUserIds = Array.from(new Set(selectedParticipants.map((participant) => participant.userId)));
+  const memoryByUser = new Map<
+    string,
+    { constraints: Constraint[]; tastes: Taste[]; hunches: Hunch[] }
+  >();
+  await Promise.all(
+    selectedUserIds.map(async (memoryUserId) => {
+      const [constraints, tastes, hunches] = await Promise.all([
+        listActiveConstraints(memoryUserId),
+        listTastes(memoryUserId),
+        memoryUserId === userId ? listActiveHunches(memoryUserId) : Promise.resolve([]),
+      ]);
+      memoryByUser.set(memoryUserId, { constraints, tastes, hunches });
+    })
+  );
 
-  const scopedConstraints = allConstraints.filter((c) => inScope(c.participantId));
-  const scopedTastes = allTastes.filter((t) => inScope(t.participantId));
-  const scopedHunches = allHunches.filter((h) => inScope(h.participantId));
+  const appliesToParticipant = (
+    memory: { userId: string; participantId: string | null },
+    participant: Participant
+  ) => memory.userId === participant.userId && (memory.participantId === null || memory.participantId === participant.id);
+  const uniqueById = <T extends { id: string }>(items: T[]) => Array.from(new Map(items.map((item) => [item.id, item])).values());
+  const scopedConstraints = uniqueById(
+    selectedParticipants.flatMap((participant) =>
+      (memoryByUser.get(participant.userId)?.constraints ?? []).filter(
+        (constraint) => appliesToParticipant(constraint, participant) &&
+          (participant.userId === userId || constraint.status === "verified")
+      )
+    )
+  );
+  const scopedTastes = uniqueById(
+    selectedParticipants.flatMap((participant) =>
+      (memoryByUser.get(participant.userId)?.tastes ?? []).filter((taste) => appliesToParticipant(taste, participant))
+    )
+  );
+  const scopedHunches = uniqueById(
+    selectedParticipants.flatMap((participant) =>
+      (memoryByUser.get(participant.userId)?.hunches ?? []).filter((hunch) => appliesToParticipant(hunch, participant))
+    )
+  );
+  const privateMemoryFactIds = new Set(
+    [...scopedConstraints, ...scopedTastes]
+      .filter((fact) => fact.userId !== userId)
+      .map((fact) => fact.id)
+  );
 
   const weather: WeatherSnapshot =
     user?.homeBaseLat != null && user?.homeBaseLng != null
@@ -84,13 +125,39 @@ export async function gatherPlanContext(userId: string, spec: PlanSpec): Promise
     homeBaseLat: user?.homeBaseLat ?? null,
     homeBaseLng: user?.homeBaseLng ?? null,
     groundingSources: [],
+    privateMemoryFactIds,
   };
 }
 
 export function activeConstraintsView(
-  scopedConstraints: Constraint[]
+  scopedConstraints: Constraint[],
+  viewerUserId?: string
 ): { id: string; text: string; status: string }[] {
-  return scopedConstraints.map((c) => ({ id: c.id, text: c.text, status: c.status }));
+  return scopedConstraints
+    .filter((constraint) => !viewerUserId || constraint.userId === viewerUserId)
+    .map((c) => ({ id: c.id, text: c.text, status: c.status }));
+}
+
+function redactFriendMemory(candidate: import("../../../shared/schemas.js").AiCandidate, privateTerms: string[], privateIds: Set<string>) {
+  const redact = (value: string) => {
+    let safe = value;
+    for (const term of privateTerms.filter((item) => item.trim().length >= 3)) {
+      safe = safe.replace(new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "the group's preferences");
+    }
+    return safe;
+  };
+  return {
+    ...candidate,
+    title: redact(candidate.title),
+    rationale: redact(candidate.rationale),
+    beats: candidate.beats.map((beat) => ({
+      ...beat,
+      title: redact(beat.title),
+      description: redact(beat.description),
+    })),
+    checkBeforeYouGo: candidate.checkBeforeYouGo.map(redact),
+    citations: candidate.citations.filter((citation) => !privateIds.has(citation.factId)),
+  };
 }
 
 export function placeProvenanceView(
@@ -133,7 +200,113 @@ function walkingTargetFromMemory(texts: (string | null | undefined)[]): { min: n
   return null;
 }
 
-export async function runGeneration(userId: string, spec: PlanSpec, batchIndex: number): Promise<PipelineResult> {
+export interface PlanEditDirective {
+  request: string;
+  mode: "restaurant" | "meal_time" | "budget" | "walking" | "general";
+  originalCandidate: Candidate;
+}
+
+function mealBeatScore(beat: {
+  category: string;
+  title: string;
+  description?: string;
+  place?: { name?: string; kind: string } | null;
+}): number {
+  const identity = `${beat.title} ${beat.description ?? ""}`;
+  const place = `${beat.place?.name ?? ""} ${beat.place?.kind ?? ""}`;
+  const mealTerms = /food|meal|dinner|lunch|breakfast|restaurant|cafe|café|dining|bistro|tavern|bakery|kitchen|grill|steak|fish|seafood|shellfish|shack|petiscos|churrasc/i;
+  let score = mealTerms.test(identity) ? 6 : 0;
+  if (mealTerms.test(place)) score += 8;
+  if (mealTerms.test(beat.category)) score += 1;
+  if (/walk|stroll|arrival|museum|garden|park|viewpoint/i.test(identity) && score <= 1) score -= 2;
+  return score;
+}
+
+export function findMealBeatIndex(beats: Array<Parameters<typeof mealBeatScore>[0]>): number {
+  let bestIndex = -1;
+  let bestScore = 0;
+  beats.forEach((beat, index) => {
+    const score = mealBeatScore(beat);
+    if (score > bestScore) {
+      bestIndex = index;
+      bestScore = score;
+    }
+  });
+  return bestIndex;
+}
+
+function applyEditPreservation(candidate: AiCandidate, edit: PlanEditDirective): AiCandidate | null {
+  const original = edit.originalCandidate;
+  if (edit.mode === "restaurant" || edit.mode === "budget") {
+    const detectedMealIndex = findMealBeatIndex(original.beats);
+    const originalMealIndex = detectedMealIndex >= 0 ? detectedMealIndex : Math.min(1, original.beats.length - 1);
+    const replacementMealIndex = findMealBeatIndex(candidate.beats);
+    const replacementMeal = candidate.beats[replacementMealIndex >= 0 ? replacementMealIndex : originalMealIndex];
+    if (originalMealIndex < 0 || !replacementMeal) return null;
+    const originalMeal = original.beats[originalMealIndex];
+    const replacementIdentity = replacementMeal.place?.name ?? replacementMeal.title;
+    const originalIdentity = originalMeal.place?.name ?? originalMeal.title;
+    if (replacementIdentity.trim().toLowerCase() === originalIdentity.trim().toLowerCase()) return null;
+    const beats = original.beats.map((beat, index) => {
+      if (index === originalMealIndex) return replacementMeal;
+      const generatedMatch = candidate.beats.find(
+        (item) => item.place?.name && item.place.name.toLowerCase() === beat.place?.name.toLowerCase()
+      );
+      return {
+        ...beat,
+        startTime: generatedMatch?.startTime ?? beat.startTime ?? null,
+        travelMode: index === originalMealIndex + 1 ? generatedMatch?.travelMode ?? beat.travelMode ?? null : beat.travelMode ?? null,
+        distanceFromPreviousKm: index === originalMealIndex + 1
+          ? generatedMatch?.distanceFromPreviousKm ?? beat.distanceFromPreviousKm ?? null
+          : beat.distanceFromPreviousKm ?? null,
+        travelMinutes: index === originalMealIndex + 1
+          ? generatedMatch?.travelMinutes ?? beat.travelMinutes ?? null
+          : beat.travelMinutes ?? null,
+      };
+    });
+    return {
+      ...candidate,
+      beats,
+      heroImage: original.heroImage,
+      photoSearchTerm: original.photoSearchTerm,
+      preparation: original.preparation,
+      destinationAnchor: original.destinationAnchor,
+    };
+  }
+  if (edit.mode === "meal_time") {
+    const originalMealIndex = findMealBeatIndex(original.beats);
+    const generatedMealIndex = findMealBeatIndex(candidate.beats);
+    const mealIndex = originalMealIndex >= 0 ? originalMealIndex : generatedMealIndex >= 0 ? generatedMealIndex : Math.min(1, candidate.beats.length - 1);
+    const wantsDinner = /\bdinner|evening|night\b/i.test(edit.request);
+    const wantsLunch = /\blunch|midday|noon\b/i.test(edit.request);
+    const requestedSchedule = wantsDinner
+      ? ["17:30", "19:30", "21:15"]
+      : wantsLunch
+        ? ["11:00", "12:30", "14:15"]
+        : null;
+    return {
+      ...candidate,
+      beats: candidate.beats.map((beat, index) => ({
+        ...beat,
+        place: original.beats[index]?.place ?? beat.place,
+        startTime: requestedSchedule
+          ? requestedSchedule[index === mealIndex ? 1 : index < mealIndex ? 0 : 2]
+          : beat.startTime,
+      })),
+      heroImage: original.heroImage,
+      photoSearchTerm: original.photoSearchTerm,
+      destinationAnchor: original.destinationAnchor,
+    };
+  }
+  return candidate;
+}
+
+export async function runGeneration(
+  userId: string,
+  spec: PlanSpec,
+  batchIndex: number,
+  edit?: PlanEditDirective
+): Promise<PipelineResult> {
   const context = await gatherPlanContext(userId, spec);
   const { selectedParticipants, scopedConstraints, scopedTastes, scopedHunches, weather, resolver, knownFacts } =
     context;
@@ -171,24 +344,72 @@ export async function runGeneration(userId: string, spec: PlanSpec, batchIndex: 
       confidence: h.confidence,
     })),
     seed: `${spec.id}:${batchIndex}`,
+    edit: edit
+      ? {
+          request: edit.request,
+          mode: edit.mode,
+          originalPlan: {
+            title: edit.originalCandidate.title,
+            category: edit.originalCandidate.category,
+            estimatedCost: edit.originalCandidate.estimatedCost,
+            walkingMinutes: edit.originalCandidate.walkingMinutes,
+            beats: edit.originalCandidate.beats.map((beat) => ({
+              title: beat.title,
+              category: beat.category,
+              startTime: beat.startTime ?? null,
+              durationMinutes: beat.durationMinutes ?? null,
+              place: beat.place
+                ? {
+                    name: beat.place.name,
+                    address: beat.place.address ?? null,
+                    kind: beat.place.kind,
+                    sourceUrl: beat.place.sourceUrl,
+                    sourceLabel: beat.place.sourceLabel,
+                    factualNote: beat.place.factualNote,
+                  }
+                : null,
+            })),
+          },
+        }
+      : undefined,
   };
 
   const { mode, response, groundingSources } = await generateCandidates(genCtx);
-  context.groundingSources = groundingSources;
+  const originalSources = edit
+    ? edit.originalCandidate.beats.flatMap((beat) => beat.place ? [{ url: beat.place.sourceUrl, title: beat.place.sourceLabel }] : [])
+    : [];
+  context.groundingSources = Array.from(
+    new Map([...groundingSources, ...originalSources].map((source) => [source.url, source])).values()
+  );
+  const editSafeResponse = edit
+    ? { ...response, candidates: response.candidates.map((candidate) => applyEditPreservation(candidate, edit)).filter((candidate): candidate is AiCandidate => Boolean(candidate)) }
+    : response;
 
-  const { kept, rejected } = filterCandidates(response.candidates, {
+  const privateTerms = [
+    ...selectedParticipants.filter((participant) => participant.userId !== userId).map((participant) => participant.name),
+    ...scopedConstraints.filter((constraint) => constraint.userId !== userId).map((constraint) => constraint.text),
+    ...scopedTastes.filter((taste) => taste.userId !== userId).map((taste) => taste.text),
+  ];
+  const privacySafeResponse = {
+    ...response,
+    candidates: editSafeResponse.candidates.map((candidate) =>
+      redactFriendMemory(candidate, privateTerms, context.privateMemoryFactIds)
+    ),
+  };
+
+  const { kept, rejected } = filterCandidates(privacySafeResponse.candidates, {
     activeConstraints: scopedConstraints.map((c) => ({ id: c.id, text: c.text })),
     knownFacts,
     resolverMode: resolver.mode,
-    groundedSourceUrls: groundingSources.map((source) => source.url),
+    groundedSourceUrls: context.groundingSources.map((source) => source.url),
     radiusKm: spec.radiusKm,
     isTripScale: isTripScale(spec.scale),
   });
 
   const memories: ParticipantMemory[] = selectedParticipants.map((p) => ({
     participantId: p.id,
-    tastes: scopedTastes.filter((t) => t.participantId === null || t.participantId === p.id),
-    hunches: scopedHunches.filter((h) => h.participantId === null || h.participantId === p.id),
+    tastes: scopedTastes.filter((t) => t.userId === p.userId && (t.participantId === null || t.participantId === p.id)),
+    hunches: scopedHunches.filter((h) => h.userId === p.userId && (h.participantId === null || h.participantId === p.id)),
   }));
 
   const recentSummaries = recentPlans.map((p) => ({ title: p.title, category: p.category }));

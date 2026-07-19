@@ -183,7 +183,7 @@ export async function researchPlacesWithGemini(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GROUNDING_MODEL_ID)}:generateContent`
   );
   endpoint.searchParams.set("key", env.GEMINI_API_KEY);
-  const prompt = `${buildPlaceResearchSystemPrompt()}\n\nREQUEST\n${buildPlaceResearchUserPrompt(ctx)}`;
+  const prompt = `${buildPlaceResearchSystemPrompt(ctx)}\n\nREQUEST\n${buildPlaceResearchUserPrompt(ctx)}`;
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -274,7 +274,7 @@ export async function composePlanWithGemini(ctx: GenerateContext): Promise<AiGen
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GROUNDING_MODEL_ID)}:generateContent`
   );
   endpoint.searchParams.set("key", env.GEMINI_API_KEY);
-  const prompt = `${buildGenerateSystemPrompt()}\n\nREQUEST\n${buildGenerateUserPrompt(ctx)}`;
+  const prompt = `${buildGenerateSystemPrompt(ctx)}\n\nREQUEST\n${buildGenerateUserPrompt(ctx)}`;
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

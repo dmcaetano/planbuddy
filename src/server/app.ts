@@ -17,6 +17,9 @@ import { chatRouter } from "./chat/routes.js";
 import { HttpError } from "./http.js";
 import { logger } from "./logger.js";
 import { AiUnavailableError } from "./ai/deepseek.js";
+import { friendsRouter } from "./friends/routes.js";
+import { sharesRouter } from "./shares/routes.js";
+import { planChatRouter } from "./plans/plan-chat.routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -49,8 +52,11 @@ export function createApp() {
   app.use("/api/hunches", hunchesRouter);
   app.use("/api/weather", weatherRouter);
   app.use("/api/plan-specs", planSpecsRouter);
+  app.use("/api/plan-specs", planChatRouter);
   app.use("/api/history", historyRouter);
   app.use("/api/chat", chatRouter);
+  app.use("/api/friends", friendsRouter);
+  app.use("/api/shares", sharesRouter);
 
   // __dirname at runtime is dist-server/server; the Vite client build lives at dist/client.
   const clientDist = path.resolve(__dirname, "../../dist/client");

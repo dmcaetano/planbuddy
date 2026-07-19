@@ -78,9 +78,30 @@ export const notThisSchema = z.object({
   reason: z.string().trim().min(1).max(300),
 });
 
+export const reactionSchema = z.enum(["dislike", "like", "love"]);
+
+export const candidateReactionSchema = z.object({
+  candidateId: z.string().uuid(),
+  reaction: reactionSchema,
+});
+
 export const feedbackCreateSchema = z.object({
-  rating: z.number().int().min(1).max(5),
+  rating: z.number().int().min(1).max(5).optional(),
+  reaction: reactionSchema.optional(),
   comment: z.string().trim().max(500).optional().nullable(),
+}).refine((value) => value.rating !== undefined || value.reaction !== undefined, {
+  message: "A reaction is required",
+});
+
+export const friendTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{32,200}$/);
+
+export const shareCreateSchema = z.object({
+  candidateId: z.string().uuid(),
+});
+
+export const planChatActionCreateSchema = z.object({
+  candidateId: z.string().uuid(),
+  message: z.string().trim().min(1).max(1000),
 });
 
 /* ---------------------------------------------------------------------- */
@@ -235,3 +256,18 @@ export const aiFeedbackResponseSchema = z.object({
   evidence: z.array(aiFeedbackEvidenceSchema).max(5).default([]),
 });
 export type AiFeedbackResponse = z.infer<typeof aiFeedbackResponseSchema>;
+
+export const aiEventFeatureResponseSchema = z.object({
+  summary: z.string().min(1).max(300),
+  features: z.array(z.string().min(1).max(160)).min(2).max(6),
+});
+export type AiEventFeatureResponse = z.infer<typeof aiEventFeatureResponseSchema>;
+
+export const aiPlanActionResponseSchema = z.object({
+  action: z.enum(["edit", "react", "lock", "share", "show_another", "invite_friend", "explain"]),
+  reaction: reactionSchema.nullable().optional(),
+  editMode: z.enum(["restaurant", "meal_time", "budget", "walking", "general"]).nullable().optional(),
+  instruction: z.string().min(1).max(500),
+  reply: z.string().min(1).max(700),
+});
+export type AiPlanActionResponse = z.infer<typeof aiPlanActionResponseSchema>;

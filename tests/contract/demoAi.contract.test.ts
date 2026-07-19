@@ -54,6 +54,27 @@ describe("demo AI generate contract", () => {
       expect(candidate.destinationAnchor).toBeNull();
     }
   });
+
+  it("keeps restaurant and budget edits inside dining alternatives", () => {
+    const result = generateCandidatesDemo(baseCtx({
+      edit: {
+        request: "Change only the restaurant",
+        mode: "restaurant",
+        originalPlan: {
+          title: "A walk and dinner",
+          category: "food",
+          estimatedCost: null,
+          walkingMinutes: 45,
+          beats: [],
+        },
+      },
+    }));
+    expect(result.candidates.length).toBeGreaterThan(1);
+    for (const candidate of result.candidates) {
+      expect(candidate.category).toBe("food");
+      expect(candidate.beats[1].title).toMatch(/market|noodle|shellfish/i);
+    }
+  });
 });
 
 describe("demo AI chat contract", () => {

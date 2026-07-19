@@ -7,6 +7,9 @@ import ChatPage from "./routes/ChatPage";
 import MemoryPage from "./routes/MemoryPage";
 import HistoryPage from "./routes/HistoryPage";
 import NavBar from "./components/NavBar";
+import FriendsPage from "./routes/FriendsPage";
+import InvitePage from "./routes/InvitePage";
+import SharedPlanPage from "./routes/SharedPlanPage";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -16,15 +19,20 @@ export default function App() {
     return <div className="loading-screen">Loading PlanBuddy…</div>;
   }
 
+  if (location.pathname.startsWith("/s/")) {
+    return <Routes><Route path="/s/:token" element={<SharedPlanPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes>;
+  }
+
   if (!user) {
     return (
       <Routes>
+        <Route path="/invite/:token" element={<InvitePage />} />
         <Route path="*" element={<AuthPage />} />
       </Routes>
     );
   }
 
-  if (!user.homeBaseLabel && location.pathname !== "/onboarding") {
+  if (!user.homeBaseLabel && location.pathname !== "/onboarding" && !location.pathname.startsWith("/invite/")) {
     return <Navigate to="/onboarding" replace />;
   }
 
@@ -37,6 +45,8 @@ export default function App() {
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/memory" element={<MemoryPage />} />
           <Route path="/history" element={<HistoryPage />} />
+          <Route path="/friends" element={<FriendsPage />} />
+          <Route path="/invite/:token" element={<InvitePage />} />
           <Route path="*" element={<Navigate to="/plan" replace />} />
         </Routes>
       </main>

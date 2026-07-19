@@ -20,7 +20,35 @@ export interface Participant {
   kind: ParticipantKind;
   relationship: string | null;
   isOwner: boolean;
+  isFriendAccount?: boolean;
+  accountEmail?: string | null;
   createdAt: string;
+}
+
+export type Reaction = "dislike" | "like" | "love";
+
+export interface FeatureSummary {
+  summary: string;
+  features: string[];
+}
+
+export interface CandidateReaction {
+  id: Id;
+  userId: Id;
+  candidateId: Id;
+  reaction: Reaction;
+  featureSummary: string | null;
+  features: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Friend {
+  userId: Id;
+  email: string;
+  displayName: string;
+  participant: Participant;
+  connectedAt: string;
 }
 
 export type ConstraintStatus = "verified" | "active_unverified";
@@ -129,6 +157,17 @@ export interface Beat {
   travelMinutes?: number | null;
   place?: PlanPlace | null;
   directionsUrl?: string | null;
+}
+
+export interface PlanChatMessage {
+  id: Id;
+  userId: Id;
+  planSpecId: Id;
+  candidateId: Id | null;
+  role: "user" | "assistant";
+  content: string;
+  action: Record<string, unknown> | null;
+  createdAt: string;
 }
 
 export interface PlanPlace {
@@ -244,7 +283,10 @@ export interface Feedback {
   id: Id;
   planId: Id;
   rating: number;
+  reaction: Reaction;
   comment: string | null;
+  featureSummary: string | null;
+  features: string[];
   createdAt: string;
 }
 

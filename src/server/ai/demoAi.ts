@@ -35,6 +35,23 @@ export interface GenerateContext {
   preferenceHunches?: { text: string; polarity: "love" | "avoid"; confidence: number }[];
   groundedPlaces?: AiPlaceResearchResponse["places"];
   seed: string; // unique per (planSpecId, batchIndex) for determinism
+  edit?: {
+    request: string;
+    mode: "restaurant" | "meal_time" | "budget" | "walking" | "general";
+    originalPlan: {
+      title: string;
+      category: string;
+      estimatedCost: string | null;
+      walkingMinutes: number | null;
+      beats: Array<{
+        title: string;
+        category: string;
+        startTime: string | null;
+        durationMinutes: number | null;
+        place: { name: string; address?: string | null; kind: string; sourceUrl: string; sourceLabel: string; factualNote: string } | null;
+      }>;
+    };
+  };
 }
 
 function candidateText(c: Pick<AiCandidate, "title" | "rationale" | "category"> & { beats: { title: string; description: string }[] }): string {
@@ -100,7 +117,10 @@ export function generateCandidatesDemo(ctx: GenerateContext): AiGenerateResponse
     return { candidates };
   }
 
-  const shuffled = seededShuffle(LOCAL_TEMPLATES, seed);
+  const templatePool = ctx.edit && (ctx.edit.mode === "restaurant" || ctx.edit.mode === "budget")
+    ? LOCAL_TEMPLATES.filter((template) => template.category === "food")
+    : LOCAL_TEMPLATES;
+  const shuffled = seededShuffle(templatePool, seed);
   const scored = shuffled
     .map((t) => {
       let bonus = 0;

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { Constraint, Hunch, Participant, Taste } from "../api/types";
 import { Check, Plus, ShieldCheck, ShieldQuestion, Trash2, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Users } from "lucide-react";
 
 type Tab = "constraints" | "tastes" | "hunches";
 
@@ -85,6 +87,7 @@ export default function MemoryPage() {
       <div>
         <div className="eyebrow">Memory</div>
         <h1>What PlanBuddy knows</h1>
+        <Link to="/friends" className="btn btn-ghost btn-sm" style={{ marginBottom: 8 }}><Users size={16} /> Friends & invites</Link>
         <p>Every constraint, taste, and hunch is visible and editable — nothing learns silently.</p>
       </div>
 

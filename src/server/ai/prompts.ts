@@ -1,8 +1,8 @@
 import type { GenerateContext } from "./demoAi.js";
 import { beatCountForScale, isTripScale } from "../../shared/scale.js";
 
-export function buildGenerateSystemPrompt(): string {
-  return [
+export function buildGenerateSystemPrompt(ctx?: GenerateContext): string {
+  const lines = [
     "You are PlanBuddy's grounded local planner. Produce a decision-ready itinerary, not generic inspiration.",
     "A citation-validated place dossier is supplied in the user prompt. Use only named places in that dossier and copy their name, address, sourceUrl, sourceLabel, and factualNote exactly.",
     "Reply with JSON only, matching this shape exactly:",
@@ -28,9 +28,19 @@ export function buildGenerateSystemPrompt(): string {
     "photoSearchTerm must be a permanent landmark, park, waterfront, or neighborhood actually on the route—not a restaurant and never an invented feature.",
     "In Lisbon, never create lakeside framing or call a small ornamental park pond a lake; prefer the Tagus waterfront, gardens, parks, viewpoints, or correctly call it a pond.",
     "Only cite memory facts given verbatim in the prompt. Never invent a memory citation.",
+    "When a friend participates, use their constraints and tastes silently for group fit. Never repeat or attribute a person's private preference, constraint, or name in the generated prose.",
     "Self-report constraintCompliance for every hard constraint honestly. If a source cannot establish a constraint such as pet acceptance or gluten safety, mark it unsatisfied so the server rejects the candidate.",
     "resolverVenueIds must always be an empty array; web source validation is the venue firewall for this version.",
-  ].join("\n");
+  ];
+  if (ctx?.edit) {
+    lines.push(
+      "This is an edit of an existing plan. Make the smallest possible change that fully satisfies the request.",
+      "For restaurant or budget edits, replace only the meal beat. Copy the two non-meal place names and factual payloads exactly from the original plan; only adjacent transition time/distance may change.",
+      "For meal-time edits, preserve existing venues whenever viable and coherently retime or reorder the three beats around the requested meal.",
+      "For walking edits, preserve the meal when possible and minimize the walking route. Never silently broaden a single-detail edit into an unrelated new day.",
+    );
+  }
+  return lines.join("\n");
 }
 
 function weatherLine(ctx: GenerateContext): string {
@@ -92,17 +102,31 @@ export function buildGenerateUserPrompt(ctx: GenerateContext): string {
     "Return exactly 1 grounded, detailed candidate using only the validated dossier below. Prefer one compact route over disconnected stops. JSON only."
   );
   lines.push(`Validated place dossier: ${JSON.stringify(ctx.groundedPlaces ?? [])}`);
+  if (ctx.edit) {
+    lines.push(`EDIT REQUEST: ${ctx.edit.request}`);
+    lines.push(`EDIT MODE: ${ctx.edit.mode}`);
+    lines.push(`ORIGINAL PLAN TO PRESERVE: ${JSON.stringify(ctx.edit.originalPlan)}`);
+  }
   return lines.join("\n");
 }
 
-export function buildPlaceResearchSystemPrompt(): string {
-  return [
+export function buildPlaceResearchSystemPrompt(ctx?: GenerateContext): string {
+  const lines = [
     "Use web search to find a tiny factual place shortlist for PlanBuddy.",
     'Reply with JSON only: {"places": [{"name": string, "address": string|null, "kind": string, "sourceUrl": string, "sourceLabel": string, "factualNote": string, "bestFor": string[], "photoSearchTerm": string|null}]}.',
     "Return exactly 4 real places in a geographically compact area: one primary meal venue, two distinct permanent outdoor walk/landmark stops (one before and one after the meal), and one fallback meal venue.",
     "Copy every sourceUrl from the search results. factualNote may only repeat source-backed facts.",
     "Do not infer dog acceptance, shade, booking availability, route distance, or hours. Never invent geography.",
-  ].join("\n");
+  ];
+  if (ctx?.edit) {
+    lines.push(
+      "For an existing-plan edit, treat original places as route anchors.",
+      "For restaurant/budget edits, the four-place dossier must contain the exact two original non-meal places plus two suitable replacement meal venues in the same vicinity.",
+      "For meal-time edits, include all viable original places plus one meal fallback suitable for the new time.",
+      "Never replace an unaffected place merely to make the edit easier.",
+    );
+  }
+  return lines.join("\n");
 }
 
 export function buildPlaceResearchUserPrompt(ctx: GenerateContext): string {
@@ -118,6 +142,8 @@ export function buildPlaceResearchUserPrompt(ctx: GenerateContext): string {
     participantSummary ? `Participants: ${participantSummary}.` : null,
     preferences ? `Remembered preferences: ${preferences}.` : null,
     ctx.weather && !ctx.weather.unavailable ? `Forecast: ${ctx.weather.summary}; sunset ${ctx.weather.sunset ?? "unknown"}.` : null,
+    ctx.edit ? `Edit the existing plan: ${ctx.edit.request}` : null,
+    ctx.edit ? `Original route anchors: ${JSON.stringify(ctx.edit.originalPlan.beats.map((beat) => beat.place).filter(Boolean))}` : null,
     "Prioritize a geographically compact combination and sources that clearly establish what each place is.",
   ]
     .filter(Boolean)
@@ -149,4 +175,34 @@ export function buildFeedbackSystemPrompt(): string {
 
 export function buildFeedbackUserPrompt(rating: number, comment: string | null): string {
   return `Rating: ${rating}/5. Comment: ${comment ? `"${comment}"` : "(none)"}`;
+}
+
+export function buildEventFeatureSystemPrompt(): string {
+  return [
+    "You are PlanBuddy's preference summarizer. Reply with JSON only:",
+    '{"summary": string, "features": string[]}',
+    "Extract 2-6 durable, reusable traits that explain why a person would love this kind of plan.",
+    "Use only the supplied structural facts. Cover useful dimensions such as pace, route shape, food style, setting, timing, budget, travel effort, and pet suitability.",
+    "Never mention or infer a venue, address, person, exact date, current weather, availability, medical condition, or temporary circumstance.",
+    "Make every feature a short natural-language preference that can guide a different future plan.",
+  ].join("\n");
+}
+
+export function buildEventFeatureUserPrompt(structure: Record<string, unknown>): string {
+  return `Loved plan structure: ${JSON.stringify(structure)}`;
+}
+
+export function buildPlanActionSystemPrompt(): string {
+  return [
+    "You are the action router for a plan-scoped PlanBuddy chat. Reply with JSON only:",
+    '{"action":"edit"|"react"|"lock"|"share"|"show_another"|"invite_friend"|"explain","reaction":"dislike"|"like"|"love"|null,"editMode":"restaurant"|"meal_time"|"budget"|"walking"|"general"|null,"instruction":string,"reply":string}',
+    "Route restaurant/venue swaps to editMode restaurant; lunch/dinner/time changes to meal_time; cheaper/less expensive to budget; less/shorter walking to walking.",
+    "Route Like/Love/Dislike to react. Route save/lock/choose to lock. Route send/copy/share this plan to share. Route another/new option to show_another. Route invite/add a friend to invite_friend.",
+    "Everything else that asks to change the visible plan is edit/general. Questions about the plan are explain.",
+    "Never expose, quote, or attribute another participant's private memory. Keep the reply short and say what will happen.",
+  ].join("\n");
+}
+
+export function buildPlanActionUserPrompt(message: string, plan: Record<string, unknown>): string {
+  return `Visible plan: ${JSON.stringify(plan)}\nUser instruction: ${JSON.stringify(message)}`;
 }

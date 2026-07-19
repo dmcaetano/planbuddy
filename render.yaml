@@ -5,7 +5,7 @@ services:
     plan: free
     region: frankfurt
     buildCommand: npm ci --include=dev && npm run build
-    startCommand: npm start
+    startCommand: node dist-server/server/db/migrate.js && npm start
     healthCheckPath: /api/health
     autoDeployTrigger: commit
     envVars:
