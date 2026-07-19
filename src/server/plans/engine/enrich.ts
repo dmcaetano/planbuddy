@@ -164,10 +164,7 @@ function calculateWalkingMetrics(
   let distanceKm = 0;
   let hasMetrics = false;
   for (const beat of beats) {
-    const isWalkingActivity = /walk|stroll|hike|promenade|wander|park/i.test(
-      `${beat.title} ${beat.category}`
-    );
-    if (isWalkingActivity && beat.durationMinutes) {
+    if (isWalkingBeat(beat) && beat.durationMinutes) {
       minutes += beat.durationMinutes;
       distanceKm += beat.durationMinutes * 0.065;
       hasMetrics = true;
@@ -185,15 +182,19 @@ function calculateWalkingMetrics(
   };
 }
 
+function isWalkingBeat(beat: AiCandidate["beats"][number]): boolean {
+  return /walk|stroll|hike|promenade|wander|park|garden|viewpoint|miradouro|jardim/i.test(
+    `${beat.title} ${beat.category} ${beat.description} ${beat.place?.kind ?? ""}`
+  );
+}
+
 function normalizeWalkingDuration(
   beats: AiCandidate["beats"],
   target: { min: number; max: number } | null | undefined
 ): AiCandidate["beats"] {
   if (!target) return beats;
   const walkingIndexes = beats
-    .map((beat, index) =>
-      /walk|stroll|hike|promenade|wander|park/i.test(`${beat.title} ${beat.category}`) ? index : -1
-    )
+    .map((beat, index) => (isWalkingBeat(beat) ? index : -1))
     .filter((index) => index >= 0);
   if (!walkingIndexes.length) return beats;
 

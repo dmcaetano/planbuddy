@@ -82,7 +82,8 @@ The browser console records one expected 401 for the initial anonymous
   harmless redirect-URL mutations cannot create a false firewall dead end while
   genuinely unknown names still fail closed.
 - Reconciled walking activity plus transfer time to an explicit remembered
-  walking range; the Lisbon canary now displays **60 minutes** total.
+  walking range; classification reads the title, description, category, and
+  place kind so a garden beat cannot disappear from the total.
 - Added mandatory hours, reservation/terrace, pet-policy, and menu/price checks.
 - Replaced fuzzy Wikipedia page images with ranked Wikimedia Commons file search
   and penalized insect, close-up, tile, flag, and sculpture results.

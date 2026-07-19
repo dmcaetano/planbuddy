@@ -9,16 +9,16 @@ const candidate: AiCandidate = {
   indoor: false,
   beats: [
     {
-      title: "Garden",
-      description: "Walk gently.",
-      category: "walk",
+      title: "Pre-dinner greenery",
+      description: "Enjoy a gentle loop before dinner.",
+      category: "nature",
       indoor: false,
       durationMinutes: 45,
       travelMode: "driving",
       place: {
         name: "Jardim da Praça do Império",
         address: "Praça do Império, Lisboa",
-        kind: "garden",
+        kind: "public garden",
         sourceUrl: "https://www.lisboa.pt/example",
         sourceLabel: "Lisbon municipality",
         factualNote: "A municipal garden.",
