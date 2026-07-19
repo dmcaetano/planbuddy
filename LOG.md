@@ -148,3 +148,34 @@ Amália Rodrigues, refreshed the Maps route, kept “Back to original,” and cr
 a privacy-safe share link. All 86 Vitest tests across 14 files, the full mobile
 Playwright journey, typecheck, lint, build, dependency audit, and visual review
 are green.
+
+## 2026-07-19 — v0.1.5 “Long Memory” release
+
+### What we did
+Made History capture every surfaced winning suggestion immediately, before Lock,
+Love, Like, Dislike, or any other action. Added a dedicated Saved suggestions
+section whose tickets reopen with full detail and all actions. Lock and rejection
+now transition the same plan record instead of creating duplicate history rows.
+Expanded the anti-repeat loop from locked-plan titles to the 20 most recent
+surfaced plans, carrying titles, categories, and normalized named venues into
+both grounding/composition prompts and deterministic novelty scoring. Backfilled
+older rank-one candidates so prior recommendations participate immediately.
+
+### Issues found and fixed
+The first end-to-end run exposed an ordering regression: putting Saved
+suggestions before Upcoming caused an existing history test to reopen the wrong
+card. Upcoming remains first, while unselected suggestions stay fully accessible
+below it. Direct Dislike now creates reversible negative hunch evidence, and
+changing the reaction removes that evidence without duplicating the existing
+Not-this or post-plan learning paths.
+
+### Result
+Render deploy `dep-d9ekr5bbc2fs738419r0` at commit `af8377d` is live. A production
+canary showed the first exact Lisbon request in Saved suggestions before Lock,
+preserved its Love reaction on reopen, and moved the same row to Upcoming after
+Lock. Repeating the identical request changed the route from Alfama (Miradouro de
+Santa Luzia → Restaurante Lautasco → Sé de Lisboa) to Cacilhas (Farol de Cacilhas
+→ Escondidinho de Cacilhas → Elevador da Boca do Vento), with no venue overlap.
+All 89 Vitest tests across 15 files, the Playwright mobile journey, typecheck,
+lint, build, dependency audit, mobile/desktop visual review, and live health and
+version checks are green.

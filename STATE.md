@@ -1,10 +1,11 @@
 # PlanBuddy — State
 
 ## Status
-v0.1.4 “Social Learning” is live at https://planbuddy.onrender.com from
-`main` (`4f28b38`), with dedicated Neon Postgres persistence. Gemini 3.5 Flash
-plus Google Search grounds real places; DeepSeek V4 Flash powers chat,
-feedback, and grounded fallback. Local and production QA are green.
+v0.1.5 “Long Memory” is live at https://planbuddy.onrender.com from
+`main` (`af8377d`, Render deploy `dep-d9ekr5bbc2fs738419r0`), with dedicated
+Neon Postgres persistence. Every surfaced winner is now saved before the user
+acts on it, and recent titles, categories, and venues actively suppress repeat
+recommendations. Local and production QA are green.
 
 ## Next concrete action
 Use the product with a real household and review recommendation/feedback quality before expanding venue, calendar, or booking integrations.
@@ -42,6 +43,14 @@ Use the product with a real household and review recommendation/feedback quality
   raw memory, chat, history, hunches, or account editing.
 - 2026-07-19 — Shared plans are immutable, scrubbed snapshots behind hashed,
   expiring, revocable tokens; they are not collaborative access grants.
+- 2026-07-19 — Every surfaced winning suggestion enters History immediately as
+  `suggested`; Lock and Not this update that same record instead of duplicating it.
+- 2026-07-19 — Novelty uses the 20 latest surfaced plans and excludes recent
+  titles, categories, and named venues in both provider prompts and deterministic
+  ranking, while still respecting an explicit request to revisit something.
+- 2026-07-19 — Gemini is optional. DeepSeek V4 Flash plus Exa/OpenRouter web
+  search can run the complete grounded planning path; the deployed hybrid route
+  remains enabled until an explicit provider switch is requested.
 
 ## Future ideas
 

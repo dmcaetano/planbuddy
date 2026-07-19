@@ -1,6 +1,6 @@
 # PlanBuddy QA report
 
-Version **0.1.4 — “Social Learning”**
+Version **0.1.5 — “Long Memory”**
 Reviewed 2026-07-19 by Codex after GPT-SOL, Claude Fable, and Claude Opus product-output comparisons.
 
 ## Phase 1 — Feature inventory
@@ -18,8 +18,10 @@ Reviewed 2026-07-19 by Codex after GPT-SOL, Claude Fable, and Claude Opus produc
 4. **Plan actions:** Lock, Show another, reversible Tweak, Share, and
    Like/Dislike/Love. Buddy chat can run every plan-level action and make
    restaurant, meal-time, budget, walking, or general edits.
-5. **History and feedback:** upcoming/past lists, reopen the full rich ticket,
-   Like/Dislike/Love, 1–5 stars, optional comment, and visible feature learning.
+5. **History and feedback:** every surfaced winner is saved immediately;
+   Saved suggestions, Upcoming, and Past & disliked lists reopen the full rich
+   ticket with Lock, Share, Like/Dislike/Love, 1–5 stars, optional comment, and
+   visible feature learning.
 6. **Chat and memory:** bounded DeepSeek chat, quote-verified constraint/taste
    extraction, visible constraints/tastes/hunches, confirmation/dismissal, CRUD,
    provenance, decay and taste promotion.
@@ -31,7 +33,7 @@ Reviewed 2026-07-19 by Codex after GPT-SOL, Claude Fable, and Claude Opus produc
    immutable share snapshots, token hashing, expiry, and revocation.
 9. **External/config states:** Gemini grounding present/absent, DeepSeek present/
    absent, Open-Meteo available/unavailable, Commons image found/not found,
-   Render env secrets, and visible `v0.1.4 · social` release marker.
+   Render env secrets, and visible `v0.1.5 · long memory` release marker.
 10. **API surface:** `/api/health`; auth signup/login/logout/me/home-base;
    participants CRUD; constraints CRUD; tastes CRUD; hunch read/action/evidence;
    weather; plan-spec create/read/regenerate/not-this/lock/tweak; history list and
@@ -41,7 +43,7 @@ Reviewed 2026-07-19 by Codex after GPT-SOL, Claude Fable, and Claude Opus produc
 ## Phase 2 — Procedures
 
 1. Run strict client/server TypeScript, ESLint, production build, dependency
-   audit, 86 unit/contract/integration tests, and the Playwright mobile journey.
+   audit, 89 unit/contract/integration tests, and the Playwright mobile journey.
 2. Generate locally with the exact Lisbon prompt and remembered Saldanha home,
    18:30 meal, 45–60 minute easy walk, €35–50 preference, and Pom needs.
 3. Confirm the response is `gemini-grounded`, contains four source-backed
@@ -54,7 +56,11 @@ Reviewed 2026-07-19 by Codex after GPT-SOL, Claude Fable, and Claude Opus produc
    collisions, image crop, bottom-navigation clearance, and responsive columns.
 6. Execute signup → onboarding → generation → rejection → regeneration → lock →
    rich History reopen → feedback → Chat extraction → Memory visibility.
-7. After deployment, poll Render until live, check health and visible version,
+7. Confirm a newly generated winner appears in Saved suggestions before any
+   action, then reacts and locks in place without creating a duplicate.
+8. Repeat an identical request and verify the route has no avoidable title,
+   category, or named-venue overlap with the recently surfaced plan.
+9. After deployment, poll Render until live, check health and visible version,
    then repeat a real grounded generation and critical persistence flow on the
    production URL.
 
@@ -63,7 +69,7 @@ Reviewed 2026-07-19 by Codex after GPT-SOL, Claude Fable, and Claude Opus produc
 - Type-check: **PASS**
 - ESLint: **PASS** (zero errors and zero warnings)
 - Production build: **PASS**
-- Unit/contract/integration: **PASS — 86/86 across 14 files**
+- Unit/contract/integration: **PASS — 89/89 across 15 files**
 - Playwright mobile journey: **PASS — 1/1**
 - Real Gemini + Search Lisbon generation: **PASS**
 - Google Maps URL generation/source firewall: **PASS**
@@ -75,6 +81,8 @@ Reviewed 2026-07-19 by Codex after GPT-SOL, Claude Fable, and Claude Opus produc
 - Friend authorization, stale-friend rejection, and cross-account privacy: **PASS**
 - Share token hashing, immutable snapshot, expiry/revoke, and prose-safe redaction: **PASS**
 - Restaurant swap preserves both non-meal stops and keeps the original reversible: **PASS**
+- Unselected suggestion persists, reopens, reacts, and locks without duplication: **PASS**
+- Repeat request receives deterministic recent-title/category/venue suppression: **PASS**
 
 The browser console records one expected 401 for the initial anonymous
 `/api/auth/me` probe; the auth provider handles it and no app exception leaks.
@@ -118,10 +126,18 @@ The browser console records one expected 401 for the initial anonymous
   plan's already-grounded nearby fallback before requesting new research.
 - Tightened public-share redaction to case-insensitive whole words and excluded
   generic pronouns so privacy scrubbing cannot corrupt ordinary prose.
+- Persisted rank-one surfaced candidates as `suggested` and backfilled historical
+  winners, so History no longer begins only after Lock or rejection.
+- Replaced title-only novelty with recent surfaced-plan exclusions covering
+  titles, categories, and normalized named venues in prompts and server scoring.
+- Made direct Dislike evidence reversible and prevented duplicate negative
+  evidence when Not-this or post-plan feedback already records the signal.
+- Restored Upcoming ahead of Saved suggestions after E2E caught ambiguous first-
+  card ordering, without reducing access to unselected recommendations.
 
 ## Phase 5 — Production canary
 
-**PASS** on final Render deploy `dep-d9ek30bbc2fs7383judg`, commit `4f28b38`.
+**PASS** on final Render deploy `dep-d9ekr5bbc2fs738419r0`, commit `af8377d`.
 
 - Exact Lisbon/Pom request returned `gemini-grounded`, `deadEnd=false` in 28.9s.
 - Winner: **A Scenic Saldanha Walk & Fresh Grilled Fish Dinner with Your Pom**.
@@ -145,8 +161,14 @@ The browser console records one expected 401 for the initial anonymous
 - Buddy created a private share link; the public page exposed the itinerary and
   live Maps links while omitting citations, constraints, per-person scores, and
   the home-origin directions leg.
+- A new grilled-fish-and-walk winner appeared in Saved suggestions before any
+  action, reopened with its full ticket, retained Love learning, and moved to
+  Upcoming on Lock using the same plan row; Saved suggestions then became empty.
+- Repeating the exact request produced Cacilhas instead of Alfama: Farol de
+  Cacilhas → Escondidinho de Cacilhas → Elevador da Boca do Vento, with zero
+  named-place overlap against the first route.
 
 ## Readiness
 
-Local and production release gates are green. Version 0.1.4 is live and ready
+Local and production release gates are green. Version 0.1.5 is live and ready
 for real household use at https://planbuddy.onrender.com.
