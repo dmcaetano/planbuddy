@@ -10,6 +10,7 @@ const envSchema = z.object({
   PLANBUDDY_DATA_DIR: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
   MODEL_ID: z.string().default("deepseek/deepseek-v4-flash"),
+  AI_TIMEOUT_MS: z.coerce.number().int().min(5000).max(120000).default(45000),
   PLACE_RESOLVER_API_KEY: z.string().optional(),
 });
 

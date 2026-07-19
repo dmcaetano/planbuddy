@@ -19,7 +19,10 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, repairNo
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
+  // Candidate generation is materially larger than chat/feedback JSON. Give
+  // the fast model enough room for a cold provider start while retaining a
+  // hard upper bound so the deterministic fallback can still take over.
+  const timeout = setTimeout(() => controller.abort(), env.AI_TIMEOUT_MS);
   try {
     const res = await fetch(OPENROUTER_URL, {
       method: "POST",
