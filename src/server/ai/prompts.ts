@@ -12,6 +12,7 @@ export function buildGenerateSystemPrompt(): string {
     '"constraintCompliance": [{"constraintId": string, "satisfied": boolean}],',
     '"travelEstimateKm": number|null}]}',
     "Return exactly 8 candidates. Day off/Weekend candidates use exactly 1 beat. Getaway/Vacation candidates use exactly 3 beats and must set destinationAnchor to permanent geography (a real city/region name), never a specific venue you are not certain currently exists.",
+    "Keep every rationale to 30 words or fewer and every beat description to 25 words or fewer.",
     "Only cite facts given to you verbatim in the prompt (constraints, tastes, recent plan history) — never invent a citation.",
     "Never invent that a specific venue is currently open, closed, or exists unless a resolver venue ID is supplied to you.",
     "You must self-report constraintCompliance for every constraint given, honestly.",

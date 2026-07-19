@@ -35,7 +35,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, repairNo
         messages,
         response_format: { type: "json_object" },
         temperature: 0.7,
-        max_tokens: 3000,
+        max_tokens: 6000,
         // OpenRouter otherwise prioritizes its lowest-price provider pool.
         // PlanBuddy is interactive, so route this same model by measured
         // throughput and keep provider fallback enabled for resilience.
@@ -88,10 +88,23 @@ export async function callAiJson<T>(
   return result.data;
 }
 
-function safeJsonParse(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
+export function safeJsonParse(text: string): unknown {
+  const trimmed = text.trim();
+  const attempts = [trimmed];
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fenced?.[1]) attempts.push(fenced[1].trim());
+  const objectStart = trimmed.indexOf("{");
+  const objectEnd = trimmed.lastIndexOf("}");
+  if (objectStart >= 0 && objectEnd > objectStart) {
+    attempts.push(trimmed.slice(objectStart, objectEnd + 1));
   }
+
+  for (const candidate of attempts) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Try the next conservative envelope. Zod still validates the payload.
+    }
+  }
+  return null;
 }
