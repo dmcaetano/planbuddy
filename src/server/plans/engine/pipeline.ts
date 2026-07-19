@@ -235,6 +235,59 @@ export function findMealBeatIndex(beats: Array<Parameters<typeof mealBeatScore>[
   return bestIndex;
 }
 
+function replaceVenueName(value: string, from: string | null, to: string): string {
+  if (!from) return value;
+  const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.replace(new RegExp(escaped, "gi"), to);
+}
+
+export function buildGroundedRestaurantSwap(original: Candidate): AiCandidate | null {
+  const replacement = original.fallback;
+  if (!replacement?.place) return null;
+  const replacementIdentity = `${replacement.title} ${replacement.description} ${replacement.place.name} ${replacement.place.kind}`;
+  if (!/food|meal|dinner|lunch|restaurant|cafe|café|dining|bistro|tavern|grill|fish|seafood|shellfish|petiscos|churrasc/i.test(replacementIdentity)) {
+    return null;
+  }
+  const mealIndex = findMealBeatIndex(original.beats);
+  if (mealIndex < 0) return null;
+  const currentMeal = original.beats[mealIndex];
+  const currentName = currentMeal.place?.name ?? null;
+  if ((currentName ?? currentMeal.title).trim().toLowerCase() === replacement.place.name.trim().toLowerCase()) return null;
+
+  const revisedBeat = {
+    ...currentMeal,
+    title: `Meal at ${replacement.place.name}`.slice(0, 120),
+    description: `${replacement.description} ${replacement.place.factualNote}`.trim().slice(0, 400),
+    place: replacement.place,
+    directionsUrl: null,
+  };
+  return {
+    title: `${original.title} — alternate restaurant`.slice(0, 120),
+    rationale: `The same route and outdoor stops, with only the meal changed to ${replacement.place.name}, an already-grounded nearby fallback.`.slice(0, 600),
+    category: original.category,
+    indoor: original.indoor,
+    beats: original.beats.map((beat, index) => index === mealIndex ? revisedBeat : { ...beat, directionsUrl: null }),
+    walkingDistanceKm: original.walkingDistanceKm,
+    walkingMinutes: original.walkingMinutes,
+    estimatedCost: original.estimatedCost,
+    checkBeforeYouGo: original.checkBeforeYouGo.map((item) => replaceVenueName(item, currentName, replacement.place!.name)),
+    fallback: {
+      title: `Original meal: ${currentName ?? currentMeal.title}`.slice(0, 140),
+      description: "Return to the original meal without changing the rest of the route.",
+      place: currentMeal.place ?? null,
+    },
+    photoSearchTerm: original.photoSearchTerm,
+    heroImage: original.heroImage,
+    routeMapsUrl: null,
+    preparation: original.preparation,
+    destinationAnchor: original.destinationAnchor,
+    resolverVenueIds: [],
+    citations: original.citations,
+    constraintCompliance: original.constraintCompliance,
+    travelEstimateKm: original.travelEstimateKm,
+  };
+}
+
 function applyEditPreservation(candidate: AiCandidate, edit: PlanEditDirective): AiCandidate | null {
   const original = edit.originalCandidate;
   if (edit.mode === "restaurant" || edit.mode === "budget") {
@@ -374,9 +427,19 @@ export async function runGeneration(
       : undefined,
   };
 
-  const { mode, response, groundingSources } = await generateCandidates(genCtx);
+  const cachedRestaurantSwap = edit?.mode === "restaurant"
+    ? buildGroundedRestaurantSwap(edit.originalCandidate)
+    : null;
+  const { mode, response, groundingSources } = cachedRestaurantSwap
+    ? { mode: "gemini-grounded" as const, response: { candidates: [cachedRestaurantSwap] }, groundingSources: [] }
+    : await generateCandidates(genCtx);
   const originalSources = edit
-    ? edit.originalCandidate.beats.flatMap((beat) => beat.place ? [{ url: beat.place.sourceUrl, title: beat.place.sourceLabel }] : [])
+    ? [
+        ...edit.originalCandidate.beats.flatMap((beat) => beat.place ? [{ url: beat.place.sourceUrl, title: beat.place.sourceLabel }] : []),
+        ...(edit.originalCandidate.fallback?.place
+          ? [{ url: edit.originalCandidate.fallback.place.sourceUrl, title: edit.originalCandidate.fallback.place.sourceLabel }]
+          : []),
+      ]
     : [];
   context.groundingSources = Array.from(
     new Map([...groundingSources, ...originalSources].map((source) => [source.url, source])).values()
