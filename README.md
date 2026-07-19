@@ -8,10 +8,12 @@ One confident, personalized plan for a day off, weekend, getaway, or vacation.
 - QA evidence: [QA-REPORT.md](./QA-REPORT.md)
 
 PlanBuddy remembers household members and pets, treats allergies and other
-hard constraints as vetoes, proposes plans with DeepSeek V4 Flash, then uses
-deterministic server-side filtering and least-misery scoring to choose the
-winner. Explicit rejection and post-plan feedback feed a visible, guarded
-self-improvement loop.
+hard constraints as vetoes, grounds each itinerary with Google Search through
+Gemini, then uses deterministic server-side filtering and least-misery scoring
+to choose the winner. Every result includes real named stops, Google Maps
+routes, attributed Commons imagery, distances, live weather, clothing and pet
+preparation, operational checks, and a compact fallback. DeepSeek V4 Flash
+powers chat and feedback learning.
 
 ## Local development
 
@@ -21,5 +23,5 @@ npm run dev
 ```
 
 No external services are required locally: PGlite and a deterministic demo AI
-are used when `DATABASE_URL` and `OPENROUTER_API_KEY` are absent. See
+are used when `DATABASE_URL`, `OPENROUTER_API_KEY`, and `GEMINI_API_KEY` are absent. See
 [.env.example](./.env.example) for production-style configuration.

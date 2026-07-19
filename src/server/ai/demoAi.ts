@@ -1,4 +1,11 @@
-import type { AiCandidate, AiChatResponse, AiFeedbackResponse, AiGenerateResponse } from "../../shared/schemas.js";
+import type {
+  AiCandidate,
+  AiChatResponse,
+  AiFeedbackResponse,
+  AiGenerateResponse,
+  AiPlaceResearchResponse,
+} from "../../shared/schemas.js";
+import type { WeatherSnapshot } from "../../shared/types.js";
 import { isTripScale, type Scale } from "../../shared/scale.js";
 import { LOCAL_TEMPLATES, TRIP_TEMPLATES } from "./contentPool.js";
 import { hashSeed, mulberry32, seededShuffle } from "./rng.js";
@@ -13,10 +20,20 @@ export interface MemoryFact {
 
 export interface GenerateContext {
   scale: Scale;
+  startDate?: string;
+  endDate?: string;
+  homeBaseLabel?: string | null;
+  homeBaseLat?: number | null;
+  homeBaseLng?: number | null;
+  participants?: { name: string; kind: "person" | "pet"; relationship: string | null }[];
+  weather?: WeatherSnapshot;
   moodContext: string | null;
   radiusKm: number;
   activeConstraints: { id: string; text: string }[];
   loveTastes: MemoryFact[];
+  avoidTastes?: MemoryFact[];
+  preferenceHunches?: { text: string; polarity: "love" | "avoid"; confidence: number }[];
+  groundedPlaces?: AiPlaceResearchResponse["places"];
   seed: string; // unique per (planSpecId, batchIndex) for determinism
 }
 
@@ -67,6 +84,12 @@ export function generateCandidatesDemo(ctx: GenerateContext): AiGenerateResponse
         category: t.category,
         indoor: t.indoor,
         beats,
+        walkingDistanceKm: null,
+        walkingMinutes: null,
+        estimatedCost: null,
+        checkBeforeYouGo: ["Open the live map and confirm current hours, availability, and booking requirements."],
+        fallback: null,
+        photoSearchTerm: t.destinationAnchor,
         destinationAnchor: t.destinationAnchor,
         resolverVenueIds: [],
         citations,
@@ -88,7 +111,43 @@ export function generateCandidatesDemo(ctx: GenerateContext): AiGenerateResponse
     .sort((a, b) => b.bonus - a.bonus);
   const chosen = scored.slice(0, Math.min(8, scored.length)).map((s) => s.t);
   const candidates: AiCandidate[] = chosen.map((t) => {
-    const beats = [t.beat];
+    const beats = [
+      {
+        title: "Easy arrival walk",
+        description: `Begin with a gentle, flexible walk near ${ctx.homeBaseLabel ?? "home"}.`,
+        category: t.category,
+        indoor: false,
+        startTime: "17:30",
+        durationMinutes: 25,
+        travelMode: "walking" as const,
+        distanceFromPreviousKm: 1,
+        travelMinutes: 15,
+        place: null,
+      },
+      {
+        ...t.beat,
+        category: t.category,
+        indoor: t.indoor,
+        startTime: "18:15",
+        durationMinutes: 75,
+        travelMode: "walking" as const,
+        distanceFromPreviousKm: 0.8,
+        travelMinutes: 12,
+        place: null,
+      },
+      {
+        title: "Soft after-plan stroll",
+        description: "Finish with an easy loop and turn back whenever the group has had enough.",
+        category: "stroll",
+        indoor: false,
+        startTime: "19:45",
+        durationMinutes: 25,
+        travelMode: "walking" as const,
+        distanceFromPreviousKm: 1.2,
+        travelMinutes: 20,
+        place: null,
+      },
+    ];
     const text = candidateText({ title: t.title, rationale: t.rationale, category: t.category, beats });
     const citations = ctx.loveTastes
       .filter((f) => t.tags.some((tag) => (f.tags ?? []).includes(tag)))
@@ -99,7 +158,13 @@ export function generateCandidatesDemo(ctx: GenerateContext): AiGenerateResponse
       rationale: t.rationale,
       category: t.category,
       indoor: t.indoor,
-      beats: beats.map((b) => ({ ...b, category: t.category, indoor: t.indoor })),
+      beats,
+      walkingDistanceKm: 3,
+      walkingMinutes: 47,
+      estimatedCost: null,
+      checkBeforeYouGo: ["Demo mode cannot verify venues: open Maps and confirm a named place before leaving."],
+      fallback: null,
+      photoSearchTerm: null,
       destinationAnchor: null,
       resolverVenueIds: [],
       citations,

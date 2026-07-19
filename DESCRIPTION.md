@@ -1,130 +1,176 @@
 # PlanBuddy
 
-PlanBuddy turns "what should we do?" into one lockable plan for the people
-involved. It supports four scales — Day off, Weekend, Getaway, and Vacation
-— as modes of a single engine, and learns safely from explicit choices and
-feedback while keeping a fully inspectable household memory.
+**A memory-aware planner that turns one click into one grounded, decision-ready plan for a person, household, and pets.**
 
-The v1 MVP is live at **https://planbuddy.onrender.com** and mirrored at
-**https://github.com/dmcaetano/planbuddy**. It is a single-package application
-(React/Vite/TypeScript client + Express/TypeScript API), built to
-[`PRODUCT-CONTRACT.md`](./PRODUCT-CONTRACT.md).
+## Purpose
 
-## The loop
+PlanBuddy removes the work between “we should go out” and an itinerary worth
+following. It is built for Diogo’s Buddy app family and supports a day off,
+weekend, getaway, or vacation in one product. Its durable advantage is an
+inspectable memory of the household’s tastes, constraints, feedback, family
+members, and pets, so it asks fewer questions over time without learning hidden
+or unsafe rules.
 
-1. Pick a scale, the people (and pets) involved, and a date window; add an
-   optional one-sentence context note.
-2. Press **Plan it**.
-3. Get one confident recommendation with an honest rationale grounded in
-   visible memory, weather, and recent history.
-4. Lock it, browse a diverse alternate, explicitly say **Not this** with a
-   reason, or tweak the spec and regenerate.
-5. Afterward, rate it and optionally comment.
-6. Anything learned — a constraint, a taste, a hunch — shows up in Memory
-   with full provenance and full CRUD. Nothing learns silently.
+## What it does
 
-## Stack
+- Produces one three-beat plan rather than a generic list of ideas.
+- Grounds every named place in a web-sourced dossier and mechanically rejects
+  names or source links that are not in that dossier.
+- Shows real stops, Maps search/directions/full-route links, an attributed place
+  image, estimated distances and spend, live weather, detailed clothing and
+  bring lists, a pet kit, operational checks, and one compact fallback.
+- Remembers household members and pets, hard constraints, loved/avoided tastes,
+  and weak feedback-derived hunches with visible provenance and CRUD controls.
+- Uses thumbs, ratings, comments, and “Not this” reasons in a guarded
+  self-improvement loop; hunches can become tastes but never safety constraints.
+- Persists accounts and planning history in Neon Postgres and runs publicly on
+  Render with email/password login.
 
-- **Client:** React + Vite + TypeScript, mobile-first (max 640px), no
-  raster assets — hand-tuned "daylight editorial" CSS design system plus
-  `lucide-react` vector icons.
-- **Server:** Express + TypeScript, serving the built client and a JSON API
-  under `/api`.
-- **Database:** normalized Postgres (Neon-ready). See
-  [`DB_SCHEMA.md`](./DB_SCHEMA.md). With no `DATABASE_URL` set, the server
-  transparently falls back to an embedded `@electric-sql/pglite` database —
-  same schema, same SQL, zero external setup required to run locally.
-- **Auth:** email/password, Argon2id when the optional native `argon2`
-  module is available (it installs cleanly on this stack), bcrypt cost-12
-  fallback otherwise. Sessions are opaque 256-bit tokens in a signed,
-  httpOnly, SameSite=Lax cookie, validated against a server-side session
-  table.
-- **AI:** DeepSeek V4 Flash via OpenRouter (`MODEL_ID`, default
-  `deepseek/deepseek-v4-flash`) when `OPENROUTER_API_KEY` is set. With no
-  key, PlanBuddy runs on a **deterministic local demo AI**
-  (`src/server/ai/demoAi.ts`) that fabricates schema-valid candidates from a
-  hand-authored content pool, seeded per (plan spec, batch) for replayable
-  output — so the whole product is genuinely usable and testable offline,
-  with zero external keys.
-- **Weather/geocoding:** Open-Meteo, no key required, with in-memory
-  caching and graceful "weather unavailable" fallback.
-- **Place resolver:** pluggable interface; with no provider key configured
-  the app runs in explicit **Inspiration mode** — it can name permanent
-  geography and categories but never asserts a specific venue is currently
-  open, per the venue-firewall principle.
+## How it works
 
-## What's deterministic vs. AI-proposed
+The user chooses a scale, date, and participants, optionally adds one sentence
+of context, and presses **Plan my weekend**. The server gathers the relevant
+memory, selected people and pets, recent plan history, home location, and an
+Open-Meteo forecast. Gemini with Google Search builds a closed dossier containing
+a meal venue, two distinct outdoor stops, and a fallback venue; a second
+structured call composes exactly one chronological three-beat itinerary using
+only those places.
 
-Per the product contract's core doctrine — "DeepSeek proposes; server code
-disposes" — every candidate returned by the model (or the demo AI) passes
-through a deterministic, replayable server-side pipeline before anything is
-shown:
+Server code then validates citations and constraint claims, rejects any place
+outside the dossier, scores group fit using least-misery logic, and enriches the
+winner. Enrichment creates Google Maps URLs, reconciles total walking time with
+an explicit remembered range, adds an operational checklist, chooses an
+attributed Wikimedia Commons image, and derives weather-aware clothing and pet
+preparation. The full candidate JSON is persisted, so a locked plan reopens in
+History with the same rich itinerary. DeepSeek V4 Flash separately powers chat
+and feedback interpretation.
 
-1. **Constraint filter** (`src/server/plans/engine/filter.ts`): a mechanical
-   keyword-and-structure check independent of what the model claims about
-   its own compliance. Rejects constraint violations, invalid citations,
-   duplicate candidates, impossible travel radius, and venue-firewall
-   violations (a candidate citing a specific venue when no live resolver
-   payload backs it).
-2. **Scoring** (`src/server/plans/engine/scoring.ts`): base fit 0.5 per
-   participant; loved/avoided tastes add or subtract fit; hunches
-   contribute at most ±0.15 and never appear in rationales; group fit is
-   the **minimum** per-participant fit (least misery); feasibility folds in
-   weather and travel distance; novelty penalizes repeat categories/venues
-   from the last ten locked plans. Final score = 55% group fit + 25%
-   feasibility + 20% novelty, with novelty breaking near ties.
-3. **Alternates** are chosen from the same filtered, scored batch, one
-   category away from the winner where possible — never a fresh unfiltered
-   AI call.
+## Architecture
 
-## Memory model
+```mermaid
+flowchart TD
+    User["User in browser"] --> UI["React Plan / Chat / Memory / History"]
+    UI --> API["Express JSON API"]
+    API --> DB[("Neon Postgres or local PGlite")]
+    API --> Weather["Open-Meteo forecast"]
+    API --> Grounding["Gemini 3.5 Flash + Google Search"]
+    Grounding --> Firewall["Zod contract + source firewall"]
+    Firewall --> Rank["Constraint filter + least-misery scoring"]
+    Rank --> Enrich["Maps URLs + walking normalization + prep"]
+    Enrich --> Commons["Wikimedia Commons image"]
+    Enrich --> UI
+    API --> DeepSeek["DeepSeek V4 Flash via OpenRouter"]
+    DeepSeek --> Chat["Chat extraction + feedback evidence"]
+    Chat --> DB
+```
 
-Three tiers, all visible and fully CRUD-able in the Memory tab:
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant F as React client
+    participant B as Express planner
+    participant G as Gemini Search
+    participant D as Neon
+    U->>F: Press Plan my weekend
+    F->>B: POST plan spec
+    B->>D: Load memory, people, pets, and history
+    B->>G: Research four real places
+    G-->>B: Closed place dossier with sources
+    B->>G: Compose one structured three-beat plan
+    B->>B: Filter, score, enrich, and verify
+    B->>D: Persist full candidate JSON
+    B-->>F: Grounded PlanView
+    F-->>U: Rich ticket with route, image, kit, and fallback
+```
 
-- **Constraints** — hard vetoes. Directly typed constraints are `verified`
-  immediately. Chat-extracted constraints only become `active_unverified`
-  (and start filtering immediately) after the server mechanically verifies
-  the model's quote is a verbatim substring of the source message at the
-  offsets it claimed (`src/server/memory/quoteVerify.ts`) — **quote or
-  demote**: anything that fails becomes a non-filtering hunch instead.
-- **Tastes** — loves/avoids that shape scoring but never veto.
-- **Hunches** — weak, decaying, non-citable signals from rejections
-  ("Not this" reasons) and post-plan feedback. They promote to a taste
-  (never to a constraint) after three independent evidence events from
-  distinct plans/sessions, and decay after six unreinforced plan
-  generations or 90 days.
+## Tech stack
 
-## Running it locally
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, Vite 6, TypeScript, React Router, Lucide icons |
+| Backend | Express 4, TypeScript, Zod validation |
+| Data | Neon Postgres in production, embedded PGlite locally/tests |
+| AI | Gemini 3.5 Flash + Google Search for plans; DeepSeek V4 Flash via OpenRouter for chat/feedback and composition fallback |
+| Context | Open-Meteo weather, Google Maps URLs, Wikimedia Commons images |
+| Auth | Email/password, Argon2id or bcrypt, opaque signed-cookie sessions |
+| Hosting | Render web service in Frankfurt; Neon database in Frankfurt |
+| QA | Vitest, Supertest, Playwright mobile Chrome |
+
+## Repo map
+
+| Path | Responsibility |
+|---|---|
+| `src/client/routes/` | Plan, Chat, Memory, History, authentication, and onboarding screens |
+| `src/client/components/TicketCard.tsx` | Rich recommendation and saved-plan presentation |
+| `src/server/grounding/geminiPlaces.ts` | Google Search dossier and structured plan composition |
+| `src/server/plans/engine/` | Constraint firewall, scoring, generation pipeline, Maps/preparation enrichment |
+| `src/server/media/wikimedia.ts` | Cached, attributable Commons place-image selection |
+| `src/server/ai/` | DeepSeek calls, prompts, guarded JSON parsing, deterministic demo AI |
+| `src/server/weather/` | Open-Meteo forecast retrieval and cache |
+| `src/server/db/` | Postgres/PGlite client and migrations |
+| `tests/` and `e2e/` | Unit, contract, integration, and browser coverage |
+| `PRODUCT-CONTRACT.md` | Product invariants and learning rules |
+| `STATE.md` / `PROGRESS.md` | Current status, roadmap, and next actions |
+
+## Data & state
+
+Production data lives in the `planbuddy` schema of a dedicated Neon project.
+Candidate payloads are JSONB so richer route, image, preparation, and fallback
+fields require no migration. Raw chat is bounded and retained for 30 days;
+durable memory is structured and visible.
+
+```mermaid
+erDiagram
+    USERS ||--o{ PARTICIPANTS : owns
+    USERS ||--o{ CONSTRAINTS : protects
+    USERS ||--o{ TASTES : remembers
+    USERS ||--o{ HUNCHES : considers
+    USERS ||--o{ PLAN_SPECS : requests
+    PLAN_SPECS ||--o{ CANDIDATES : generates
+    PLAN_SPECS ||--o{ PLANS : records
+    PLANS ||--o{ FEEDBACK : receives
+    HUNCHES ||--o{ HUNCH_EVIDENCE : accumulates
+    USERS ||--o{ CHAT_SESSIONS : opens
+    CHAT_SESSIONS ||--o{ CHAT_MESSAGES : contains
+```
+
+## External integrations
+
+- **Google Gemini API** — native Search grounding plus structured itinerary
+  composition. Reads `GEMINI_API_KEY` or local `GEMINI_API_KEY_FILE`.
+- **OpenRouter / DeepSeek V4 Flash** — chat, feedback extraction, and bounded
+  composition fallback. Reads `OPENROUTER_API_KEY` or local key-file path.
+- **Open-Meteo** — no-key weather forecast and geocoding.
+- **Google Maps URLs** — no-key server-generated search and directions links.
+- **Wikimedia Commons API** — no-key, cached route photography with attribution.
+- **Neon** — persistent Postgres via `DATABASE_URL`.
+- **Render** — builds and serves the single Node production process.
+
+## How to run
 
 ```bash
 npm install
-npm run dev      # Vite dev server (5173) + Express API (4000), proxied
-# or, production-style single process:
+npm run dev
+
+# Production-style local process
 npm run build
-npm start         # serves the built client + API on PORT (default 4000)
+npm start
 ```
 
-No `.env` is required to run — copy [`.env.example`](./.env.example) if you
-want to point at a real Neon Postgres database or a real OpenRouter key.
+- **Entry points:** `src/client/main.tsx`, `src/server/index.ts`
+- **Live URL:** https://planbuddy.onrender.com
+- **Repository:** https://github.com/dmcaetano/planbuddy
+- **Configuration:** copy `.env.example`; never commit filled secrets.
 
-## Verifying it
+## Status
 
-```bash
-npm run typecheck   # client + server, strict TypeScript
-npm run lint         # ESLint
-npm run build        # vite build + tsc build, copies SQL migrations
-npm test              # Vitest: unit + AI-contract + Supertest integration
-npm run test:e2e     # Playwright: signup → onboard → generate → reject → lock → feedback → Memory
-```
+Version 0.1.1 is locally verified and prepared for production deployment with
+grounded Lisbon planning. See `STATE.md` and `PROGRESS.md` for live release
+status and next work.
 
-All of the above are green as of this build (68 Vitest tests, 1 Playwright
-scenario, zero TypeScript or ESLint errors).
+## Glossary
 
-## What's intentionally out of scope for v1
-
-- No live place-resolver integration is wired up (the pluggable interface
-  exists; the app runs in Inspiration mode without a provider key).
-- Venue-specific live facts remain disabled until a place-resolver provider is
-  configured; the deployed app labels this honestly as Inspiration mode.
-- No booking or detailed itinerary generation (by design — see the product
-  contract's immutable principle #10).
+- **Dossier** — the four source-backed places the composer is allowed to name.
+- **Venue firewall** — server validation rejecting any place/source outside the dossier.
+- **Hunch** — weak feedback-derived preference evidence that can decay or promote to a taste.
+- **Least misery** — group-fit score based on the least-satisfied participant.

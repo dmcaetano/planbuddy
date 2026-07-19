@@ -10,6 +10,7 @@ export interface FilterContext {
   activeConstraints: { id: string; text: string }[];
   knownFacts: Map<string, string>; // factId -> verbatim fact text
   resolverMode: "inspiration" | "resolved";
+  groundedSourceUrls?: string[];
   radiusKm: number;
   isTripScale: boolean;
 }
@@ -36,6 +37,7 @@ export function filterCandidates(candidates: AiCandidate[], ctx: FilterContext):
   const kept: AiCandidate[] = [];
   const rejected: RejectedCandidate[] = [];
   const seenTitles = new Set<string>();
+  const groundedUrls = new Set((ctx.groundedSourceUrls ?? []).map(normalizeSourceUrl));
 
   for (const candidate of candidates) {
     const text = candidateText(candidate);
@@ -80,9 +82,28 @@ export function filterCandidates(candidates: AiCandidate[], ctx: FilterContext):
       continue;
     }
 
+    const placeSourceUrls = [
+      ...candidate.beats.flatMap((beat) => (beat.place?.sourceUrl ? [beat.place.sourceUrl] : [])),
+      ...(candidate.fallback?.place?.sourceUrl ? [candidate.fallback.place.sourceUrl] : []),
+    ];
+    const unsupportedSource = placeSourceUrls.find((url) => !groundedUrls.has(normalizeSourceUrl(url)));
+    if (unsupportedSource) {
+      rejected.push({ candidate, reason: "place-source firewall: named place is not backed by web-search evidence" });
+      continue;
+    }
+
     seenTitles.add(normalizedTitle);
     kept.push(candidate);
   }
 
   return { kept, rejected };
+}
+
+function normalizeSourceUrl(raw: string): string {
+  try {
+    const url = new URL(raw);
+    return `${url.hostname.toLowerCase()}${url.pathname.replace(/\/+$/, "") || "/"}`;
+  } catch {
+    return raw.trim().toLowerCase().replace(/\/+$/, "");
+  }
 }

@@ -31,7 +31,7 @@ export interface PlanView {
 
 export interface PipelineResponse {
   spec: PlanSpec;
-  aiMode: "deepseek" | "demo";
+  aiMode: "deepseek" | "gemini-grounded" | "demo";
   deadEnd: boolean;
   deadEndReasons: string[];
   winner: PlanView | null;

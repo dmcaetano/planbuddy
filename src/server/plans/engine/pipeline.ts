@@ -13,6 +13,8 @@ import { generateCandidates, type MemoryFact, type GenerateContext } from "../..
 import { filterCandidates } from "./filter.js";
 import { scoreCandidates, pickDiverseAlternates, type ParticipantMemory, type ScoredCandidate } from "./scoring.js";
 import type { Candidate } from "../../../shared/types.js";
+import type { GroundingSource } from "../../ai/deepseek.js";
+import { enrichCandidate } from "./enrich.js";
 
 export interface PlanContext {
   selectedParticipants: Participant[];
@@ -22,6 +24,10 @@ export interface PlanContext {
   weather: WeatherSnapshot;
   resolver: PlaceResolverResult;
   knownFacts: Map<string, string>;
+  homeBaseLabel: string | null;
+  homeBaseLat: number | null;
+  homeBaseLng: number | null;
+  groundingSources: GroundingSource[];
 }
 
 export async function gatherPlanContext(userId: string, spec: PlanSpec): Promise<PlanContext> {
@@ -44,7 +50,18 @@ export async function gatherPlanContext(userId: string, spec: PlanSpec): Promise
   const weather: WeatherSnapshot =
     user?.homeBaseLat != null && user?.homeBaseLng != null
       ? await getForecast(user.homeBaseLat, user.homeBaseLng, spec.startDate, spec.endDate)
-      : { temperatureC: null, precipitationProbability: null, summary: "Weather unavailable", unavailable: true };
+      : {
+          temperatureC: null,
+          temperatureMinC: null,
+          apparentTemperatureC: null,
+          precipitationProbability: null,
+          windSpeedKph: null,
+          uvIndex: null,
+          sunrise: null,
+          sunset: null,
+          summary: "Weather unavailable",
+          unavailable: true,
+        };
 
   const resolver: PlaceResolverResult =
     user?.homeBaseLat != null && user?.homeBaseLng != null
@@ -55,7 +72,19 @@ export async function gatherPlanContext(userId: string, spec: PlanSpec): Promise
   for (const t of scopedTastes) knownFacts.set(t.id, t.text);
   for (const c of scopedConstraints) knownFacts.set(c.id, c.text);
 
-  return { selectedParticipants, scopedConstraints, scopedTastes, scopedHunches, weather, resolver, knownFacts };
+  return {
+    selectedParticipants,
+    scopedConstraints,
+    scopedTastes,
+    scopedHunches,
+    weather,
+    resolver,
+    knownFacts,
+    homeBaseLabel: user?.homeBaseLabel ?? null,
+    homeBaseLat: user?.homeBaseLat ?? null,
+    homeBaseLng: user?.homeBaseLng ?? null,
+    groundingSources: [],
+  };
 }
 
 export function activeConstraintsView(
@@ -64,9 +93,17 @@ export function activeConstraintsView(
   return scopedConstraints.map((c) => ({ id: c.id, text: c.text, status: c.status }));
 }
 
-export function placeProvenanceView(resolver: PlaceResolverResult): { mode: "inspiration" | "resolved"; note: string } {
-  return resolver.mode === "resolved"
-    ? { mode: "resolved", note: "Backed by a live place-resolver lookup." }
+export function placeProvenanceView(
+  resolver: PlaceResolverResult,
+  groundingSources: GroundingSource[] = []
+): { mode: "inspiration" | "resolved"; note: string } {
+  return groundingSources.length > 0
+    ? {
+        mode: "resolved",
+        note: `Named places are backed by ${groundingSources.length} current web source${groundingSources.length === 1 ? "" : "s"}. Maps routes are live; distances remain estimates. Check hours, booking, prices, and pet policy before leaving.`,
+      }
+    : resolver.mode === "resolved"
+      ? { mode: "resolved", note: "Named places are backed by a live place-resolver lookup." }
     : {
         mode: "inspiration",
         note: "Inspiration mode: names permanent geography and categories, but no live venue payload backs specific facts.",
@@ -74,7 +111,7 @@ export function placeProvenanceView(resolver: PlaceResolverResult): { mode: "ins
 }
 
 export interface PipelineResult {
-  aiMode: "deepseek" | "demo";
+  aiMode: "deepseek" | "gemini-grounded" | "demo";
   winner: Candidate | null;
   alternates: Candidate[];
   rejectedCount: number;
@@ -83,7 +120,18 @@ export interface PipelineResult {
   context: PlanContext;
 }
 
-const ALTERNATE_COUNT = 2;
+const ALTERNATE_COUNT = 0;
+
+function walkingTargetFromMemory(texts: (string | null | undefined)[]): { min: number; max: number } | null {
+  for (const text of texts) {
+    const match = text?.match(/\b(\d{1,3})\s*(?:[-\u2013\u2014]|to)\s*(\d{1,3})\s*(?:minutes?|mins?)\b/i);
+    if (!match) continue;
+    const min = Number(match[1]);
+    const max = Number(match[2]);
+    if (min >= 10 && max >= min && max <= 240) return { min, max };
+  }
+  return null;
+}
 
 export async function runGeneration(userId: string, spec: PlanSpec, batchIndex: number): Promise<PipelineResult> {
   const context = await gatherPlanContext(userId, spec);
@@ -103,19 +151,36 @@ export async function runGeneration(userId: string, spec: PlanSpec, batchIndex: 
 
   const genCtx: GenerateContext = {
     scale: spec.scale,
+    startDate: spec.startDate,
+    endDate: spec.endDate,
+    homeBaseLabel: context.homeBaseLabel,
+    homeBaseLat: context.homeBaseLat,
+    homeBaseLng: context.homeBaseLng,
+    participants: selectedParticipants.map((p) => ({ name: p.name, kind: p.kind, relationship: p.relationship })),
+    weather,
     moodContext: spec.moodContext,
     radiusKm: spec.radiusKm,
     activeConstraints: scopedConstraints.map((c) => ({ id: c.id, text: c.text })),
     loveTastes,
+    avoidTastes: scopedTastes
+      .filter((t) => t.polarity === "avoid")
+      .map((t) => ({ id: t.id, text: t.text, source: "taste" as const })),
+    preferenceHunches: scopedHunches.map((h) => ({
+      text: h.text,
+      polarity: h.polarity,
+      confidence: h.confidence,
+    })),
     seed: `${spec.id}:${batchIndex}`,
   };
 
-  const { mode, response } = await generateCandidates(genCtx);
+  const { mode, response, groundingSources } = await generateCandidates(genCtx);
+  context.groundingSources = groundingSources;
 
   const { kept, rejected } = filterCandidates(response.candidates, {
     activeConstraints: scopedConstraints.map((c) => ({ id: c.id, text: c.text })),
     knownFacts,
     resolverMode: resolver.mode,
+    groundedSourceUrls: groundingSources.map((source) => source.url),
     radiusKm: spec.radiusKm,
     isTripScale: isTripScale(spec.scale),
   });
@@ -128,9 +193,23 @@ export async function runGeneration(userId: string, spec: PlanSpec, batchIndex: 
 
   const recentSummaries = recentPlans.map((p) => ({ title: p.title, category: p.category }));
   const ranked: ScoredCandidate[] = scoreCandidates(kept, memories, weather, spec.radiusKm, recentSummaries);
+  const enrichedRanked: ScoredCandidate[] = await Promise.all(
+    ranked.map(async (sc) => ({
+      ...sc,
+      candidate: await enrichCandidate(sc.candidate, {
+        homeBaseLabel: context.homeBaseLabel,
+        weather,
+        participants: selectedParticipants,
+        walkingTargetMinutes: walkingTargetFromMemory([
+          spec.moodContext,
+          ...scopedTastes.map((taste) => taste.text),
+        ]),
+      }),
+    }))
+  );
 
   const inserts: CandidateInsert[] = [
-    ...ranked.map((sc, idx) => ({
+    ...enrichedRanked.map((sc, idx) => ({
       payload: sc.candidate,
       scoreBreakdown: {
         groupFit: sc.groupFit,
@@ -153,7 +232,7 @@ export async function runGeneration(userId: string, spec: PlanSpec, batchIndex: 
   ];
 
   const savedCandidates = await insertCandidates(spec.id, inserts);
-  const savedRanked = savedCandidates.slice(0, ranked.length);
+  const savedRanked = savedCandidates.slice(0, enrichedRanked.length);
 
   await bumpPlansSinceEvidence(userId);
 

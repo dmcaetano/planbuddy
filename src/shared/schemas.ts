@@ -95,11 +95,61 @@ export const chatMessageCreateSchema = z.object({
 /* DeepSeek contract: Generate                                             */
 /* ---------------------------------------------------------------------- */
 
+export const aiPlanPlaceSchema = z.object({
+  name: z.string().min(1).max(160),
+  address: z.string().max(240).nullable().optional(),
+  kind: z.string().min(1).max(80),
+  sourceUrl: z.string().url().max(1000),
+  sourceLabel: z.string().min(1).max(160),
+  factualNote: z.string().min(1).max(600),
+  mapsUrl: z.string().url().max(1500).nullable().optional(),
+});
+
+export const aiPlaceResearchResponseSchema = z.object({
+  places: z
+    .array(
+      aiPlanPlaceSchema.extend({
+        bestFor: z.array(z.string().min(1).max(100)).min(1).max(5),
+        photoSearchTerm: z.string().max(160).nullable().optional(),
+      })
+    )
+    .min(3)
+    .max(8),
+});
+export type AiPlaceResearchResponse = z.infer<typeof aiPlaceResearchResponseSchema>;
+
 export const aiBeatSchema = z.object({
   title: z.string().min(1).max(120),
   description: z.string().min(1).max(400),
   category: z.string().min(1).max(60),
   indoor: z.boolean(),
+  startTime: z.string().max(20).nullable().optional(),
+  durationMinutes: z.number().int().min(5).max(1440).nullable().optional(),
+  travelMode: z.enum(["walking", "driving", "transit", "ferry"]).nullable().optional(),
+  distanceFromPreviousKm: z.number().min(0).max(20000).nullable().optional(),
+  travelMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+  place: aiPlanPlaceSchema.nullable().optional(),
+  directionsUrl: z.string().url().max(2000).nullable().optional(),
+});
+
+const aiFallbackSchema = z.object({
+  title: z.string().min(1).max(140),
+  description: z.string().min(1).max(300),
+  place: aiBeatSchema.shape.place,
+});
+
+const aiPlanImageSchema = z.object({
+  url: z.string().url().max(1500),
+  sourceUrl: z.string().url().max(1500),
+  attribution: z.string().min(1).max(240),
+  caption: z.string().min(1).max(240),
+});
+
+const aiPreparationSchema = z.object({
+  wear: z.array(z.string().min(1).max(200)).max(8),
+  bring: z.array(z.string().min(1).max(200)).max(8),
+  pet: z.array(z.string().min(1).max(200)).max(8),
+  weatherRule: z.string().min(1).max(400),
 });
 
 export const aiCitationSchema = z.object({
@@ -119,6 +169,15 @@ export const aiCandidateSchema = z.object({
   category: z.string().min(1).max(60),
   indoor: z.boolean(),
   beats: z.array(aiBeatSchema).min(1).max(3),
+  walkingDistanceKm: z.number().min(0).max(200).nullable().optional(),
+  walkingMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+  estimatedCost: z.string().max(120).nullable().optional(),
+  checkBeforeYouGo: z.array(z.string().min(1).max(240)).max(8).default([]),
+  fallback: aiFallbackSchema.nullable().optional(),
+  photoSearchTerm: z.string().max(160).nullable().optional(),
+  heroImage: aiPlanImageSchema.nullable().optional(),
+  routeMapsUrl: z.string().url().max(2000).nullable().optional(),
+  preparation: aiPreparationSchema.nullable().optional(),
   destinationAnchor: z.string().max(200).nullable().optional(),
   resolverVenueIds: z.array(z.string().max(200)).default([]),
   citations: z.array(aiCitationSchema).default([]),

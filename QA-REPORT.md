@@ -1,84 +1,99 @@
 # PlanBuddy QA report
 
-Version **0.1.0 — “Field Guide”**  
-Reviewed 2026-07-19 by Codex after the Claude/Fable/Sonnet build handoff.
+Version **0.1.1 — “Lisbon Field Guide”**
+Reviewed 2026-07-19 by Codex after GPT-SOL, Claude Fable, and Claude Opus product-output comparisons.
 
-## 1. Feature inventory
+## Phase 1 — Feature inventory
 
-- Email/password signup, login, signed server-side sessions, logout, and rate limits.
-- Two-step onboarding with geocoded home base plus household people and pets.
-- One-click planning across Day off, Weekend, Getaway, and Vacation.
-- Eight AI candidates per batch, server-side hard filtering, deterministic
-  least-misery scoring, one winner, and safe diverse alternates.
-- Open-Meteo context and explicit Inspiration mode when no live venue resolver
-  is configured.
-- Plan, Chat, Memory, and History surfaces.
-- Visible CRUD memory for constraints and tastes; weak, decaying, inspectable
-  hunches; quote-or-demote chat extraction.
-- Lock, neutral Show another, reasoned Not this, history, comments, star ratings,
-  and thumbs-style feedback feeding the learning loop.
-- PGlite zero-setup local persistence and isolated Neon/Postgres persistence.
+1. **Authentication and onboarding:** signup, login, logout, session restore,
+   home geocoding, owner plus people/pets, empty/loading/error/success states.
+2. **Plan input:** four scales, start/end dates, participant toggles, optional
+   context, scale-specific one-click label, generating, success, dead-end,
+   provider error, and no-more-generations states.
+3. **Grounded recommendation:** attributed hero image; title/rationale and
+   memory citations; fit/weather/sunset badges; walking, spend, and full-route
+   summary; exactly three chronological stops; real place/address/source;
+   Google Maps place, directions, and route links; estimates; apparel, bring,
+   and pet kit; weather rule; operational checks; fallback; provenance.
+4. **Plan actions:** Lock it, Show another, Not this with reason, Tweak, and
+   direct API rejection of an unsafe/rejected candidate.
+5. **History and feedback:** upcoming/past lists, reopen the full rich ticket,
+   thumbs, 1–5 stars, optional comment, and feedback-to-hunch evidence.
+6. **Chat and memory:** bounded DeepSeek chat, quote-verified constraint/taste
+   extraction, visible constraints/tastes/hunches, confirmation/dismissal, CRUD,
+   provenance, decay and taste promotion.
+7. **Persistence and tenancy:** Neon/Postgres production storage, PGlite local
+   fallback, signed-cookie sessions, tenant-scoped reads/writes, CSRF/origin
+   guard, rate limits, and 30-day ended-chat retention.
+8. **External/config states:** Gemini grounding present/absent, DeepSeek present/
+   absent, Open-Meteo available/unavailable, Commons image found/not found,
+   Render env secrets, and visible `v0.1.1 · grounded` release marker.
+9. **API surface:** `/api/health`; auth signup/login/logout/me/home-base;
+   participants CRUD; constraints CRUD; tastes CRUD; hunch read/action/evidence;
+   weather; plan-spec create/read/regenerate/not-this/lock/tweak; history list and
+   feedback; chat session/message/end operations.
 
-## 2. Verification procedures
+## Phase 2 — Procedures
 
-- Strict TypeScript client and server type-check.
-- ESLint across all TypeScript and React sources.
-- Production Vite and Node server build, including copied SQL migrations.
-- Unit tests for filters, citations, quote verification, group scoring, novelty,
-  hunch caps, and venue firewall behavior.
-- Contract tests against the complete local AI response pool.
-- Supertest integration tests for auth, tenant isolation, memory, generation,
-  rejected-candidate locking, travel-mode structure, history, and feedback.
-- Playwright mobile-Chrome journey: signup → onboarding → generation → rejection
-  → alternate → lock → feedback → chat extraction → visible Memory.
-- Manual Playwright CLI review at 1440×1000 and 390×844, with screenshots in
-  `output/playwright/` (kept local, not committed).
-- `npm audit` for the full dependency tree and for production dependencies.
+1. Run strict client/server TypeScript, ESLint, production build, dependency
+   audit, 71 unit/contract/integration tests, and the Playwright mobile journey.
+2. Generate locally with the exact Lisbon prompt and remembered Saldanha home,
+   18:30 meal, 45–60 minute easy walk, €35–50 preference, and Pom needs.
+3. Confirm the response is `gemini-grounded`, contains four source-backed
+   dossier places, three distinct chronological route stops, and no invented
+   lake or out-of-dossier URL.
+4. Inspect every Maps/place/source link, hero-image URL and attribution,
+   total-walking normalization, spend estimate, operational checks, apparel,
+   bring list, Pom kit, weather rule, and fallback.
+5. Render the plan at 390×844 and 1280×900, inspect clipping, overflow,
+   collisions, image crop, bottom-navigation clearance, and responsive columns.
+6. Execute signup → onboarding → generation → rejection → regeneration → lock →
+   rich History reopen → feedback → Chat extraction → Memory visibility.
+7. After deployment, poll Render until live, check health and visible version,
+   then repeat a real grounded generation and critical persistence flow on the
+   production URL.
 
-## 3. Defects found and corrected
+## Phase 3 — Local execution results
 
-- Added actual `DB_SCHEMA=planbuddy` search-path enforcement for shared Neon;
-  the initial build only documented schema isolation.
-- Closed credentialed arbitrary-origin CORS and added a production Origin check.
-- Added tenant ownership validation to hunch-evidence reads.
-- Prevented rejected AI candidates from being force-locked by direct API calls.
-- Attached Not-this evidence to its persisted rejected plan for independent
-  evidence accounting.
-- Made positive/negative rating-only feedback teach the system without requiring
-  a comment, and exposed explicit thumbs controls.
-- Added accessible names to onboarding participant controls.
-- Upgraded Vite/Vitest to patched releases after the initial audit flagged
-  development-server advisories.
-- Routed the large DeepSeek request through a low-latency provider with fallback,
-  normalized harmless JSON envelopes, and added a bounded timeout.
-- Corrected the hard-filter false positive that treated “gluten-safe,”
-  “gluten-free,” and explicit avoidance language as violations.
-
-## 4. Final local results
-
-- Type-check: **pass**
-- Lint: **pass**
-- Production build: **pass**
-- Unit/contract/integration: **68/68 pass** across 8 files
-- Browser journey: **1/1 pass** on mobile Chrome
-- Dependency audit: **0 vulnerabilities**
-- Visual inspection: **pass** on desktop and mobile
+- Type-check: **PASS**
+- ESLint: **PASS** (zero errors and zero warnings)
+- Production build: **PASS**
+- Unit/contract/integration: **PASS — 71/71 across 9 files**
+- Playwright mobile journey: **PASS — 1/1**
+- Real Gemini + Search Lisbon generation: **PASS**
+- Google Maps URL generation/source firewall: **PASS**
+- Open-Meteo weather and weather-aware apparel/Pom preparation: **PASS**
+- Wikimedia Commons lookup and attribution: **PASS**
+- Visual inspection at mobile and desktop: **PASS**
+- Rich locked-plan reopen from History: **PASS**
 
 The browser console records one expected 401 for the initial anonymous
-`/api/auth/me` probe; it is handled by the auth provider and is not an app
-failure or leaked exception.
+`/api/auth/me` probe; the auth provider handles it and no app exception leaks.
 
-## 5. Production canary
+## Phase 4 — Defects found and corrected
 
-- URL: https://planbuddy.onrender.com
-- Render deploy: `dep-d9ed6fhoagis7397kurg` (`d8ba6cc`, live)
-- Neon project: `aged-dream-11028120`, dedicated to PlanBuddy
-- Health, signup/login, family and pet persistence: **pass**
-- Real DeepSeek V4 Flash recommendation and chat: **pass**
-- Two hard constraints visible on the winning ticket: **pass**
-- Lock, feedback-to-hunch learning, chat memory extraction: **pass**
-- Fresh-login history and memory persistence: **pass**
+- Removed the generic “lakeside” path by requiring a Google Search-backed place
+  dossier and rejecting every place/source URL outside it.
+- Replaced one generic activity beat with exactly three chronological stops and
+  changed place research to provide two distinct outdoor anchors around a meal.
+- Prevented minor structured-copy length misses from discarding an otherwise
+  grounded plan and cascading into the demo fallback.
+- Reconciled walking activity plus transfer time to an explicit remembered
+  walking range; the Lisbon canary now displays **60 minutes** total.
+- Added mandatory hours, reservation/terrace, pet-policy, and menu/price checks.
+- Replaced fuzzy Wikipedia page images with ranked Wikimedia Commons file search
+  and penalized insect, close-up, tile, flag, and sculpture results.
+- Added full rich-ticket reopening in History instead of degrading saved plans
+  to plain text beats.
+- Kept tests deterministic even when local key-file configuration exists by
+  forcing demo mode under `NODE_ENV=test`.
 
-## 6. Readiness
+## Phase 5 — Production canary
 
-The v1 MVP is accepted, merged, deployed, and production-canary verified.
+Pending deployment of `v0.1.1`; this section is completed only after the Render
+deploy and live grounded Lisbon flow pass.
+
+## Readiness
+
+Local release gates are green. Production readiness remains pending the final
+Render deploy and live canary.

@@ -148,6 +148,60 @@ describe("filterCandidates", () => {
     const { kept } = filterCandidates([candidate], baseCtx({ resolverMode: "resolved" }));
     expect(kept).toHaveLength(1);
   });
+
+  it("rejects a named place whose source URL was not returned by web grounding", () => {
+    const candidate = makeCandidate({
+      beats: [
+        {
+          title: "Dinner",
+          description: "A specific dinner stop.",
+          category: "food",
+          indoor: false,
+          place: {
+            name: "Real Place",
+            address: "Lisbon",
+            kind: "restaurant",
+            sourceUrl: "https://invented.example/place",
+            sourceLabel: "Invented source",
+            factualNote: "A terrace restaurant.",
+          },
+        },
+      ],
+    });
+    const { kept, rejected } = filterCandidates(
+      [candidate],
+      baseCtx({ groundedSourceUrls: ["https://official.example/another-place"] })
+    );
+    expect(kept).toHaveLength(0);
+    expect(rejected[0].reason).toContain("place-source firewall");
+  });
+
+  it("accepts a named place when its source URL matches web-search evidence", () => {
+    const sourceUrl = "https://www.visitlisboa.com/en/places/example/";
+    const candidate = makeCandidate({
+      beats: [
+        {
+          title: "Dinner",
+          description: "A grounded dinner stop.",
+          category: "food",
+          indoor: false,
+          place: {
+            name: "Example",
+            address: "Lisbon",
+            kind: "restaurant",
+            sourceUrl,
+            sourceLabel: "Visit Lisboa",
+            factualNote: "A listed Lisbon restaurant.",
+          },
+        },
+      ],
+    });
+    const { kept } = filterCandidates(
+      [candidate],
+      baseCtx({ groundedSourceUrls: ["https://www.visitlisboa.com/en/places/example"] })
+    );
+    expect(kept).toHaveLength(1);
+  });
 });
 
 describe("filterCandidates against real demo AI output", () => {

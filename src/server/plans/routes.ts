@@ -26,9 +26,21 @@ function planView(candidate: Candidate, context: PipelineResult["context"]) {
   return {
     candidate,
     weather: context.weather,
-    placeProvenance: placeProvenanceView(context.resolver),
+    placeProvenance: placeProvenanceView(context.resolver, context.groundingSources),
     activeConstraints: activeConstraintsView(context.scopedConstraints),
   };
+}
+
+function candidateGroundingSources(candidate: Candidate) {
+  const sources = [
+    ...candidate.beats.flatMap((beat) =>
+      beat.place?.sourceUrl ? [{ url: beat.place.sourceUrl, title: beat.place.sourceLabel }] : []
+    ),
+    ...(candidate.fallback?.place?.sourceUrl
+      ? [{ url: candidate.fallback.place.sourceUrl, title: candidate.fallback.place.sourceLabel }]
+      : []),
+  ];
+  return Array.from(new Map(sources.map((source) => [source.url, source])).values());
 }
 
 function pipelineResponse(spec: Awaited<ReturnType<typeof createPlanSpec>>, result: PipelineResult) {
@@ -119,7 +131,7 @@ planSpecsRouter.post(
       beats: candidate.beats,
       weather: context.weather,
       distanceKm: candidate.travelEstimateKm,
-      placeProvenance: placeProvenanceView(context.resolver),
+      placeProvenance: placeProvenanceView(context.resolver, candidateGroundingSources(candidate)),
       activeConstraints: activeConstraintsView(context.scopedConstraints),
       citations: candidate.citations,
       rejectionReason: req.body.reason,
@@ -167,7 +179,7 @@ planSpecsRouter.post(
       beats: candidate.beats,
       weather: context.weather,
       distanceKm: candidate.travelEstimateKm,
-      placeProvenance: placeProvenanceView(context.resolver),
+      placeProvenance: placeProvenanceView(context.resolver, candidateGroundingSources(candidate)),
       activeConstraints: activeConstraintsView(context.scopedConstraints),
       citations: candidate.citations,
       rejectionReason: null,

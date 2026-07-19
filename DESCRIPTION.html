@@ -1,121 +1,285 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>PlanBuddy — MVP Description</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlanBuddy â€” Project Description</title>
 <style>
   :root {
-    --paper: #FAF6EF; --ink: #26221B; --clay: #C75B39; --pine: #2F5D50; --honey: #E8A13D; --sky: #7FA8C9;
-    --hairline: rgba(38,34,27,0.14);
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #6b7280; --border: #e5e7eb;
+    --card: #f9fafb; --accent: #4f46e5; --code-bg: #f3f4f6; --code-fg: #111827;
+    --table-head: #f3f4f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --fg: #e6e7eb; --muted: #9aa1ad; --border: #2a2f3a;
+      --card: #161a22; --accent: #8b8bff; --code-bg: #1b2029; --code-fg: #e6e7eb;
+      --table-head: #1b2029;
+    }
   }
   * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
   body {
-    margin: 0; background: var(--paper); color: var(--ink);
-    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-    line-height: 1.55;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65; font-size: 16px;
   }
-  main { max-width: 760px; margin: 0 auto; padding: 48px 24px 96px; }
-  h1, h2, h3 { font-family: Georgia, 'Iowan Old Style', serif; font-weight: 600; line-height: 1.2; }
-  h1 { font-size: 2.1rem; color: var(--clay); margin-bottom: 4px; }
-  .tagline { color: rgba(38,34,27,0.62); margin-top: 0; margin-bottom: 32px; font-size: 1.05rem; }
-  h2 { font-size: 1.3rem; margin-top: 40px; border-bottom: 2px solid var(--hairline); padding-bottom: 8px; }
-  h3 { font-size: 1.05rem; margin-top: 24px; }
-  code, pre { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; }
-  pre { background: #fff; border: 1px solid var(--hairline); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 0.85rem; }
-  code { background: rgba(38,34,27,0.06); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
-  ul, ol { padding-left: 22px; }
-  li { margin-bottom: 6px; }
-  .badges { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
-  .badge { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; }
-  .b-pine { background: rgba(47,93,80,0.12); color: var(--pine); }
-  .b-clay { background: rgba(199,91,57,0.12); color: var(--clay); }
-  .b-honey { background: rgba(232,161,61,0.16); color: #8a5a13; }
-  .b-sky { background: rgba(127,168,201,0.16); color: #35566d; }
-  .card { background: #fff; border: 1px solid var(--hairline); border-radius: 14px; padding: 18px 20px; margin: 14px 0; box-shadow: 0 1px 2px rgba(38,34,27,0.06), 0 6px 20px rgba(38,34,27,0.06); }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
-  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--hairline); color: rgba(38,34,27,0.46); font-size: 0.85rem; }
-  a { color: var(--pine); }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 48px 24px 96px; }
+  .topbar { font-size: 13px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 8px; }
+  #content h1 { font-size: 2rem; line-height: 1.2; margin: .2em 0 .4em; border-bottom: 2px solid var(--border); padding-bottom: .3em; }
+  #content h2 { font-size: 1.35rem; margin: 1.8em 0 .6em; border-bottom: 1px solid var(--border); padding-bottom: .25em; }
+  #content h3 { font-size: 1.1rem; margin: 1.4em 0 .4em; }
+  #content p { margin: .7em 0; }
+  #content ul, #content ol { padding-left: 1.4em; }
+  #content li { margin: .25em 0; }
+  #content a { color: var(--accent); text-decoration: none; }
+  #content a:hover { text-decoration: underline; }
+  #content code {
+    background: var(--code-bg); color: var(--code-fg); padding: .15em .4em;
+    border-radius: 4px; font-size: .9em; font-family: "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  #content pre {
+    background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto;
+    border: 1px solid var(--border);
+  }
+  #content pre code { background: none; padding: 0; }
+  #content blockquote {
+    border-left: 3px solid var(--accent); margin: .8em 0; padding: .2em 1em; color: var(--muted);
+  }
+  #content table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: .95em; }
+  #content th, #content td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  #content th { background: var(--table-head); font-weight: 600; }
+  #content tr:nth-child(even) td { background: var(--card); }
+  .mermaid {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; margin: 1.2em 0; text-align: center; overflow-x: auto;
+  }
+  .render-error { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; padding: 12px; border-radius: 8px; }
+  footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
 </style>
 </head>
 <body>
-<main>
-  <h1>PlanBuddy</h1>
-  <p class="tagline">One confident, lockable plan for the people involved — Day off, Weekend, Getaway, or Vacation.</p>
-
-  <div class="badges">
-    <span class="badge b-pine">React + Vite + TS</span>
-    <span class="badge b-clay">Express + TS</span>
-    <span class="badge b-honey">Neon / PGlite</span>
-    <span class="badge b-sky">DeepSeek V4 Flash + demo AI</span>
+  <div class="wrap">
+    <div class="topbar">Project Description</div>
+    <div id="content">Renderingâ€¦</div>
+    <footer>Generated from <code>DESCRIPTION.md</code> Â· rendered with marked + mermaid</footer>
   </div>
 
-  <p>PlanBuddy turns "what should we do?" into one lockable plan. The v1 MVP
-  is live at <a href="https://planbuddy.onrender.com">planbuddy.onrender.com</a>:
-  a single-package React client and Express API, dedicated Neon persistence,
-  secure auth, full-CRUD household memory, four planning modes, and a
-  deterministic recommendation engine sitting on top of DeepSeek V4 Flash.</p>
+  <!-- Canonical markdown source, injected verbatim. type="text/plain" keeps markdown chars inert. -->
+  <script id="source-md" type="text/plain"># PlanBuddy
 
-  <h2>The smallest lovable loop</h2>
-  <ol>
-    <li>Pick a scale, the people (and pets) involved, and a date window; add an optional context note.</li>
-    <li>Press <strong>Plan it</strong>.</li>
-    <li>Get one confident recommendation with an honest, memory-grounded rationale.</li>
-    <li>Lock it, browse a diverse alternate, say <strong>Not this</strong> with a reason, or tweak the spec.</li>
-    <li>Rate it afterward and optionally comment.</li>
-    <li>Anything learned shows up in Memory with full provenance and full CRUD.</li>
-  </ol>
+**A memory-aware planner that turns one click into one grounded, decision-ready plan for a person, household, and pets.**
 
-  <h2>Stack</h2>
-  <div class="grid">
-    <div class="card"><strong>Client</strong><br>React + Vite + TypeScript, mobile-first (≤640px), no raster assets — warm "daylight editorial" design system + lucide-react vector icons.</div>
-    <div class="card"><strong>Server</strong><br>Express + TypeScript, serves the built client and a JSON API under <code>/api</code>.</div>
-    <div class="card"><strong>Database</strong><br>Normalized Postgres, Neon-ready. No <code>DATABASE_URL</code>? Falls back to an embedded PGlite database — same schema, zero setup.</div>
-    <div class="card"><strong>Auth</strong><br>Argon2id (bcrypt cost-12 fallback), 256-bit opaque session tokens in a signed httpOnly SameSite=Lax cookie.</div>
-    <div class="card"><strong>AI</strong><br>DeepSeek V4 Flash via OpenRouter when a key is set; otherwise a deterministic local demo AI — fully usable offline.</div>
-    <div class="card"><strong>Weather / Places</strong><br>Open-Meteo (no key). Pluggable place resolver; defaults to explicit Inspiration mode.</div>
-  </div>
+## Purpose
 
-  <h2>Deterministic recommendation pipeline</h2>
-  <p>Per the contract's core doctrine — <em>DeepSeek proposes, server code disposes</em> — every AI-proposed candidate passes a deterministic, replayable pipeline before it's shown:</p>
-  <ul>
-    <li><strong>Constraint filter</strong> — mechanical keyword/structure check, independent of the model's own self-report. Rejects constraint violations, invalid citations, duplicates, impossible travel radius, and venue-firewall violations.</li>
-    <li><strong>Scoring</strong> — base fit 0.5 per participant; loves/avoids shift it; hunches contribute at most ±0.15 and never appear in rationales; group fit is the <strong>minimum</strong> per-participant fit (least misery); feasibility folds in weather/travel; novelty penalizes recent repeats. Final score = 55% group fit + 25% feasibility + 20% novelty.</li>
-    <li><strong>Alternates</strong> — drawn from the same filtered batch, category-diverse from the winner.</li>
-  </ul>
+PlanBuddy removes the work between â€œwe should go outâ€ and an itinerary worth
+following. It is built for Diogoâ€™s Buddy app family and supports a day off,
+weekend, getaway, or vacation in one product. Its durable advantage is an
+inspectable memory of the householdâ€™s tastes, constraints, feedback, family
+members, and pets, so it asks fewer questions over time without learning hidden
+or unsafe rules.
 
-  <h2>Memory model</h2>
-  <ul>
-    <li><strong>Constraints</strong> — hard vetoes. Typed constraints are verified immediately. Chat-extracted constraints become <code>active_unverified</code> (and start protecting immediately) only after the server verifies the model's quote is a verbatim substring of the source message at the claimed offsets — <em>quote or demote</em>. A failed quote becomes a non-filtering hunch instead.</li>
-    <li><strong>Tastes</strong> — loves/avoids that shape scoring but never veto.</li>
-    <li><strong>Hunches</strong> — weak, decaying, non-citable. Promote to a taste (never a constraint) after three independent evidence events from distinct plans/sessions; decay after six unreinforced generations or 90 days.</li>
-  </ul>
+## What it does
 
-  <h2>Running it</h2>
-  <pre>npm install
-npm run dev      # Vite (5173) + Express (4000), proxied
-# or:
+- Produces one three-beat plan rather than a generic list of ideas.
+- Grounds every named place in a web-sourced dossier and mechanically rejects
+  names or source links that are not in that dossier.
+- Shows real stops, Maps search/directions/full-route links, an attributed place
+  image, estimated distances and spend, live weather, detailed clothing and
+  bring lists, a pet kit, operational checks, and one compact fallback.
+- Remembers household members and pets, hard constraints, loved/avoided tastes,
+  and weak feedback-derived hunches with visible provenance and CRUD controls.
+- Uses thumbs, ratings, comments, and â€œNot thisâ€ reasons in a guarded
+  self-improvement loop; hunches can become tastes but never safety constraints.
+- Persists accounts and planning history in Neon Postgres and runs publicly on
+  Render with email/password login.
+
+## How it works
+
+The user chooses a scale, date, and participants, optionally adds one sentence
+of context, and presses **Plan my weekend**. The server gathers the relevant
+memory, selected people and pets, recent plan history, home location, and an
+Open-Meteo forecast. Gemini with Google Search builds a closed dossier containing
+a meal venue, two distinct outdoor stops, and a fallback venue; a second
+structured call composes exactly one chronological three-beat itinerary using
+only those places.
+
+Server code then validates citations and constraint claims, rejects any place
+outside the dossier, scores group fit using least-misery logic, and enriches the
+winner. Enrichment creates Google Maps URLs, reconciles total walking time with
+an explicit remembered range, adds an operational checklist, chooses an
+attributed Wikimedia Commons image, and derives weather-aware clothing and pet
+preparation. The full candidate JSON is persisted, so a locked plan reopens in
+History with the same rich itinerary. DeepSeek V4 Flash separately powers chat
+and feedback interpretation.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    User["User in browser"] --> UI["React Plan / Chat / Memory / History"]
+    UI --> API["Express JSON API"]
+    API --> DB[("Neon Postgres or local PGlite")]
+    API --> Weather["Open-Meteo forecast"]
+    API --> Grounding["Gemini 3.5 Flash + Google Search"]
+    Grounding --> Firewall["Zod contract + source firewall"]
+    Firewall --> Rank["Constraint filter + least-misery scoring"]
+    Rank --> Enrich["Maps URLs + walking normalization + prep"]
+    Enrich --> Commons["Wikimedia Commons image"]
+    Enrich --> UI
+    API --> DeepSeek["DeepSeek V4 Flash via OpenRouter"]
+    DeepSeek --> Chat["Chat extraction + feedback evidence"]
+    Chat --> DB
+```
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant F as React client
+    participant B as Express planner
+    participant G as Gemini Search
+    participant D as Neon
+    U->>F: Press Plan my weekend
+    F->>B: POST plan spec
+    B->>D: Load memory, people, pets, and history
+    B->>G: Research four real places
+    G-->>B: Closed place dossier with sources
+    B->>G: Compose one structured three-beat plan
+    B->>B: Filter, score, enrich, and verify
+    B->>D: Persist full candidate JSON
+    B-->>F: Grounded PlanView
+    F-->>U: Rich ticket with route, image, kit, and fallback
+```
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, Vite 6, TypeScript, React Router, Lucide icons |
+| Backend | Express 4, TypeScript, Zod validation |
+| Data | Neon Postgres in production, embedded PGlite locally/tests |
+| AI | Gemini 3.5 Flash + Google Search for plans; DeepSeek V4 Flash via OpenRouter for chat/feedback and composition fallback |
+| Context | Open-Meteo weather, Google Maps URLs, Wikimedia Commons images |
+| Auth | Email/password, Argon2id or bcrypt, opaque signed-cookie sessions |
+| Hosting | Render web service in Frankfurt; Neon database in Frankfurt |
+| QA | Vitest, Supertest, Playwright mobile Chrome |
+
+## Repo map
+
+| Path | Responsibility |
+|---|---|
+| `src/client/routes/` | Plan, Chat, Memory, History, authentication, and onboarding screens |
+| `src/client/components/TicketCard.tsx` | Rich recommendation and saved-plan presentation |
+| `src/server/grounding/geminiPlaces.ts` | Google Search dossier and structured plan composition |
+| `src/server/plans/engine/` | Constraint firewall, scoring, generation pipeline, Maps/preparation enrichment |
+| `src/server/media/wikimedia.ts` | Cached, attributable Commons place-image selection |
+| `src/server/ai/` | DeepSeek calls, prompts, guarded JSON parsing, deterministic demo AI |
+| `src/server/weather/` | Open-Meteo forecast retrieval and cache |
+| `src/server/db/` | Postgres/PGlite client and migrations |
+| `tests/` and `e2e/` | Unit, contract, integration, and browser coverage |
+| `PRODUCT-CONTRACT.md` | Product invariants and learning rules |
+| `STATE.md` / `PROGRESS.md` | Current status, roadmap, and next actions |
+
+## Data & state
+
+Production data lives in the `planbuddy` schema of a dedicated Neon project.
+Candidate payloads are JSONB so richer route, image, preparation, and fallback
+fields require no migration. Raw chat is bounded and retained for 30 days;
+durable memory is structured and visible.
+
+```mermaid
+erDiagram
+    USERS ||--o{ PARTICIPANTS : owns
+    USERS ||--o{ CONSTRAINTS : protects
+    USERS ||--o{ TASTES : remembers
+    USERS ||--o{ HUNCHES : considers
+    USERS ||--o{ PLAN_SPECS : requests
+    PLAN_SPECS ||--o{ CANDIDATES : generates
+    PLAN_SPECS ||--o{ PLANS : records
+    PLANS ||--o{ FEEDBACK : receives
+    HUNCHES ||--o{ HUNCH_EVIDENCE : accumulates
+    USERS ||--o{ CHAT_SESSIONS : opens
+    CHAT_SESSIONS ||--o{ CHAT_MESSAGES : contains
+```
+
+## External integrations
+
+- **Google Gemini API** â€” native Search grounding plus structured itinerary
+  composition. Reads `GEMINI_API_KEY` or local `GEMINI_API_KEY_FILE`.
+- **OpenRouter / DeepSeek V4 Flash** â€” chat, feedback extraction, and bounded
+  composition fallback. Reads `OPENROUTER_API_KEY` or local key-file path.
+- **Open-Meteo** â€” no-key weather forecast and geocoding.
+- **Google Maps URLs** â€” no-key server-generated search and directions links.
+- **Wikimedia Commons API** â€” no-key, cached route photography with attribution.
+- **Neon** â€” persistent Postgres via `DATABASE_URL`.
+- **Render** â€” builds and serves the single Node production process.
+
+## How to run
+
+```bash
+npm install
+npm run dev
+
+# Production-style local process
 npm run build
-npm start          # single process on PORT</pre>
-  <p>No <code>.env</code> is required — copy <code>.env.example</code> for a real Neon DB or OpenRouter key.</p>
+npm start
+```
 
-  <h2>Verifying it</h2>
-  <pre>npm run typecheck   # strict TS, client + server
-npm run lint          # ESLint
-npm run build          # vite build + tsc build
-npm test                 # Vitest: unit + AI-contract + Supertest integration
-npm run test:e2e        # Playwright: signup → onboard → generate → reject → lock → feedback → Memory</pre>
-  <p>All green as of this build: 68 Vitest tests, 1 Playwright scenario, a live production canary, and zero TypeScript/ESLint errors.</p>
+- **Entry points:** `src/client/main.tsx`, `src/server/index.ts`
+- **Live URL:** https://planbuddy.onrender.com
+- **Repository:** https://github.com/dmcaetano/planbuddy
+- **Configuration:** copy `.env.example`; never commit filled secrets.
 
-  <h2>Out of scope for v1</h2>
-  <ul>
-    <li>No live place-resolver provider wired up (interface is pluggable; Inspiration mode by default).</li>
-    <li>No venue-specific live facts until a place-resolver provider is configured; the deployed app labels this as Inspiration mode.</li>
-    <li>No booking or detailed itinerary generation, by design.</li>
-  </ul>
+## Status
 
-  <footer>See <code>PRODUCT-CONTRACT.md</code>, <code>DB_SCHEMA.md</code>, and <code>DESCRIPTION.md</code> in the repository root for full detail.</footer>
-</main>
+Version 0.1.1 is locally verified and prepared for production deployment with
+grounded Lisbon planning. See `STATE.md` and `PROGRESS.md` for live release
+status and next work.
+
+## Glossary
+
+- **Dossier** â€” the four source-backed places the composer is allowed to name.
+- **Venue firewall** â€” server validation rejecting any place/source outside the dossier.
+- **Hunch** â€” weak feedback-derived preference evidence that can decay or promote to a taste.
+- **Least misery** â€” group-fit score based on the least-satisfied participant.
+</script>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    (function () {
+      var md = document.getElementById('source-md').textContent || '';
+      var contentEl = document.getElementById('content');
+      var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+      try {
+        // Render markdown â†’ HTML.
+        var html = (window.marked && (marked.parse ? marked.parse(md) : marked(md))) || '';
+        contentEl.innerHTML = html;
+
+        // Convert ```mermaid code blocks into <div class="mermaid"> so mermaid can draw them.
+        contentEl.querySelectorAll('pre > code.language-mermaid').forEach(function (code) {
+          var div = document.createElement('div');
+          div.className = 'mermaid';
+          div.textContent = code.textContent;
+          code.parentElement.replaceWith(div);
+        });
+
+        if (window.mermaid) {
+          mermaid.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'default', securityLevel: 'loose' });
+          mermaid.run({ querySelector: '.mermaid' }).catch(function (e) {
+            console.error('mermaid render error', e);
+          });
+        }
+
+        // Use the first <h1> as the document title if present.
+        var h1 = contentEl.querySelector('h1');
+        if (h1) document.title = h1.textContent + ' â€” Project Description';
+      } catch (e) {
+        contentEl.innerHTML = '<div class="render-error">Failed to render DESCRIPTION.md: ' +
+          (e && e.message ? e.message : e) + '</div><pre></pre>';
+        contentEl.querySelector('pre').textContent = md;
+      }
+    })();
+  </script>
 </body>
 </html>

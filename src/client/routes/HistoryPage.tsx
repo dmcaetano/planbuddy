@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
-import type { PlanRecord } from "../api/types";
+import type { Candidate, PlanRecord, PlanView } from "../api/types";
 import { Star, ThumbsDown, ThumbsUp } from "lucide-react";
+import TicketCard from "../components/TicketCard";
 
 function PlanRow({ plan, onOpen }: { plan: PlanRecord; onOpen: () => void }) {
   return (
@@ -80,6 +81,8 @@ export default function HistoryPage() {
   const [upcoming, setUpcoming] = useState<PlanRecord[]>([]);
   const [past, setPast] = useState<PlanRecord[]>([]);
   const [selected, setSelected] = useState<PlanRecord | null>(null);
+  const [selectedView, setSelectedView] = useState<PlanView | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedbackDone, setFeedbackDone] = useState(false);
 
@@ -93,13 +96,41 @@ export default function HistoryPage() {
     load().catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't load History."));
   }, []);
 
+  async function openPlan(plan: PlanRecord) {
+    setSelected(plan);
+    setSelectedView(null);
+    setDetailsLoading(true);
+    try {
+      const data = await api.get<{ candidates: Candidate[] }>(`/plan-specs/${plan.planSpecId}`);
+      const candidate = data.candidates.find((item) => item.id === plan.candidateId);
+      if (candidate) {
+        setSelectedView({
+          candidate,
+          weather: plan.weather ?? {
+            temperatureC: null,
+            precipitationProbability: null,
+            summary: "Forecast unavailable",
+            unavailable: true,
+          },
+          placeProvenance: plan.placeProvenance,
+          activeConstraints: plan.activeConstraints,
+        });
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't load the full itinerary.");
+    } finally {
+      setDetailsLoading(false);
+    }
+  }
+
   if (selected) {
     return (
       <div className="stack">
-        <button className="btn btn-ghost btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => { setSelected(null); setFeedbackDone(false); }}>
+        <button className="btn btn-ghost btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => { setSelected(null); setSelectedView(null); setFeedbackDone(false); }}>
           ← Back to History
         </button>
-        <div className="card">
+        {detailsLoading && <div className="skeleton" style={{ height: 320, borderRadius: 18 }} />}
+        {selectedView ? <TicketCard view={selectedView} /> : !detailsLoading && <div className="card">
           <div className="eyebrow">{selected.category}</div>
           <h2>{selected.title}</h2>
           <p>{selected.rationale}</p>
@@ -110,7 +141,7 @@ export default function HistoryPage() {
             </div>
           ))}
           {selected.rejectionReason && <p className="muted">Not chosen: {selected.rejectionReason}</p>}
-        </div>
+        </div>}
         {selected.status === "locked" && !feedbackDone && (
           <FeedbackForm planId={selected.id} onDone={() => setFeedbackDone(true)} />
         )}
@@ -133,7 +164,7 @@ export default function HistoryPage() {
       {upcoming.length === 0 && <p className="muted">Nothing locked yet.</p>}
       <div className="stack">
         {upcoming.map((p) => (
-          <PlanRow key={p.id} plan={p} onOpen={() => setSelected(p)} />
+          <PlanRow key={p.id} plan={p} onOpen={() => void openPlan(p)} />
         ))}
       </div>
 
@@ -141,7 +172,7 @@ export default function HistoryPage() {
       {past.length === 0 && <p className="muted">Nothing here yet.</p>}
       <div className="stack">
         {past.map((p) => (
-          <PlanRow key={p.id} plan={p} onOpen={() => setSelected(p)} />
+          <PlanRow key={p.id} plan={p} onOpen={() => void openPlan(p)} />
         ))}
       </div>
     </div>

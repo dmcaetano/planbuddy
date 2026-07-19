@@ -27,8 +27,8 @@ test("signup -> onboard -> generate -> reject -> lock -> feedback -> Memory", as
   await page.getByRole("button", { name: "Start planning" }).click();
 
   // Plan tab: New spec state
-  await expect(page.getByText("What should we do?")).toBeVisible();
-  await page.getByRole("button", { name: "Plan it" }).click();
+  await expect(page.getByText("One click. One genuinely good plan.")).toBeVisible();
+  await page.getByRole("button", { name: "Plan my weekend" }).click();
 
   // Recommendation appears
   await expect(page.getByRole("button", { name: /Lock it/i })).toBeVisible({ timeout: 15000 });

@@ -47,10 +47,10 @@ describe("demo AI generate contract", () => {
     }
   });
 
-  it("day_off candidates have exactly 1 beat and no destination anchor", () => {
+  it("day_off candidates have a decision-ready 3-beat itinerary and no destination anchor", () => {
     const result = generateCandidatesDemo(baseCtx({ scale: "day_off" }));
     for (const candidate of result.candidates) {
-      expect(candidate.beats).toHaveLength(1);
+      expect(candidate.beats).toHaveLength(3);
       expect(candidate.destinationAnchor).toBeNull();
     }
   });

@@ -1,14 +1,15 @@
-import { env } from "../env.js";
+import { env, isTest } from "../env.js";
 import { logger } from "../logger.js";
 import {
   aiChatResponseSchema,
   aiFeedbackResponseSchema,
   aiGenerateResponseSchema,
+  aiPlaceResearchResponseSchema,
   type AiChatResponse,
   type AiFeedbackResponse,
   type AiGenerateResponse,
 } from "../../shared/schemas.js";
-import { callAiJson, AiUnavailableError } from "./deepseek.js";
+import { callAiJson, callAiJsonGrounded, AiUnavailableError, type GroundingSource } from "./deepseek.js";
 import {
   buildChatSystemPrompt,
   buildChatUserPrompt,
@@ -16,32 +17,79 @@ import {
   buildFeedbackUserPrompt,
   buildGenerateSystemPrompt,
   buildGenerateUserPrompt,
+  buildPlaceResearchSystemPrompt,
+  buildPlaceResearchUserPrompt,
 } from "./prompts.js";
 import { chatRespondDemo, feedbackExtractDemo, generateCandidatesDemo, type ChatContext, type GenerateContext } from "./demoAi.js";
+import { composePlanWithGemini, researchPlacesWithGemini } from "../grounding/geminiPlaces.js";
 
-export type AiMode = "deepseek" | "demo";
+export type AiMode = "deepseek" | "gemini-grounded" | "demo";
 
 export function currentAiMode(): AiMode {
-  return env.OPENROUTER_API_KEY ? "deepseek" : "demo";
+  return !isTest && env.OPENROUTER_API_KEY ? "deepseek" : "demo";
 }
 
-export async function generateCandidates(ctx: GenerateContext): Promise<{ mode: AiMode; response: AiGenerateResponse }> {
+export async function generateCandidates(
+  ctx: GenerateContext
+): Promise<{ mode: AiMode; response: AiGenerateResponse; groundingSources: GroundingSource[] }> {
   if (currentAiMode() === "demo") {
-    return { mode: "demo", response: generateCandidatesDemo(ctx) };
+    return { mode: "demo", response: generateCandidatesDemo(ctx), groundingSources: [] };
   }
   try {
-    const response = await callAiJson(
-      buildGenerateSystemPrompt(),
-      buildGenerateUserPrompt(ctx),
-      aiGenerateResponseSchema
-    );
-    return { mode: "deepseek", response };
+    const research = env.GEMINI_API_KEY
+      ? await researchPlacesWithGemini(ctx)
+      : await callAiJsonGrounded(
+          buildPlaceResearchSystemPrompt(),
+          buildPlaceResearchUserPrompt(ctx),
+          aiPlaceResearchResponseSchema
+        );
+    const allowedUrls = new Set(research.groundingSources.map((source) => normalizeSourceUrl(source.url)));
+    const groundedPlaces = research.data.places.filter((place) => allowedUrls.has(normalizeSourceUrl(place.sourceUrl)));
+    if (groundedPlaces.length < 4) {
+      throw new Error("Place research did not return enough citation-backed places");
+    }
+    const generationContext: GenerateContext = { ...ctx, groundedPlaces };
+    let response: AiGenerateResponse;
+    if (env.GEMINI_API_KEY) {
+      try {
+        response = await composePlanWithGemini(generationContext);
+      } catch (geminiError) {
+        logger.warn("Gemini composition failed; retrying the grounded dossier with DeepSeek", {
+          error: String(geminiError),
+        });
+        response = await callAiJson(
+          buildGenerateSystemPrompt(),
+          buildGenerateUserPrompt(generationContext),
+          aiGenerateResponseSchema
+        );
+      }
+    } else {
+      response = await callAiJson(
+        buildGenerateSystemPrompt(),
+        buildGenerateUserPrompt(generationContext),
+        aiGenerateResponseSchema
+      );
+    }
+    return {
+      mode: env.GEMINI_API_KEY ? "gemini-grounded" : "deepseek",
+      response,
+      groundingSources: research.groundingSources,
+    };
   } catch (err) {
     if (err instanceof AiUnavailableError) {
-      return { mode: "demo", response: generateCandidatesDemo(ctx) };
+      return { mode: "demo", response: generateCandidatesDemo(ctx), groundingSources: [] };
     }
     logger.error("DeepSeek generate failed, falling back to demo AI", { error: String(err) });
-    return { mode: "demo", response: generateCandidatesDemo(ctx) };
+    return { mode: "demo", response: generateCandidatesDemo(ctx), groundingSources: [] };
+  }
+}
+
+function normalizeSourceUrl(raw: string): string {
+  try {
+    const url = new URL(raw);
+    return `${url.hostname.toLowerCase()}${url.pathname.replace(/\/+$/, "") || "/"}`;
+  } catch {
+    return raw.trim().toLowerCase().replace(/\/+$/, "");
   }
 }
 

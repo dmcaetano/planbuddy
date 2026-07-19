@@ -6,16 +6,33 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 export class AiUnavailableError extends Error {}
 
-async function callOpenRouter(systemPrompt: string, userPrompt: string, repairNote?: string): Promise<string> {
+export interface GroundingSource {
+  url: string;
+  title: string;
+}
+
+interface AiCallOptions {
+  webSearch?: boolean;
+  repairNote?: string;
+}
+
+interface RawAiReply {
+  content: string;
+  groundingSources: GroundingSource[];
+}
+
+async function callOpenRouter(systemPrompt: string, userPrompt: string, options: AiCallOptions = {}): Promise<RawAiReply> {
   if (!env.OPENROUTER_API_KEY) {
     throw new AiUnavailableError("OPENROUTER_API_KEY not configured");
   }
-  const messages = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: userPrompt },
-  ];
-  if (repairNote) {
-    messages.push({ role: "user", content: `Your previous reply was invalid: ${repairNote}. Reply again with corrected JSON only.` });
+  const messages = options.webSearch
+    ? [{ role: "user", content: `${systemPrompt}\n\nREQUEST\n${userPrompt}` }]
+    : [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ];
+  if (options.repairNote) {
+    messages.push({ role: "user", content: `Your previous reply was invalid: ${options.repairNote}. Reply again with corrected JSON only.` });
   }
 
   const controller = new AbortController();
@@ -34,16 +51,30 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, repairNo
         model: env.MODEL_ID,
         messages,
         response_format: { type: "json_object" },
-        temperature: 0.7,
-        max_tokens: 6000,
+        temperature: options.webSearch ? 0.45 : 0.7,
+        max_tokens: options.webSearch ? 5000 : 6000,
+        ...(options.webSearch ? { reasoning: { effort: "low", exclude: true } } : {}),
+        ...(options.webSearch
+          ? {
+              // DeepSeek currently completes a single injected Exa search far
+              // more reliably than the model-controlled multi-search tool,
+              // which can consume the whole request timeout without a final
+              // answer. Citations use the same standardized annotation shape.
+              plugins: [{ id: "web", engine: "exa", max_results: 5 }],
+            }
+          : {}),
         // Baidu's FP8 endpoint is the current low-latency, structured-output
         // path for this exact model. OpenRouter may still fall through to its
         // other providers if that endpoint is unavailable.
-        provider: {
-          order: ["baidu"],
-          allow_fallbacks: true,
-          require_parameters: true,
-        },
+        ...(options.webSearch
+          ? {}
+          : {
+              provider: {
+                order: ["baidu"],
+                allow_fallbacks: true,
+                require_parameters: true,
+              },
+            }),
       }),
       signal: controller.signal,
     });
@@ -51,10 +82,32 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, repairNo
       const body = await res.text().catch(() => "");
       throw new Error(`OpenRouter error ${res.status}: ${body.slice(0, 300)}`);
     }
-    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error("OpenRouter returned no content");
-    return content;
+    const data = (await res.json()) as {
+      choices?: {
+        finish_reason?: string;
+        message?: {
+          content?: string;
+          annotations?: { type?: string; url_citation?: { url?: string; title?: string } }[];
+        };
+      }[];
+    };
+    const message = data.choices?.[0]?.message;
+    const content = message?.content;
+    if (!content) {
+      logger.warn("OpenRouter returned an empty assistant message", {
+        choiceCount: data.choices?.length ?? 0,
+        messageKeys: message ? Object.keys(message) : [],
+        finishReason: data.choices?.[0]?.finish_reason,
+        reasoningLength: ((message as { reasoning?: string } | undefined)?.reasoning ?? "").length,
+        annotationCount: message?.annotations?.length ?? 0,
+        hasToolCalls: Boolean((message as { tool_calls?: unknown[] } | undefined)?.tool_calls?.length),
+      });
+      throw new Error("OpenRouter returned no content");
+    }
+    const groundingSources = (message.annotations ?? [])
+      .filter((a) => a.type === "url_citation" && a.url_citation?.url)
+      .map((a) => ({ url: a.url_citation!.url!, title: a.url_citation?.title ?? "Web source" }));
+    return { content, groundingSources };
   } finally {
     clearTimeout(timeout);
   }
@@ -72,14 +125,14 @@ export async function callAiJson<T>(
   schema: ZodType<T, ZodTypeDef, unknown>
 ): Promise<T> {
   let raw = await callOpenRouter(systemPrompt, userPrompt);
-  let parsed = safeJsonParse(raw);
+  let parsed = safeJsonParse(raw.content);
   let result = parsed ? schema.safeParse(parsed) : null;
 
   if (!result || !result.success) {
     const issue = result ? JSON.stringify(result.error.flatten()).slice(0, 400) : "not valid JSON";
     logger.warn("AI response failed validation, attempting one repair", { model: env.MODEL_ID, issue });
-    raw = await callOpenRouter(systemPrompt, userPrompt, issue);
-    parsed = safeJsonParse(raw);
+    raw = await callOpenRouter(systemPrompt, userPrompt, { repairNote: issue });
+    parsed = safeJsonParse(raw.content);
     result = parsed ? schema.safeParse(parsed) : null;
   }
 
@@ -90,6 +143,40 @@ export async function callAiJson<T>(
 
   logger.info("AI call succeeded", { model: env.MODEL_ID });
   return result.data;
+}
+
+/**
+ * Grounded generation variant. OpenRouter gives DeepSeek a bounded web-search
+ * tool and returns the cited URLs separately so the pipeline can enforce that
+ * every named place is backed by an actual search result.
+ */
+export async function callAiJsonGrounded<T>(
+  systemPrompt: string,
+  userPrompt: string,
+  schema: ZodType<T, ZodTypeDef, unknown>
+): Promise<{ data: T; groundingSources: GroundingSource[] }> {
+  let raw = await callOpenRouter(systemPrompt, userPrompt, { webSearch: true });
+  let parsed = safeJsonParse(raw.content);
+  let result = parsed ? schema.safeParse(parsed) : null;
+
+  if (!result || !result.success) {
+    const issue = result ? JSON.stringify(result.error.flatten()).slice(0, 500) : "not valid JSON";
+    logger.warn("Grounded AI response failed validation, attempting one repair", { model: env.MODEL_ID, issue });
+    raw = await callOpenRouter(systemPrompt, userPrompt, { webSearch: true, repairNote: issue });
+    parsed = safeJsonParse(raw.content);
+    result = parsed ? schema.safeParse(parsed) : null;
+  }
+
+  if (!result || !result.success) {
+    logger.error("Grounded AI response failed validation after repair attempt", { model: env.MODEL_ID });
+    throw new Error("Grounded AI response did not match the expected contract after repair");
+  }
+
+  logger.info("Grounded AI call succeeded", {
+    model: env.MODEL_ID,
+    sourceCount: raw.groundingSources.length,
+  });
+  return { data: result.data, groundingSources: raw.groundingSources };
 }
 
 export function safeJsonParse(text: string): unknown {

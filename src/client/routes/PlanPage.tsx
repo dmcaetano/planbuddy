@@ -7,17 +7,22 @@ import { SCALE_LABELS, SCALE_RADIUS_KM, type Scale } from "@shared/scale";
 import TicketCard from "../components/TicketCard";
 import { PawPrint, User, ThumbsDown, Lock, RefreshCw, SlidersHorizontal } from "lucide-react";
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
+function nextSaturday(): string {
+  const date = new Date();
+  date.setDate(date.getDate() + ((6 - date.getDay() + 7) % 7));
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 type ViewState = "spec" | "generating" | "browsing" | "locked" | "deadEnd" | "error";
 
 export default function PlanPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [scale, setScale] = useState<Scale>("day_off");
-  const [startDate, setStartDate] = useState(today());
-  const [endDate, setEndDate] = useState(today());
+  const [scale, setScale] = useState<Scale>("weekend");
+  const [startDate, setStartDate] = useState(nextSaturday());
+  const [endDate, setEndDate] = useState(nextSaturday());
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [moodContext, setMoodContext] = useState("");
 
@@ -159,9 +164,9 @@ export default function PlanPage() {
     return (
       <div className="stack">
         <div className="card">
-          <div className="eyebrow">Generating</div>
-          <h2>Finding your plan…</h2>
-          <p className="muted">Reading memory, weather, and recent history to pick one confident option.</p>
+          <div className="eyebrow">Building your route</div>
+          <h2>Finding the plan worth leaving home for…</h2>
+          <p className="muted">Checking memory, forecast, real places, route shape, and recent feedback.</p>
         </div>
         <div className="skeleton" style={{ height: 220, borderRadius: 14 }} />
       </div>
@@ -240,9 +245,12 @@ export default function PlanPage() {
   return (
     <div className="stack">
       <div>
-        <div className="eyebrow">Plan</div>
-        <h1>What should we do?</h1>
-        <p>Pick a scale, who's in, and press Plan it.</p>
+        <div className="row-gap" style={{ alignItems: "center", marginBottom: 4 }}>
+          <div className="eyebrow" style={{ marginBottom: 0 }}>Plan</div>
+          <span className="version-pill">v0.1.1 · grounded</span>
+        </div>
+        <h1>One click. One genuinely good plan.</h1>
+        <p>PlanBuddy combines what it remembers with live context, then commits to the best fit.</p>
       </div>
 
       {error && <div className="error-banner">{error}</div>}
@@ -295,18 +303,18 @@ export default function PlanPage() {
         </div>
 
         <div className="field">
-          <label htmlFor="mood">Optional context</label>
+          <label htmlFor="mood">Anything different this time? <span className="muted">Optional</span></label>
           <textarea
             id="mood"
             rows={2}
-            placeholder="e.g. keep it low-key, someone's a bit tired"
+            placeholder="e.g. grilled fish, a soft walk, and our Pom is coming"
             value={moodContext}
             onChange={(e) => setMoodContext(e.target.value)}
           />
         </div>
 
         <button className="btn btn-primary btn-block" onClick={planIt} disabled={selectedIds.length === 0}>
-          Plan it
+          Plan my {SCALE_LABELS[scale].toLowerCase()}
         </button>
       </div>
     </div>

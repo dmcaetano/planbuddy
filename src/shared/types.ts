@@ -122,6 +122,43 @@ export interface Beat {
   description: string;
   category: string;
   indoor: boolean;
+  startTime?: string | null;
+  durationMinutes?: number | null;
+  travelMode?: "walking" | "driving" | "transit" | "ferry" | null;
+  distanceFromPreviousKm?: number | null;
+  travelMinutes?: number | null;
+  place?: PlanPlace | null;
+  directionsUrl?: string | null;
+}
+
+export interface PlanPlace {
+  name: string;
+  address?: string | null;
+  kind: string;
+  sourceUrl: string;
+  sourceLabel: string;
+  factualNote: string;
+  mapsUrl?: string | null;
+}
+
+export interface PlanImage {
+  url: string;
+  sourceUrl: string;
+  attribution: string;
+  caption: string;
+}
+
+export interface PreparationGuide {
+  wear: string[];
+  bring: string[];
+  pet: string[];
+  weatherRule: string;
+}
+
+export interface PlanFallback {
+  title: string;
+  description: string;
+  place?: PlanPlace | null;
 }
 
 export interface Citation {
@@ -146,6 +183,15 @@ export interface Candidate {
   category: string;
   indoor: boolean;
   beats: Beat[];
+  walkingDistanceKm: number | null;
+  walkingMinutes: number | null;
+  estimatedCost: string | null;
+  checkBeforeYouGo: string[];
+  fallback: PlanFallback | null;
+  photoSearchTerm: string | null;
+  heroImage: PlanImage | null;
+  routeMapsUrl: string | null;
+  preparation: PreparationGuide | null;
   destinationAnchor: string | null;
   travelEstimateKm: number | null;
   citations: Citation[];
@@ -161,7 +207,13 @@ export type PlanStatus = "locked" | "rejected";
 
 export interface WeatherSnapshot {
   temperatureC: number | null;
+  temperatureMinC?: number | null;
+  apparentTemperatureC?: number | null;
   precipitationProbability: number | null;
+  windSpeedKph?: number | null;
+  uvIndex?: number | null;
+  sunrise?: string | null;
+  sunset?: string | null;
   summary: string;
   unavailable: boolean;
 }

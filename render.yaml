@@ -16,10 +16,12 @@ services:
       - key: MODEL_ID
         value: deepseek/deepseek-v4-flash
       - key: AI_TIMEOUT_MS
-        value: "45000"
+        value: "90000"
       - key: DATABASE_URL
         sync: false
       - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
         sync: false
       - key: SESSION_SECRET
         generateValue: true

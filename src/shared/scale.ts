@@ -15,11 +15,11 @@ export const SCALE_RADIUS_KM: Record<Scale, number> = {
   vacation: 1500, // destination-scale; not a hard travel-distance filter
 };
 
-/** Getaway/Vacation always return a destination anchor plus exactly three trip beats. */
+/** Every plan is a usable three-stop itinerary; trips also require a destination anchor. */
 export function isTripScale(scale: Scale): boolean {
   return scale === "getaway" || scale === "vacation";
 }
 
-export function beatCountForScale(scale: Scale): number {
-  return isTripScale(scale) ? 3 : 1;
+export function beatCountForScale(_scale: Scale): number {
+  return 3;
 }
