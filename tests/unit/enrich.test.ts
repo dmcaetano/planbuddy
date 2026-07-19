@@ -26,9 +26,10 @@ const candidate: AiCandidate = {
     },
     {
       title: "Dinner",
-      description: "Choose grilled fish.",
+      description: "Walk over and choose grilled fish.",
       category: "food",
       indoor: false,
+      durationMinutes: 90,
       travelMode: "walking",
       travelMinutes: 10,
       place: {
@@ -100,6 +101,7 @@ describe("candidate enrichment", () => {
     expect(enriched.preparation?.weatherRule).toContain("skip the first walk");
     expect(enriched.walkingMinutes).toBe(60);
     expect(enriched.beats[0].durationMinutes! + enriched.beats[2].durationMinutes!).toBe(35);
+    expect(enriched.beats[1].durationMinutes).toBe(90);
     expect(enriched.checkBeforeYouGo.join(" ")).toMatch(/opening hours/i);
   });
 

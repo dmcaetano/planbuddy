@@ -183,6 +183,12 @@ function calculateWalkingMetrics(
 }
 
 function isWalkingBeat(beat: AiCandidate["beats"][number]): boolean {
+  // Titles and descriptions often contain connective language such as
+  // "walk over for dinner" or "pre-dinner greenery". Only structural fields
+  // should decide that the activity itself is a meal rather than a walk.
+  if (/food|meal|dinner|lunch|restaurant|dining|cafe|café/i.test(`${beat.category} ${beat.place?.kind ?? ""}`)) {
+    return false;
+  }
   return /walk|stroll|hike|promenade|wander|park|garden|viewpoint|miradouro|jardim/i.test(
     `${beat.title} ${beat.category} ${beat.description} ${beat.place?.kind ?? ""}`
   );

@@ -20,6 +20,7 @@ export function buildGenerateSystemPrompt(): string {
     "Distances and travel times are estimates: make them geographically plausible and conservative. Do not output Google Maps URLs; the server creates them.",
     "Make start times coherent with the request, sunset, heat, meals, and companions. Rationale must explain why this specific route fits the remembered household.",
     "For a local request that asks for walking plus a meal, use this exact sequence: a gentle pre-meal walk, the meal, then a soft after-meal stroll. Schedule the requested meal time exactly when one is given.",
+    "For that local walk-meal-walk sequence, use the dossier's two distinct outdoor places for beats 1 and 3; never repeat the same park or landmark on both sides of the meal.",
     "walkingMinutes must include both walking between stops and time spent walking inside a park/promenade. walkingDistanceKm must cover that same total. Respect any explicit walking-time range.",
     "estimatedCost must be formatted per person and stay inside any explicit budget (for example, €35–50 per person). Never silently total multiple people.",
     "checkBeforeYouGo must cover current hours, reservation/terrace availability, pet acceptance when a pet is present, and any price/menu fact not established by the dossier.",
