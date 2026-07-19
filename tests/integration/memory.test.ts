@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeAll } from "vitest";
 import request from "supertest";
 import { getTestApp } from "../helpers/testApp.js";
+import { recordHunchEvidence } from "../../src/server/memory/hunches.repo.js";
 
 const HDR = "X-PlanBuddy-Client";
 
@@ -69,6 +70,24 @@ describe("memory integration", () => {
 
     const crossDelete = await agentB.delete(`/api/constraints/${id}`).set(HDR, "1");
     expect(crossDelete.status).toBe(404);
+  });
+
+  it("does not expose hunch evidence across tenants", async () => {
+    const { agent: agentA, userId } = await signUp(app, "hunch-owner@example.com");
+    const { agent: agentB } = await signUp(app, "hunch-other@example.com");
+    const hunch = await recordHunchEvidence(userId, {
+      participantId: null,
+      text: "quiet mornings",
+      polarity: "love",
+      note: "private feedback detail",
+    });
+
+    const ownerRead = await agentA.get(`/api/hunches/${hunch.id}/evidence`);
+    expect(ownerRead.status).toBe(200);
+    expect(ownerRead.body.evidence).toHaveLength(1);
+
+    const crossTenantRead = await agentB.get(`/api/hunches/${hunch.id}/evidence`);
+    expect(crossTenantRead.status).toBe(404);
   });
 
   it("chat quote-or-demote: verified quote becomes an active-unverified constraint", async () => {

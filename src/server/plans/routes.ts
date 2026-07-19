@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { asyncHandler, notFound, validateBody } from "../http.js";
+import { asyncHandler, HttpError, notFound, validateBody } from "../http.js";
 import { requireAuth } from "../auth/middleware.js";
 import { aiRateLimiter } from "../rateLimit.js";
 import { planSpecCreateSchema, notThisSchema } from "../../shared/schemas.js";
@@ -108,7 +108,7 @@ planSpecsRouter.post(
     if (!candidate || candidate.planSpecId !== spec.id) throw notFound();
 
     const context = await gatherPlanContext(req.user!.id, spec);
-    await insertPlan({
+    const rejectedPlan = await insertPlan({
       userId: req.user!.id,
       planSpecId: spec.id,
       candidateId: candidate.id,
@@ -131,7 +131,7 @@ planSpecsRouter.post(
         participantId: participant.id,
         text: `plans like "${candidate.title}" (${candidate.category})`,
         polarity: "avoid",
-        planId: null,
+        planId: rejectedPlan.id,
         sessionId: null,
         note: `Not-this: ${req.body.reason}`,
       });
@@ -151,6 +151,9 @@ planSpecsRouter.post(
     if (!spec) throw notFound();
     const candidate = await getCandidate(req.body.candidateId);
     if (!candidate || candidate.planSpecId !== spec.id) throw notFound();
+    if (candidate.rejected) {
+      throw new HttpError(409, "This suggestion did not pass PlanBuddy's safety checks");
+    }
 
     const context = await gatherPlanContext(req.user!.id, spec);
     const plan = await insertPlan({

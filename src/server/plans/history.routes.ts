@@ -41,10 +41,17 @@ historyRouter.post(
     const feedback = await insertFeedback(plan.id, req.body.rating, req.body.comment ?? null);
 
     const { response } = await feedbackExtract(req.body.rating, req.body.comment ?? null);
+    const ratingFallback =
+      response.evidence.length === 0 && req.body.rating >= 4
+        ? [{ text: `plans like "${plan.title}" (${plan.category})`, polarity: "love" as const }]
+        : response.evidence.length === 0 && req.body.rating <= 2
+          ? [{ text: `plans like "${plan.title}" (${plan.category})`, polarity: "avoid" as const }]
+          : [];
+    const evidenceItems = response.evidence.length > 0 ? response.evidence : ratingFallback;
     const spec = await getPlanSpec(req.user!.id, plan.planSpecId);
     const participantIds = spec?.participantIds ?? [];
     const targets: (string | null)[] = participantIds.length > 0 ? participantIds : [null];
-    for (const evidence of response.evidence) {
+    for (const evidence of evidenceItems) {
       for (const participantId of targets) {
         await recordHunchEvidence(req.user!.id, {
           participantId,

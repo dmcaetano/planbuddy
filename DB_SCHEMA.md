@@ -1,6 +1,8 @@
 # PlanBuddy database schema
 
-Normalized Postgres schema, Neon-ready. Runs unmodified against a real
+Normalized Postgres schema, Neon-ready. On a real Postgres connection every
+query is pinned to the sanitized `DB_SCHEMA` namespace (`planbuddy` by
+default), so a shared Neon database remains isolated. It runs unmodified against a real
 Postgres connection string or against the embedded local PGlite fallback
 used when `DATABASE_URL` is unset (see `.env.example`). Source of truth:
 `src/server/db/migrations/0001_init.sql`.

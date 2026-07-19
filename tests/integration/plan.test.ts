@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeAll } from "vitest";
 import request from "supertest";
 import { getTestApp } from "../helpers/testApp.js";
+import { getDb } from "../../src/server/db/client.js";
 
 const HDR = "X-PlanBuddy-Client";
 
@@ -59,6 +60,22 @@ describe("plan generation integration (demo AI)", () => {
     for (const view of allShown) {
       expect(/peanut/i.test(`${view.candidate.title} ${view.candidate.rationale}`)).toBe(false);
     }
+
+    // A client cannot bypass the safety boundary by posting the ID of a
+    // rejected candidate directly to the lock endpoint.
+    const blockedCandidate = full.body.candidates.find(
+      (c: { id: string }) => c.id !== generate.body.winner.candidate.id
+    );
+    const db = await getDb();
+    await db.query(
+      "UPDATE candidates SET rejected = true, rejection_reason = 'constraint violation: test' WHERE id = $1",
+      [blockedCandidate.id]
+    );
+    const unsafeLock = await agent
+      .post(`/api/plan-specs/${specId}/lock`)
+      .set(HDR, "1")
+      .send({ candidateId: blockedCandidate.id });
+    expect(unsafeLock.status).toBe(409);
 
     const lock = await agent
       .post(`/api/plan-specs/${specId}/lock`)
@@ -142,5 +159,26 @@ describe("plan generation integration (demo AI)", () => {
 
     const hunches = await agent.get("/api/hunches");
     expect(hunches.body.hunches.some((h: { polarity: string }) => h.polarity === "love")).toBe(true);
+  });
+
+  it("learns from thumbs-style rating feedback even without a comment", async () => {
+    const { agent, ownerId } = await signUpWithHomeBase(app, "rating-only@example.com");
+    const generate = await agent
+      .post("/api/plan-specs")
+      .set(HDR, "1")
+      .send({ scale: "day_off", startDate: "2026-08-08", endDate: "2026-08-08", participantIds: [ownerId] });
+    const lock = await agent
+      .post(`/api/plan-specs/${generate.body.spec.id}/lock`)
+      .set(HDR, "1")
+      .send({ candidateId: generate.body.winner.candidate.id });
+
+    const feedback = await agent
+      .post(`/api/history/${lock.body.plan.id}/feedback`)
+      .set(HDR, "1")
+      .send({ rating: 1, comment: null });
+    expect(feedback.status).toBe(201);
+
+    const hunches = await agent.get("/api/hunches");
+    expect(hunches.body.hunches.some((h: { polarity: string }) => h.polarity === "avoid")).toBe(true);
   });
 });

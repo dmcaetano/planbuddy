@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { PlanRecord } from "../api/types";
-import { Star } from "lucide-react";
+import { Star, ThumbsDown, ThumbsUp } from "lucide-react";
 
 function PlanRow({ plan, onOpen }: { plan: PlanRecord; onOpen: () => void }) {
   return (
@@ -38,6 +38,23 @@ function FeedbackForm({ planId, onDone }: { planId: string; onDone: () => void }
   return (
     <div className="card">
       <div className="eyebrow">Leave feedback</div>
+      <div className="row-gap" style={{ marginBottom: 8 }}>
+        <button
+          className={`chip ${rating >= 4 ? "selected" : ""}`}
+          onClick={() => setRating(5)}
+          aria-label="Thumbs up"
+        >
+          <ThumbsUp size={16} /> Good pick
+        </button>
+        <button
+          className={`chip ${rating <= 2 ? "selected" : ""}`}
+          onClick={() => setRating(1)}
+          aria-label="Thumbs down"
+        >
+          <ThumbsDown size={16} /> Missed the mark
+        </button>
+      </div>
+      <p className="muted" style={{ marginBottom: 6 }}>Or fine-tune the rating:</p>
       <div className="row-gap" style={{ marginBottom: 8 }}>
         {[1, 2, 3, 4, 5].map((n) => (
           <button key={n} className="icon-btn" onClick={() => setRating(n)} aria-label={`${n} stars`}>

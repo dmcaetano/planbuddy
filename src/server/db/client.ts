@@ -29,7 +29,11 @@ async function createPool(): Promise<DbClient> {
   const pool = new Pool({
     connectionString: env.DATABASE_URL,
     ssl: env.DATABASE_URL?.includes("sslmode=disable") ? false : { rejectUnauthorized: false },
+    // Keep every unqualified query inside this app's namespace on a shared
+    // Neon database. DB_SCHEMA is restricted to [a-z0-9_] in env.ts.
+    options: `-c search_path=${env.DB_SCHEMA}`,
   });
+  await pool.query(`CREATE SCHEMA IF NOT EXISTS ${env.DB_SCHEMA}`);
   return {
     kind: "postgres",
     async query<T>(text: string, params?: unknown[]) {

@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { findSession, readSessionToken } from "./session.js";
 import { getUserById } from "../users/repo.js";
 import type { PublicUser } from "../../shared/types.js";
+import { isProduction } from "../env.js";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -57,6 +58,14 @@ export function requireSameOrigin(req: Request, res: Response, next: NextFunctio
   if (req.get(CUSTOM_HEADER) !== "1") {
     res.status(403).json({ error: "Cross-origin mutation blocked" });
     return;
+  }
+  if (isProduction) {
+    const origin = req.get("origin");
+    const expectedOrigin = `${req.protocol}://${req.get("host")}`;
+    if (origin && origin !== expectedOrigin) {
+      res.status(403).json({ error: "Cross-origin mutation blocked" });
+      return;
+    }
   }
   next();
 }

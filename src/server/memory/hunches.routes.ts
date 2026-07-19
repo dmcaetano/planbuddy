@@ -2,7 +2,7 @@ import { Router } from "express";
 import { asyncHandler, notFound, validateBody } from "../http.js";
 import { requireAuth } from "../auth/middleware.js";
 import { hunchUpdateSchema } from "../../shared/schemas.js";
-import { confirmHunch, dismissHunch, listHunchEvidence, listHunches } from "./hunches.repo.js";
+import { confirmHunch, dismissHunch, getHunch, listHunchEvidence, listHunches } from "./hunches.repo.js";
 
 export const hunchesRouter = Router();
 hunchesRouter.use(requireAuth);
@@ -18,6 +18,8 @@ hunchesRouter.get(
 hunchesRouter.get(
   "/:id/evidence",
   asyncHandler(async (req, res) => {
+    const hunch = await getHunch(req.user!.id, req.params.id);
+    if (!hunch) throw notFound();
     const evidence = await listHunchEvidence(req.params.id);
     res.json({ evidence });
   })

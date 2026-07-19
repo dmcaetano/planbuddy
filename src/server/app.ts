@@ -26,7 +26,9 @@ export function createApp() {
 
   app.use(
     cors({
-      origin: isProduction ? true : ["http://localhost:5173"],
+      // Production is a same-origin app; exposing credentialed CORS to
+      // arbitrary origins would undermine the mutation-origin guard.
+      origin: isProduction ? false : ["http://localhost:5173"],
       credentials: true,
     })
   );

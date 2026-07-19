@@ -133,6 +133,7 @@ export default function OnboardingPage() {
               style={{ flex: 1, border: "1px solid var(--hairline-strong)", borderRadius: 10, padding: "10px 12px" }}
             />
             <select
+              aria-label="Participant type"
               value={newKind}
               onChange={(e) => setNewKind(e.target.value as "person" | "pet")}
               style={{ border: "1px solid var(--hairline-strong)", borderRadius: 10, padding: "10px 12px" }}
@@ -140,7 +141,7 @@ export default function OnboardingPage() {
               <option value="person">Person</option>
               <option value="pet">Pet</option>
             </select>
-            <button type="button" className="btn btn-secondary" onClick={addParticipant}>
+            <button type="button" className="btn btn-secondary" onClick={addParticipant} aria-label="Add participant">
               <Plus size={16} />
             </button>
           </div>
