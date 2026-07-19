@@ -36,10 +36,14 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, repairNo
         response_format: { type: "json_object" },
         temperature: 0.7,
         max_tokens: 6000,
-        // OpenRouter otherwise prioritizes its lowest-price provider pool.
-        // PlanBuddy is interactive, so route this same model by measured
-        // throughput and keep provider fallback enabled for resilience.
-        provider: { sort: "throughput", allow_fallbacks: true },
+        // Baidu's FP8 endpoint is the current low-latency, structured-output
+        // path for this exact model. OpenRouter may still fall through to its
+        // other providers if that endpoint is unavailable.
+        provider: {
+          order: ["baidu"],
+          allow_fallbacks: true,
+          require_parameters: true,
+        },
       }),
       signal: controller.signal,
     });
