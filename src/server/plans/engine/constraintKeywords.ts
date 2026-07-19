@@ -19,7 +19,10 @@ export const CONSTRAINT_KEYWORD_RULES: KeywordRule[] = [
   { triggers: ["no seafood"], blocked: ["seafood", "fish", "shellfish", "shrimp", "crab", "lobster", "oyster"] },
   { triggers: ["no spicy", "spice-free", "no heat"], blocked: ["spicy", "chili", "hot sauce"] },
   { triggers: ["no smoking", "smoke-free"], blocked: ["smoking", "cigar"] },
-  { triggers: ["quiet", "low noise", "no loud", "no crowds"], blocked: ["nightlife", "loud", "crowded", "rave", "concert"] },
+  {
+    triggers: ["quiet", "low noise", "no loud", "no crowds", "avoid loud", "avoid crowd", "noise-sensitive"],
+    blocked: ["nightlife", "loud", "crowded", "rave", "concert"],
+  },
   { triggers: ["no stairs", "wheelchair", "step-free", "mobility"], blocked: ["climbing", "hike", "trail", "bouldering", "stairs"] },
 ];
 
@@ -42,4 +45,41 @@ export function blockedTermsForConstraint(constraintText: string): string[] {
     }
   }
   return [...blocked];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isExplicitlySafeMention(text: string, start: number, end: number): boolean {
+  const before = text.slice(Math.max(0, start - 64), start);
+  const after = text.slice(end, Math.min(text.length, end + 24));
+
+  // Examples: gluten-safe, dairy free, allergy-friendly.
+  if (/^\s*[- ]\s*(?:free|safe|friendly|aware)\b/.test(after)) return true;
+
+  // Examples: without wheat, avoid loud/crowded rooms, no alcohol.
+  if (/\b(?:no|without|avoid|avoids|avoiding|avoided|free of|free from)\b[^.!?;]{0,44}$/.test(before)) {
+    return true;
+  }
+
+  // Examples: gluten-free bread, dairy-free ice cream, nut-safe menu.
+  return /\b(?:gluten|celiac|dairy|lactose|nut|peanut|shellfish|allergen|alcohol|smoke|spice)[- ](?:free|safe|friendly)\b[^.!?;]{0,36}$|\b(?:wheelchair[- ]accessible|step[- ]free|non[- ]alcoholic|zero[- ]alcohol)\b[^.!?;]{0,36}$/.test(
+    before
+  );
+}
+
+/**
+ * Finds real blocked-term mentions while allowing explicit safety language.
+ * A plain substring check incorrectly classified "gluten-safe" and
+ * "uncrowded" as violations, causing safe AI plans to dead-end.
+ */
+export function containsUnsafeBlockedTerm(text: string, term: string): boolean {
+  const normalized = text.toLowerCase();
+  const matcher = new RegExp(`(?<![a-z0-9])${escapeRegExp(term.toLowerCase())}(?![a-z0-9])`, "g");
+  for (const match of normalized.matchAll(matcher)) {
+    const start = match.index ?? 0;
+    if (!isExplicitlySafeMention(normalized, start, start + match[0].length)) return true;
+  }
+  return false;
 }

@@ -1,5 +1,10 @@
 import type { AiCandidate } from "../../../shared/schemas.js";
-import { blockedTermsForConstraint, indoorOnlyRequired, outdoorOnlyRequired } from "./constraintKeywords.js";
+import {
+  blockedTermsForConstraint,
+  containsUnsafeBlockedTerm,
+  indoorOnlyRequired,
+  outdoorOnlyRequired,
+} from "./constraintKeywords.js";
 
 export interface FilterContext {
   activeConstraints: { id: string; text: string }[];
@@ -38,7 +43,7 @@ export function filterCandidates(candidates: AiCandidate[], ctx: FilterContext):
 
     const violated = ctx.activeConstraints.find((c) => {
       const blocked = blockedTermsForConstraint(c.text);
-      if (blocked.some((term) => text.includes(term))) return true;
+      if (blocked.some((term) => containsUnsafeBlockedTerm(text, term))) return true;
       if (indoorOnlyRequired(c.text) && !candidate.indoor) return true;
       if (outdoorOnlyRequired(c.text) && candidate.indoor) return true;
       return false;

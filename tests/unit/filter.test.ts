@@ -49,6 +49,42 @@ describe("filterCandidates", () => {
     expect(rejected).toHaveLength(0);
   });
 
+  it("does not mistake explicit gluten-safe language for a violation", () => {
+    const candidate = makeCandidate({
+      title: "Gluten-safe coastal picnic",
+      rationale: "Pack a gluten-free lunch with gluten-free bread before a quiet shoreline walk.",
+    });
+    const { kept, rejected } = filterCandidates(
+      [candidate],
+      baseCtx({ activeConstraints: [{ id: "c1", text: "gluten intolerance" }] })
+    );
+    expect(kept).toHaveLength(1);
+    expect(rejected).toHaveLength(0);
+  });
+
+  it("still rejects an unsafe food mention for a gluten constraint", () => {
+    const candidate = makeCandidate({ title: "Artisan bread and pasta tasting" });
+    const { kept, rejected } = filterCandidates(
+      [candidate],
+      baseCtx({ activeConstraints: [{ id: "c1", text: "gluten intolerance" }] })
+    );
+    expect(kept).toHaveLength(0);
+    expect(rejected[0].reason).toContain("constraint violation");
+  });
+
+  it("does not treat uncrowded or explicit avoidance language as a noise violation", () => {
+    const candidate = makeCandidate({
+      title: "Uncrowded garden morning",
+      rationale: "A quiet route that avoids loud, crowded indoor places.",
+    });
+    const { kept, rejected } = filterCandidates(
+      [candidate],
+      baseCtx({ activeConstraints: [{ id: "c1", text: "no loud places or crowds" }] })
+    );
+    expect(kept).toHaveLength(1);
+    expect(rejected).toHaveLength(0);
+  });
+
   it("rejects indoor candidates when a constraint requires outdoor only", () => {
     const candidate = makeCandidate({ indoor: true });
     const { kept, rejected } = filterCandidates([candidate], baseCtx({ activeConstraints: [{ id: "c1", text: "must be outdoor only" }] }));
