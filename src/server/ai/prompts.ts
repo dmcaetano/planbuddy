@@ -98,6 +98,13 @@ export function buildGenerateUserPrompt(ctx: GenerateContext): string {
     }
   }
 
+  if (!ctx.edit && ctx.recentSuggestions?.length) {
+    lines.push("Recently shown plans (do not repeat their route or named places unless the current request explicitly asks for one):");
+    for (const suggestion of ctx.recentSuggestions) {
+      lines.push(`- ${suggestion.title} [${suggestion.category}]: ${suggestion.placeNames.join(", ") || "no named places"}`);
+    }
+  }
+
   lines.push(
     "Return exactly 1 grounded, detailed candidate using only the validated dossier below. Prefer one compact route over disconnected stops. JSON only."
   );
@@ -118,6 +125,11 @@ export function buildPlaceResearchSystemPrompt(ctx?: GenerateContext): string {
     "Copy every sourceUrl from the search results. factualNote may only repeat source-backed facts.",
     "Do not infer dog acceptance, shade, booking availability, route distance, or hours. Never invent geography.",
   ];
+  if (!ctx?.edit && ctx?.recentSuggestions?.length) {
+    lines.push(
+      "Novelty is mandatory: do not return a recently shown named place or substantially repeat a recent route unless the user's current request explicitly names it."
+    );
+  }
   if (ctx?.edit) {
     lines.push(
       "For an existing-plan edit, treat original places as route anchors.",
@@ -144,6 +156,9 @@ export function buildPlaceResearchUserPrompt(ctx: GenerateContext): string {
     ctx.weather && !ctx.weather.unavailable ? `Forecast: ${ctx.weather.summary}; sunset ${ctx.weather.sunset ?? "unknown"}.` : null,
     ctx.edit ? `Edit the existing plan: ${ctx.edit.request}` : null,
     ctx.edit ? `Original route anchors: ${JSON.stringify(ctx.edit.originalPlan.beats.map((beat) => beat.place).filter(Boolean))}` : null,
+    !ctx.edit && ctx.recentSuggestions?.length
+      ? `Recently shownâ€”choose different places and a different route: ${JSON.stringify(ctx.recentSuggestions)}`
+      : null,
     "Prioritize a geographically compact combination and sources that clearly establish what each place is.",
   ]
     .filter(Boolean)

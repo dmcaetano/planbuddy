@@ -124,7 +124,7 @@ planSpecsRouter.post(
     const candidate = await getCandidate(req.body.candidateId);
     if (!candidate || candidate.planSpecId !== spec.id) throw notFound();
 
-    await applyCandidateReaction(req.user!.id, candidate, "dislike");
+    await applyCandidateReaction(req.user!.id, candidate, "dislike", { learnDislike: false });
     const context = await gatherPlanContext(req.user!.id, spec);
     const rejectedPlan = await insertPlan({
       userId: req.user!.id,

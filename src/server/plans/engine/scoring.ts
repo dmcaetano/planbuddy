@@ -98,14 +98,28 @@ export function feasibility(
 export interface RecentPlanSummary {
   title: string;
   category: string;
+  placeNames: string[];
 }
 
 export function novelty(candidate: AiCandidate, recentPlans: RecentPlanSummary[]): number {
   let score = 1;
   const sameCategory = recentPlans.filter((p) => p.category === candidate.category).length;
-  score -= sameCategory * 0.25;
+  score -= Math.min(0.3, sameCategory * 0.08);
   if (recentPlans.some((p) => p.title.trim().toLowerCase() === candidate.title.trim().toLowerCase())) {
-    score -= 0.5;
+    score -= 0.4;
+  }
+  const normalizePlace = (name: string) => name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const candidatePlaces = new Set(
+    candidate.beats.map((beat) => beat.place?.name).filter((name): name is string => Boolean(name)).map(normalizePlace)
+  );
+  if (candidatePlaces.size > 0) {
+    let strongestOverlap = 0;
+    for (const plan of recentPlans) {
+      const recentPlaces = new Set(plan.placeNames.map(normalizePlace));
+      const overlap = [...candidatePlaces].filter((name) => recentPlaces.has(name)).length / candidatePlaces.size;
+      strongestOverlap = Math.max(strongestOverlap, overlap);
+    }
+    score -= strongestOverlap * 0.75;
   }
   return clamp(score, 0, 1);
 }

@@ -24,7 +24,9 @@ The smallest lovable loop is:
 4. Models propose; server code disposes. Validation, source filtering, constraint filtering, scoring, enrichment, novelty, and final ranking are deterministic and replayable.
 5. Group fit uses the minimum per-participant fit (least misery). A participant with no profile is neutral.
 6. Hunches never appear in rationales, never filter, contribute at most ±0.15 to a participant’s fit, and decay after six relevant plans or 90 days.
-7. “Show another” is neutral browsing. Only explicit Not-this reasons and post-plan feedback create learning evidence.
+7. “Show another” is neutral preference-wise, but every surfaced suggestion
+   enters visible History and the novelty exclusion loop. Only explicit
+   reactions, Not-this reasons, and post-plan feedback create taste evidence.
 8. No silent learning and no silent loss: raw events persist before AI extraction; failures remain visible/retryable.
 9. Any named place or closable business must come from the current source-backed place dossier; the server rejects names and source URLs outside that dossier. Unverified operational facts remain visible checks.
 10. Every scale returns exactly three chronological beats and one compact fallback. Getaway/Vacation add a destination anchor; no booking transaction occurs in v1.
@@ -44,7 +46,9 @@ The smallest lovable loop is:
 - **Plan** — home and the one-click loop.
 - **Chat** — free-form planning and knowledge capture; planning intent routes into the same recommendation pipeline.
 - **Memory** — constraints, tastes, hunches, provenance, confirmation, and complete CRUD.
-- **History** — upcoming and past locked plans, feedback, and the visible source of novelty.
+- **History** — upcoming commitments, saved suggestions, past/disliked plans,
+  feedback, and the visible source of novelty. Any saved suggestion can be
+  reopened, rated, shared, or locked later.
 - **Friends** (from Plan/Memory) — invite, connect, remove, and explicitly select
   people for a plan without revealing their private profile.
 
@@ -64,6 +68,7 @@ Target: under 90 seconds.
 - Generating: cancellable skeleton/status.
 - Recommendation: attributed hero image, rationale/citations, three timed beats, real places, Maps links, distance/walking/spend estimates, live weather, apparel/bring/pet preparation, operational checks, compact fallback, provenance, active constraints, and actions.
 - Browsing: candidate position, diverse alternatives, one regeneration batch, then honest looseners.
+- Suggested: persisted as soon as shown and available in History without a lock.
 - Locked: confirmation and History entry.
 - Failure: retryable AI error, weather-unavailable badge, explicit demo mode without grounding keys, and an honest constraint-bound dead end.
 
@@ -78,7 +83,9 @@ Target: under 90 seconds.
 ## Recommendation pipeline
 
 1. Build a spec and selected-participant context.
-2. Read active structured memory, last ten locked plans, weather, home base, people, and pets.
+2. Read active structured memory, the last twenty surfaced plans, weather,
+   home base, people, and pets. Send the twelve most recent titles and named
+   places into discovery as an explicit no-repeat list.
 3. Use Google Search grounding through Gemini to build a closed four-place dossier: primary meal, two distinct outdoor stops, and fallback meal.
 4. Compose exactly one three-beat candidate using only the dossier; reject schema failures, constraint failures, invalid citations, impossible radius, duplicates, and any out-of-dossier place or URL.
 5. Score each survivor per participant:
@@ -87,11 +94,14 @@ Target: under 90 seconds.
    - hunch contribution is clamped to ±0.15;
    - group fit is the minimum participant fit;
    - feasibility incorporates weather/travel softly;
-   - novelty penalizes recent categories and venues.
+   - novelty penalizes recent categories, exact titles, and overlapping venues.
 6. Final score: 55% group fit, 25% feasibility, 20% novelty; novelty breaks near ties.
 7. Enrich the winner server-side with Maps URLs, walking-range reconciliation, Commons imagery, live-weather apparel, bring and pet kit, checks, and fallback.
-8. Display the winner. Any regenerated alternative passes the identical grounding and filtering path.
-9. Persist the full candidate, context snapshot, score, selected result, and all later actions.
+8. Persist the surfaced winner immediately with status `suggested`, then
+   display it. Any regenerated alternative passes the identical grounding and
+   filtering path and is also persisted when surfaced.
+9. Lock and Not-this transition the existing suggestion row in place. Persist
+   the full candidate, context snapshot, score, reactions, and all later actions.
 
 Default radii: Day off 25 km, Weekend 60 km, Getaway 250 km, Vacation destination-scale.
 
@@ -122,7 +132,7 @@ Normalized Postgres entities:
 - bounded sessions and retained messages
 - versioned plan_specs and spec_participants
 - generated candidates with score breakdowns
-- locked plans
+- surfaced plans (`suggested`, `locked`, or `rejected`)
 - feedback
 - candidate reactions and extracted Love summaries
 - friend invites and canonical friendships
@@ -186,7 +196,8 @@ then receive one grounded three-beat plan with real places, Maps links, an
 attributed image, distance/walking/spend estimates, detailed apparel and pet
 preparation, operational checks, and a fallback. A typed constraint is
 mechanically enforced; quoted Chat memory protects immediately; locked plans
-reopen richly in History; Love creates visible reusable learning. Buddy can run
+reopen richly in History; unselected suggestions remain revisitable and block
+venue repetition; Love creates visible reusable learning. Buddy can run
 every plan action and revise one detail without losing the original. Users can
 connect friends for private group fit and share a scrubbed itinerary. Getaway
 and Vacation add a destination anchor. Data persists in Neon and all release

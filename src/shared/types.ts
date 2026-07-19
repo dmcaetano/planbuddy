@@ -242,7 +242,7 @@ export interface Candidate {
   createdAt: string;
 }
 
-export type PlanStatus = "locked" | "rejected";
+export type PlanStatus = "suggested" | "locked" | "rejected";
 
 export interface WeatherSnapshot {
   temperatureC: number | null;

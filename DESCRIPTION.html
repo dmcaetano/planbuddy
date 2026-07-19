@@ -21,7 +21,7 @@
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1.65; font-size: 16px; overflow-x: hidden;
+    line-height: 1.65; font-size: 16px;
   }
   .wrap { max-width: 860px; margin: 0 auto; padding: 48px 24px 96px; }
   .topbar { font-size: 13px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 8px; }
@@ -45,7 +45,7 @@
   #content blockquote {
     border-left: 3px solid var(--accent); margin: .8em 0; padding: .2em 1em; color: var(--muted);
   }
-  #content table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: .95em; display: block; overflow-x: auto; }
+  #content table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: .95em; }
   #content th, #content td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
   #content th { background: var(--table-head); font-weight: 600; }
   #content tr:nth-child(even) td { background: var(--card); }
@@ -96,6 +96,8 @@ or unsafe rules.
 - Connects friends through one-time invites. Selected friends contribute their
   verified needs and explicit tastes without exposing raw memory or history.
 - Shares immutable, privacy-scrubbed itineraries through private expiring links.
+- Saves every surfaced suggestion before selection. History can reopen, rate,
+  share, or lock it later, while recent titles and venue names prevent repeats.
 - Persists accounts and planning history in Neon Postgres and runs publicly on
   Render with email/password login.
 
@@ -116,8 +118,10 @@ outside the dossier, scores group fit using least-misery logic, and enriches the
 winner. Enrichment creates Google Maps URLs, reconciles total walking time with
 an explicit remembered range, adds an operational checklist, chooses an
 attributed Wikimedia Commons image, and derives weather-aware clothing and pet
-preparation. The full candidate JSON is persisted, so a locked plan reopens in
-History with the same rich itinerary. DeepSeek V4 Flash separately powers chat,
+preparation. The surfaced winner is immediately persisted as `suggested`; Lock
+or Not-this transitions that same record in place. The next planning request
+sends recent titles and venue names back to discovery as exclusions and applies
+a second deterministic overlap penalty. DeepSeek V4 Flash separately powers chat,
 Love feature extraction, and plan-action interpretation. Plan-scoped chat stores
 an append-only revision trail, so the original is always one tap away.
 
@@ -151,12 +155,12 @@ sequenceDiagram
     participant D as Neon
     U->>F: Press Plan my weekend
     F->>B: POST plan spec
-    B->>D: Load memory, people, pets, and history
+    B->>D: Load memory, people, pets, and surfaced history
     B->>G: Research four real places
     G-->>B: Closed place dossier with sources
     B->>G: Compose one structured three-beat plan
     B->>B: Filter, score, enrich, and verify
-    B->>D: Persist full candidate JSON
+    B->>D: Persist winner as a saved suggestion
     B-->>F: Grounded PlanView
     F-->>U: Rich ticket with route, image, kit, and fallback
 ```
@@ -196,7 +200,9 @@ sequenceDiagram
 
 Production data lives in the `planbuddy` schema of a dedicated Neon project.
 Candidate payloads are JSONB so richer route, image, preparation, and fallback
-fields require no migration. Raw chat is bounded and retained for 30 days;
+fields require no migration. Every surfaced winner also has a `plans` snapshot
+whose status moves from `suggested` to `locked` or `rejected` without creating a
+duplicate. Raw chat is bounded and retained for 30 days;
 durable memory is structured and visible.
 
 ```mermaid
@@ -248,9 +254,9 @@ npm start
 
 ## Status
 
-Version 0.1.4 is live on Render and production-verified with the Lisbon,
-grilled-fish, walking, and Pom scenario; Love learning; a restaurant-only swap;
-reversible versions; and private itinerary sharing. See `STATE.md`,
+Version 0.1.5 “Long Memory” saves every surfaced suggestion, recovers earlier
+unselected winners, prevents venue/title repeats, and lets History reopen, rate,
+share, or lock suggestions. See `STATE.md`,
 `PROGRESS.md`, and `QA-REPORT.md` for release evidence and next work.
 
 ## Glossary

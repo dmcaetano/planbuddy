@@ -37,6 +37,11 @@ describe("plan generation integration (demo AI)", () => {
     expect(generate.body.winner).toBeTruthy();
 
     const specId = generate.body.spec.id;
+    const historyBeforeLock = await agent.get("/api/history");
+    const surfaced = historyBeforeLock.body.suggested.find(
+      (p: { candidateId: string }) => p.candidateId === generate.body.winner.candidate.id
+    );
+    expect(surfaced).toBeTruthy();
     const full = await agent.get(`/api/plan-specs/${specId}`);
 
     // Any raw AI candidate that trips the peanut-allergy keyword filter must
@@ -83,9 +88,14 @@ describe("plan generation integration (demo AI)", () => {
       .send({ candidateId: generate.body.winner.candidate.id });
     expect(lock.status).toBe(201);
     expect(lock.body.plan.status).toBe("locked");
+    expect(lock.body.plan.id).toBe(surfaced.id);
 
     const history = await agent.get("/api/history");
     expect(history.body.upcoming.some((p: { id: string }) => p.id === lock.body.plan.id)).toBe(true);
+    expect(history.body.suggested.some((p: { candidateId: string }) => p.candidateId === generate.body.winner.candidate.id)).toBe(false);
+    const matchingRecords = [...history.body.suggested, ...history.body.upcoming, ...history.body.past]
+      .filter((p: { candidateId: string }) => p.candidateId === generate.body.winner.candidate.id);
+    expect(matchingRecords).toHaveLength(1);
   });
 
   it("returns a destination anchor and exactly 3 beats for a getaway plan", async () => {

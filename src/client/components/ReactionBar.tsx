@@ -7,17 +7,19 @@ export default function ReactionBar({
   specId,
   candidateId,
   onDislike,
+  initialReaction = null,
 }: {
   specId: string;
   candidateId: string;
-  onDislike: () => void;
+  onDislike?: () => void;
+  initialReaction?: Reaction | null;
 }) {
-  const [selected, setSelected] = useState<Reaction | null>(null);
+  const [selected, setSelected] = useState<Reaction | null>(initialReaction);
   const [learned, setLearned] = useState<FeatureSummary | null>(null);
   const [working, setWorking] = useState<Reaction | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function react(reaction: "like" | "love") {
+  async function react(reaction: Reaction) {
     setWorking(reaction);
     setError(null);
     try {
@@ -43,9 +45,18 @@ export default function ReactionBar({
       <div className="reaction-buttons">
         <button
           className={`reaction-button reaction-button--dislike ${selected === "dislike" ? "selected" : ""}`}
-          onClick={() => { setSelected("dislike"); setLearned(null); onDislike(); }}
+          onClick={() => {
+            if (onDislike) {
+              setSelected("dislike");
+              setLearned(null);
+              onDislike();
+            } else {
+              void react("dislike");
+            }
+          }}
+          disabled={working !== null}
         >
-          <ThumbsDown size={17} /> Dislike
+          <ThumbsDown size={17} /> {working === "dislike" ? "Savingâ€¦" : "Dislike"}
         </button>
         <button className={`reaction-button ${selected === "like" ? "selected" : ""}`} onClick={() => void react("like")} disabled={working !== null}>
           <ThumbsUp size={17} /> {working === "like" ? "Saving…" : "Like"}

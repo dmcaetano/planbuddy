@@ -145,14 +145,41 @@ describe("feasibility", () => {
 describe("novelty", () => {
   it("penalizes repeated categories from recent plans", () => {
     const fresh = novelty(makeCandidate(), []);
-    const repeated = novelty(makeCandidate(), [{ title: "Something else", category: "active" }]);
+    const repeated = novelty(makeCandidate(), [{ title: "Something else", category: "active", placeNames: [] }]);
     expect(repeated).toBeLessThan(fresh);
   });
 
   it("penalizes an exact title repeat more heavily", () => {
-    const repeatedCategory = novelty(makeCandidate(), [{ title: "Different", category: "active" }]);
-    const repeatedTitle = novelty(makeCandidate(), [{ title: "Morning hike", category: "active" }]);
+    const repeatedCategory = novelty(makeCandidate(), [{ title: "Different", category: "active", placeNames: [] }]);
+    const repeatedTitle = novelty(makeCandidate(), [{ title: "Morning hike", category: "active", placeNames: [] }]);
     expect(repeatedTitle).toBeLessThan(repeatedCategory);
+  });
+
+  it("strongly penalizes a renamed plan that repeats the same places", () => {
+    const withPlace = makeCandidate({
+      title: "A new-sounding title",
+      beats: [{
+        title: "Walk",
+        description: "A familiar route.",
+        category: "active",
+        indoor: false,
+        place: {
+          name: "Jardim Central",
+          address: null,
+          kind: "park",
+          sourceUrl: "https://example.com/park",
+          sourceLabel: "Source",
+          factualNote: "A park.",
+        },
+      }],
+    });
+    const fresh = novelty(withPlace, []);
+    const repeatedVenue = novelty(withPlace, [{
+      title: "An entirely different title",
+      category: "food",
+      placeNames: ["Jardim Central"],
+    }]);
+    expect(repeatedVenue).toBeLessThan(fresh - 0.7);
   });
 });
 

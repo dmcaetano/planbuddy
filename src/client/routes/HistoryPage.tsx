@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { Candidate, FeatureSummary, PlanRecord, PlanView, Reaction } from "../api/types";
-import { Heart, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Heart, Lock, ThumbsDown, ThumbsUp } from "lucide-react";
 import TicketCard from "../components/TicketCard";
 import ShareButton from "../components/ShareButton";
+import ReactionBar from "../components/ReactionBar";
 
 function PlanRow({ plan, onOpen }: { plan: PlanRecord; onOpen: () => void }) {
+  const statusLabel = plan.status === "locked" ? "Locked" : plan.status === "suggested" ? "Saved suggestion" : "Disliked";
   return (
     <button className="card" style={{ textAlign: "left", width: "100%", border: "1px solid var(--hairline)" }} onClick={onOpen}>
       <div className="row-gap" style={{ marginBottom: 4 }}>
-        <span className={`badge ${plan.status === "locked" ? "badge-pine" : "badge-clay"}`}>{plan.status === "locked" ? "Locked" : "Not chosen"}</span>
+        <span className={`badge ${plan.status === "locked" ? "badge-pine" : plan.status === "suggested" ? "badge-sky" : "badge-clay"}`}>{statusLabel}</span>
         <span className="badge badge-sky">{plan.category}</span>
       </div>
       <strong>{plan.title}</strong>
@@ -65,17 +67,21 @@ function FeedbackForm({ planId, onDone }: { planId: string; onDone: (learned: Fe
 }
 
 export default function HistoryPage() {
+  const [suggested, setSuggested] = useState<PlanRecord[]>([]);
   const [upcoming, setUpcoming] = useState<PlanRecord[]>([]);
   const [past, setPast] = useState<PlanRecord[]>([]);
   const [selected, setSelected] = useState<PlanRecord | null>(null);
   const [selectedView, setSelectedView] = useState<PlanView | null>(null);
+  const [selectedReaction, setSelectedReaction] = useState<Reaction | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedbackDone, setFeedbackDone] = useState(false);
   const [learned, setLearned] = useState<FeatureSummary | null>(null);
+  const [locking, setLocking] = useState(false);
 
   async function load() {
-    const data = await api.get<{ upcoming: PlanRecord[]; past: PlanRecord[] }>("/history");
+    const data = await api.get<{ suggested: PlanRecord[]; upcoming: PlanRecord[]; past: PlanRecord[] }>("/history");
+    setSuggested(data.suggested);
     setUpcoming(data.upcoming);
     setPast(data.past);
   }
@@ -87,9 +93,14 @@ export default function HistoryPage() {
   async function openPlan(plan: PlanRecord) {
     setSelected(plan);
     setSelectedView(null);
+    setSelectedReaction(null);
     setDetailsLoading(true);
     try {
-      const data = await api.get<{ candidates: Candidate[] }>(`/plan-specs/${plan.planSpecId}`);
+      const [data, detail] = await Promise.all([
+        api.get<{ candidates: Candidate[] }>(`/plan-specs/${plan.planSpecId}`),
+        api.get<{ reaction: { reaction: Reaction } | null }>(`/history/${plan.id}`),
+      ]);
+      setSelectedReaction(detail.reaction?.reaction ?? null);
       const candidate = data.candidates.find((item) => item.id === plan.candidateId);
       if (candidate) {
         setSelectedView({
@@ -106,13 +117,38 @@ export default function HistoryPage() {
     }
   }
 
+  async function lockSelected() {
+    if (!selected) return;
+    setLocking(true);
+    setError(null);
+    try {
+      const data = await api.post<{ plan: PlanRecord }>(`/plan-specs/${selected.planSpecId}/lock`, {
+        candidateId: selected.candidateId,
+      });
+      setSelected(data.plan);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't lock this suggestion.");
+    } finally {
+      setLocking(false);
+    }
+  }
+
   if (selected) {
     return (
       <div className="stack">
         <div className="history-detail-actions">
           <button className="btn btn-ghost btn-sm" onClick={() => { setSelected(null); setSelectedView(null); setFeedbackDone(false); setLearned(null); }}>← Back to History</button>
-          {selectedView && <ShareButton candidateId={selected.candidateId} compact />}
+          <div className="row-gap">
+            {selected.status !== "locked" && (
+              <button className="btn btn-primary btn-sm" onClick={() => void lockSelected()} disabled={locking}>
+                <Lock size={15} /> {locking ? "Lockingâ€¦" : "Lock it"}
+              </button>
+            )}
+            {selectedView && <ShareButton candidateId={selected.candidateId} compact />}
+          </div>
         </div>
+        {error && <div className="error-banner">{error}</div>}
         {detailsLoading && <div className="skeleton" style={{ height: 320, borderRadius: 18 }} />}
         {selectedView ? (
           <TicketCard view={selectedView} eventStartDate={selected.eventStartDate} eventEndDate={selected.eventEndDate} />
@@ -124,6 +160,14 @@ export default function HistoryPage() {
             {selected.beats.map((beat, index) => <div className="beat" key={index}><h4>{beat.title}</h4><p>{beat.description}</p></div>)}
             {selected.rejectionReason && <p className="muted">Not chosen: {selected.rejectionReason}</p>}
           </div>
+        )}
+        {selected.status !== "locked" && (
+          <ReactionBar
+            key={selected.candidateId}
+            specId={selected.planSpecId}
+            candidateId={selected.candidateId}
+            initialReaction={selectedReaction}
+          />
         )}
         {selected.status === "locked" && !feedbackDone && <FeedbackForm planId={selected.id} onDone={(summary) => { setFeedbackDone(true); setLearned(summary); }} />}
         {feedbackDone && (
@@ -139,12 +183,15 @@ export default function HistoryPage() {
 
   return (
     <div className="stack">
-      <div><div className="eyebrow">History</div><h1>Your plans</h1><p>Upcoming and past plans, and the source of novelty for future recommendations.</p></div>
+      <div><div className="eyebrow">History</div><h1>Your plans</h1><p>Every suggestion stays here. Reopen it, rate it, or lock it whenever you want.</p></div>
       {error && <div className="error-banner">{error}</div>}
       <h3>Upcoming</h3>
       {upcoming.length === 0 && <p className="muted">Nothing locked yet.</p>}
       <div className="stack">{upcoming.map((plan) => <PlanRow key={plan.id} plan={plan} onOpen={() => void openPlan(plan)} />)}</div>
-      <h3>Past</h3>
+      <h3>Saved suggestions</h3>
+      {suggested.length === 0 && <p className="muted">New suggestions will appear here automatically.</p>}
+      <div className="stack">{suggested.map((plan) => <PlanRow key={plan.id} plan={plan} onOpen={() => void openPlan(plan)} />)}</div>
+      <h3>Past & disliked</h3>
       {past.length === 0 && <p className="muted">Nothing here yet.</p>}
       <div className="stack">{past.map((plan) => <PlanRow key={plan.id} plan={plan} onOpen={() => void openPlan(plan)} />)}</div>
     </div>

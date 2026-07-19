@@ -7,10 +7,11 @@ import { getCandidateReaction, upsertCandidateReaction } from "./reactions.repo.
 export async function applyCandidateReaction(
   userId: string,
   candidate: Candidate,
-  reaction: Reaction
+  reaction: Reaction,
+  options: { learnDislike?: boolean } = {}
 ): Promise<CandidateReaction> {
   const existing = await getCandidateReaction(userId, candidate.id);
-  if (existing?.reaction === "love" && reaction !== "love") {
+  if (existing && existing.reaction !== reaction && (existing.reaction === "love" || existing.reaction === "dislike")) {
     await removeReactionEvidence(userId, candidate.id);
   }
 
@@ -34,6 +35,16 @@ export async function applyCandidateReaction(
         note: `Love: ${learned.summary}`,
       });
     }
+  } else if (reaction === "dislike" && options.learnDislike !== false) {
+    const owner = (await listParticipants(userId)).find((participant) => participant.isOwner);
+    await recordHunchEvidence(userId, {
+      participantId: owner?.id ?? null,
+      text: `Plans in the ${candidate.category} style`,
+      polarity: "avoid",
+      planId: null,
+      sessionId: candidate.id,
+      note: `Dislike: ${candidate.title}`,
+    });
   }
   return saved.reaction;
 }

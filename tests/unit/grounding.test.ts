@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { canonicalizeCandidatePlaces } from "../../src/server/ai/index.js";
+import { buildGenerateUserPrompt, buildPlaceResearchUserPrompt } from "../../src/server/ai/prompts.js";
+import type { GenerateContext } from "../../src/server/ai/demoAi.js";
 import type { AiGenerateResponse, AiPlaceResearchResponse } from "../../src/shared/schemas.js";
 
 const canonical: AiPlaceResearchResponse["places"][number] = {
@@ -61,5 +63,26 @@ describe("grounded place canonicalization", () => {
     const changed: AiGenerateResponse = structuredClone(response);
     changed.candidates[0].beats[0].place!.name = "Invented Lake";
     expect(canonicalizeCandidatePlaces(changed, [canonical]).candidates[0].beats[0].place?.name).toBe("Invented Lake");
+  });
+});
+
+describe("grounded novelty prompts", () => {
+  it("tells both discovery and composition to avoid previously surfaced places", () => {
+    const context: GenerateContext = {
+      scale: "weekend",
+      homeBaseLabel: "Lisbon",
+      moodContext: null,
+      radiusKm: 60,
+      activeConstraints: [],
+      loveTastes: [],
+      seed: "novelty",
+      recentSuggestions: [{
+        title: "An earlier day",
+        category: "food",
+        placeNames: ["Jardim Central", "Old Restaurant"],
+      }],
+    };
+    expect(buildPlaceResearchUserPrompt(context)).toContain("Jardim Central");
+    expect(buildGenerateUserPrompt(context)).toContain("Jardim Central");
   });
 });

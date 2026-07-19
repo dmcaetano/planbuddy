@@ -33,6 +33,7 @@ export interface GenerateContext {
   loveTastes: MemoryFact[];
   avoidTastes?: MemoryFact[];
   preferenceHunches?: { text: string; polarity: "love" | "avoid"; confidence: number }[];
+  recentSuggestions?: { title: string; category: string; placeNames: string[] }[];
   groundedPlaces?: AiPlaceResearchResponse["places"];
   seed: string; // unique per (planSpecId, batchIndex) for determinism
   edit?: {

@@ -11,6 +11,7 @@ import { getCandidate } from "./candidates.repo.js";
 import { applyCandidateReaction } from "./reactions.service.js";
 import { listParticipants } from "../participants/repo.js";
 import type { Reaction } from "../../shared/types.js";
+import { getCandidateReaction } from "./reactions.repo.js";
 
 export const historyRouter = Router();
 historyRouter.use(requireAuth);
@@ -20,9 +21,10 @@ historyRouter.get(
   asyncHandler(async (req, res) => {
     const plans = await listPlans(req.user!.id);
     const todayStr = new Date().toISOString().slice(0, 10);
+    const suggested = plans.filter((p) => p.status === "suggested");
     const upcoming = plans.filter((p) => p.status === "locked" && p.eventEndDate >= todayStr);
-    const past = plans.filter((p) => !(p.status === "locked" && p.eventEndDate >= todayStr));
-    res.json({ upcoming, past });
+    const past = plans.filter((p) => p.status !== "suggested" && !(p.status === "locked" && p.eventEndDate >= todayStr));
+    res.json({ suggested, upcoming, past });
   })
 );
 
@@ -31,8 +33,11 @@ historyRouter.get(
   asyncHandler(async (req, res) => {
     const plan = await getPlan(req.user!.id, req.params.planId);
     if (!plan) throw notFound();
-    const feedback = await listFeedbackForPlan(plan.id);
-    res.json({ plan, feedback });
+    const [feedback, reaction] = await Promise.all([
+      listFeedbackForPlan(plan.id),
+      getCandidateReaction(req.user!.id, plan.candidateId),
+    ]);
+    res.json({ plan, feedback, reaction });
   })
 );
 
@@ -46,7 +51,7 @@ historyRouter.post(
     const rating = req.body.rating ?? (reaction === "dislike" ? 1 : reaction === "love" ? 5 : 4);
     const candidate = await getCandidate(plan.candidateId);
     if (!candidate) throw notFound();
-    const savedReaction = await applyCandidateReaction(req.user!.id, candidate, reaction);
+    const savedReaction = await applyCandidateReaction(req.user!.id, candidate, reaction, { learnDislike: false });
     const learned = reaction === "love"
       ? { summary: savedReaction.featureSummary, features: savedReaction.features }
       : null;

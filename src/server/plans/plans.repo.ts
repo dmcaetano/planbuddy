@@ -74,30 +74,75 @@ export interface PlanInsert {
 
 export async function insertPlan(input: PlanInsert): Promise<PlanRecord> {
   const db = await getDb();
-  const id = newId();
-  await db.query(
-    `INSERT INTO plans
+  const { rows: existingRows } = await db.query<PlanRow>(
+    `${SELECT_WITH_SPEC_DATES} WHERE plans.user_id = $1 AND plans.candidate_id = $2
+     ORDER BY plans.created_at ASC LIMIT 1`,
+    [input.userId, input.candidateId]
+  );
+  const existing = existingRows[0];
+  const id = existing?.id ?? newId();
+  const status = input.status === "suggested"
+    ? (existing?.status ?? "suggested")
+    : existing?.status === "locked" && input.status === "rejected"
+      ? "locked"
+      : input.status;
+
+  if (existing) {
+    await db.query(
+      `UPDATE plans
+       SET status = $3,
+           title = $4,
+           rationale = $5,
+           category = $6,
+           beats = $7,
+           weather = $8,
+           distance_km = $9,
+           place_provenance = $10,
+           active_constraints = $11,
+           rejection_reason = CASE WHEN $3 = 'rejected' THEN $12 ELSE NULL END,
+           locked_at = CASE WHEN $3 = 'locked' THEN COALESCE(locked_at, now()) ELSE NULL END
+       WHERE id = $1 AND user_id = $2`,
+      [
+        id,
+        input.userId,
+        status,
+        input.title,
+        input.rationale,
+        input.category,
+        stringifyJsonForDb(input.beats),
+        input.weather ? stringifyJsonForDb(input.weather) : null,
+        input.distanceKm,
+        stringifyJsonForDb(input.placeProvenance),
+        stringifyJsonForDb(input.activeConstraints),
+        input.rejectionReason,
+      ]
+    );
+    await db.query("DELETE FROM citations WHERE plan_id = $1", [id]);
+  } else {
+    await db.query(
+      `INSERT INTO plans
       (id, user_id, plan_spec_id, candidate_id, status, title, rationale, category, beats,
        weather, distance_km, place_provenance, active_constraints, rejection_reason, locked_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-    [
-      id,
-      input.userId,
-      input.planSpecId,
-      input.candidateId,
-      input.status,
-      input.title,
-      input.rationale,
-      input.category,
-      stringifyJsonForDb(input.beats),
-      input.weather ? stringifyJsonForDb(input.weather) : null,
-      input.distanceKm,
-      stringifyJsonForDb(input.placeProvenance),
-      stringifyJsonForDb(input.activeConstraints),
-      input.rejectionReason,
-      input.locked ? new Date().toISOString() : null,
-    ]
-  );
+      [
+        id,
+        input.userId,
+        input.planSpecId,
+        input.candidateId,
+        status,
+        input.title,
+        input.rationale,
+        input.category,
+        stringifyJsonForDb(input.beats),
+        input.weather ? stringifyJsonForDb(input.weather) : null,
+        input.distanceKm,
+        stringifyJsonForDb(input.placeProvenance),
+        stringifyJsonForDb(input.activeConstraints),
+        input.rejectionReason,
+        status === "locked" ? new Date().toISOString() : null,
+      ]
+    );
+  }
   for (const citation of input.citations) {
     await db.query(
       `INSERT INTO citations (id, plan_id, fact_id, quote, source) VALUES ($1, $2, $3, $4, $5)`,
@@ -141,11 +186,11 @@ export async function listPlans(userId: string): Promise<PlanRecord[]> {
   return results;
 }
 
-export async function lastLockedPlans(userId: string, limit = 10): Promise<PlanRecord[]> {
+export async function lastSurfacedPlans(userId: string, limit = 20): Promise<PlanRecord[]> {
   const db = await getDb();
   const { rows } = await db.query<PlanRow>(
-    `${SELECT_WITH_SPEC_DATES} WHERE plans.user_id = $1 AND plans.status = 'locked'
-     ORDER BY plans.locked_at DESC LIMIT $2`,
+    `${SELECT_WITH_SPEC_DATES} WHERE plans.user_id = $1
+     ORDER BY plans.created_at DESC LIMIT $2`,
     [userId, limit]
   );
   const results: PlanRecord[] = [];

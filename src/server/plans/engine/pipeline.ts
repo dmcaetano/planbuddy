@@ -7,7 +7,7 @@ import { listActiveHunches, bumpPlansSinceEvidence } from "../../memory/hunches.
 import { getUserById } from "../../users/repo.js";
 import { getForecast } from "../../weather/openMeteo.js";
 import { resolvePlaces, type PlaceResolverResult } from "../../resolver/placeResolver.js";
-import { lastLockedPlans } from "../plans.repo.js";
+import { insertPlan, lastSurfacedPlans } from "../plans.repo.js";
 import { insertCandidates, type CandidateInsert } from "../candidates.repo.js";
 import { generateCandidates, type MemoryFact, type GenerateContext } from "../../ai/index.js";
 import { filterCandidates } from "./filter.js";
@@ -364,7 +364,12 @@ export async function runGeneration(
   const { selectedParticipants, scopedConstraints, scopedTastes, scopedHunches, weather, resolver, knownFacts } =
     context;
 
-  const recentPlans = await lastLockedPlans(userId, 10);
+  const recentPlans = await lastSurfacedPlans(userId, 20);
+  const recentSuggestions = recentPlans.slice(0, 12).map((plan) => ({
+    title: plan.title,
+    category: plan.category,
+    placeNames: Array.from(new Set(plan.beats.map((beat) => beat.place?.name).filter((name): name is string => Boolean(name)))),
+  }));
 
   const loveTastes: MemoryFact[] = scopedTastes
     .filter((t) => t.polarity === "love")
@@ -396,6 +401,7 @@ export async function runGeneration(
       polarity: h.polarity,
       confidence: h.confidence,
     })),
+    recentSuggestions,
     seed: `${spec.id}:${batchIndex}`,
     edit: edit
       ? {
@@ -475,7 +481,11 @@ export async function runGeneration(
     hunches: scopedHunches.filter((h) => h.userId === p.userId && (h.participantId === null || h.participantId === p.id)),
   }));
 
-  const recentSummaries = recentPlans.map((p) => ({ title: p.title, category: p.category }));
+  const recentSummaries = recentPlans.map((p) => ({
+    title: p.title,
+    category: p.category,
+    placeNames: p.beats.map((beat) => beat.place?.name).filter((name): name is string => Boolean(name)),
+  }));
   const ranked: ScoredCandidate[] = scoreCandidates(kept, memories, weather, spec.radiusKm, recentSummaries);
   const enrichedRanked: ScoredCandidate[] = await Promise.all(
     ranked.map(async (sc) => ({
@@ -537,6 +547,37 @@ export async function runGeneration(
   const alternates = alternateScored
     .map((sc) => savedRanked.find((c) => c.title === sc.candidate.title))
     .filter((c): c is Candidate => Boolean(c));
+
+  for (const candidate of [winner, ...alternates]) {
+    const candidateSources = Array.from(new Map([
+      ...candidate.beats.flatMap((beat) => beat.place
+        ? [[beat.place.sourceUrl, { url: beat.place.sourceUrl, title: beat.place.sourceLabel }] as const]
+        : []),
+      ...(candidate.fallback?.place
+        ? [[candidate.fallback.place.sourceUrl, {
+            url: candidate.fallback.place.sourceUrl,
+            title: candidate.fallback.place.sourceLabel,
+          }] as const]
+        : []),
+    ]).values());
+    await insertPlan({
+      userId,
+      planSpecId: spec.id,
+      candidateId: candidate.id,
+      status: "suggested",
+      title: candidate.title,
+      rationale: candidate.rationale,
+      category: candidate.category,
+      beats: candidate.beats,
+      weather: context.weather,
+      distanceKm: candidate.travelEstimateKm,
+      placeProvenance: placeProvenanceView(context.resolver, candidateSources),
+      activeConstraints: activeConstraintsView(context.scopedConstraints, userId),
+      citations: candidate.citations,
+      rejectionReason: null,
+      locked: false,
+    });
+  }
 
   return {
     aiMode: mode,

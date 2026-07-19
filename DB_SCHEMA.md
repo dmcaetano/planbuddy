@@ -31,7 +31,7 @@ the repository layer (returns 404, never leaks existence).
 | `plan_specs` | Versioned plan requests (scale, dates, radius, mood). | `scale`, `start_date`, `end_date`, `radius_km` |
 | `spec_participants` | Join table: which participants a spec includes. | `plan_spec_id`, `participant_id` |
 | `candidates` | Every AI-proposed candidate for a spec, pre- and post-filter. | `payload` (jsonb), `score_breakdown` (jsonb), `rank`, `rejected`, `rejection_reason` |
-| `plans` | Locked or explicitly-rejected outcomes of a spec. | `status` (`locked`\|`rejected`), `beats` (jsonb), `weather` (jsonb), `place_provenance` (jsonb), `active_constraints` (jsonb) |
+| `plans` | Every surfaced suggestion and its later lifecycle state. | `status` (`suggested`\|`locked`\|`rejected`), `beats` (jsonb), `weather` (jsonb), `place_provenance` (jsonb), `active_constraints` (jsonb) |
 | `citations` | Normalized fact citations backing a locked plan's rationale. | `plan_id`, `fact_id`, `quote`, `source` |
 | `feedback` | Post-plan rating/comment plus Like/Dislike/Love learning summary. | `plan_id`, `rating`, `reaction`, `feature_summary`, `features` |
 | `resolver_venues` | Cache of live place-resolver lookups (empty in Inspiration mode). | `external_id` (unique), `cache` (jsonb) |
@@ -53,6 +53,10 @@ the repository layer (returns 404, never leaks existence).
 - `candidates.payload` retains the full generation trace (all 8 raw AI
   candidates, validation/rejection reasons) for replay and QA, independent
   of which candidate was ultimately locked.
+- A rank-1 candidate is persisted to `plans` as soon as it is surfaced. Lock
+  and Not-this update that same row rather than creating duplicates. Migration
+  `0004_suggestion_history.sql` recovers older surfaced rank-1 candidates so
+  novelty can use pre-release history immediately.
 - Friend planning reads verified constraints and explicit tastes from each
   selected account, but never exposes raw memory, hunches, history, or chat.
 - Share snapshots strip citations, constraint compliance, per-person scores,

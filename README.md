@@ -16,6 +16,10 @@ preparation, operational checks, and a compact fallback. DeepSeek V4 Flash
 powers memory chat, plan actions, and Love feature learning. Users can make
 reversible one-detail edits, connect friends for private group planning, and
 share scrubbed itineraries through expiring private links.
+Every surfaced recommendation is saved in History before the user chooses it,
+so it can be reopened, rated, shared, or locked later. Recent titles and named
+venues are fed back into discovery and deterministic novelty scoring to prevent
+the same outing from returning under a different title.
 
 ## Local development
 

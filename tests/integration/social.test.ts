@@ -38,6 +38,11 @@ describe("social learning, sharing, and friends", () => {
     const first = await alice.agent.post(`/api/plan-specs/${specId}/react`).set(HDR, "1").send({ candidateId, reaction: "love" });
     expect(first.status).toBe(200);
     expect(first.body.learned.features.length).toBeGreaterThanOrEqual(2);
+    const suggestionHistory = await alice.agent.get("/api/history");
+    const savedSuggestion = suggestionHistory.body.suggested.find((plan: { candidateId: string }) => plan.candidateId === candidateId);
+    expect(savedSuggestion).toBeTruthy();
+    const savedDetail = await alice.agent.get(`/api/history/${savedSuggestion.id}`);
+    expect(savedDetail.body.reaction.reaction).toBe("love");
     const learnedText = JSON.stringify(first.body.learned).toLowerCase();
     for (const beat of plan.body.winner.candidate.beats) {
       if (beat.place?.name) expect(learnedText).not.toContain(String(beat.place.name).toLowerCase());
@@ -59,6 +64,14 @@ describe("social learning, sharing, and friends", () => {
     expect(undoLove.status).toBe(200);
     const remaining = await db.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM hunch_evidence WHERE session_id = $1", [candidateId]);
     expect(remaining.rows[0].count).toBe("0");
+
+    const dislike = await alice.agent.post(`/api/plan-specs/${specId}/react`).set(HDR, "1").send({ candidateId, reaction: "dislike" });
+    expect(dislike.status).toBe(200);
+    const dislikeEvidence = await db.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM hunch_evidence WHERE session_id = $1", [candidateId]);
+    expect(dislikeEvidence.rows[0].count).toBe("1");
+    await alice.agent.post(`/api/plan-specs/${specId}/react`).set(HDR, "1").send({ candidateId, reaction: "like" });
+    const clearedDislike = await db.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM hunch_evidence WHERE session_id = $1", [candidateId]);
+    expect(clearedDislike.rows[0].count).toBe("0");
   });
 
   it("creates an immutable privacy-safe share snapshot and stores only the token hash", async () => {

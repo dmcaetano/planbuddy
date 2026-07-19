@@ -200,7 +200,7 @@ export async function removeReactionEvidence(userId: string, candidateId: string
      WHERE he.hunch_id = h.id
        AND h.user_id = $1
        AND he.session_id = $2
-       AND he.note LIKE 'Love:%'
+       AND (he.note LIKE 'Love:%' OR he.note LIKE 'Dislike:%')
      RETURNING he.hunch_id`,
     [userId, candidateId]
   );
