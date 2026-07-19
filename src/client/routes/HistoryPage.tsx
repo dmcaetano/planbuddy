@@ -15,7 +15,12 @@ function PlanRow({ plan, onOpen }: { plan: PlanRecord; onOpen: () => void }) {
       </div>
       <strong>{plan.title}</strong>
       <p className="muted" style={{ marginBottom: 0 }}>
-        {new Date(plan.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+        {new Date(`${plan.eventStartDate}T12:00:00`).toLocaleDateString(undefined, {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })}
       </p>
     </button>
   );
@@ -130,7 +135,13 @@ export default function HistoryPage() {
           ← Back to History
         </button>
         {detailsLoading && <div className="skeleton" style={{ height: 320, borderRadius: 18 }} />}
-        {selectedView ? <TicketCard view={selectedView} /> : !detailsLoading && <div className="card">
+        {selectedView ? (
+          <TicketCard
+            view={selectedView}
+            eventStartDate={selected.eventStartDate}
+            eventEndDate={selected.eventEndDate}
+          />
+        ) : !detailsLoading && <div className="card">
           <div className="eyebrow">{selected.category}</div>
           <h2>{selected.title}</h2>
           <p>{selected.rationale}</p>

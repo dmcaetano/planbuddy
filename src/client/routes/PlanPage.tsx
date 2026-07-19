@@ -155,7 +155,7 @@ export default function PlanPage() {
             </button>
           </div>
         </div>
-        {current && <TicketCard view={current} />}
+        {current && <TicketCard view={current} eventStartDate={result?.spec.startDate} eventEndDate={result?.spec.endDate} />}
       </div>
     );
   }
@@ -198,7 +198,7 @@ export default function PlanPage() {
           </div>
         ) : (
           <>
-            <TicketCard view={current} />
+            <TicketCard view={current} eventStartDate={result?.spec.startDate} eventEndDate={result?.spec.endDate} />
             <div className="row-gap">
               <button className="btn btn-primary" onClick={lockIt}>
                 <Lock size={16} /> Lock it

@@ -32,8 +32,26 @@ function DetailList({ items }: { items: string[] }) {
   );
 }
 
-export default function TicketCard({ view }: { view: PlanView }) {
+function eventDateLabel(startDate?: string, endDate?: string): string | null {
+  if (!startDate) return null;
+  const format = (value: string) =>
+    new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short" }).format(
+      new Date(`${value}T12:00:00`)
+    );
+  return endDate && endDate !== startDate ? `${format(startDate)}–${format(endDate)}` : format(startDate);
+}
+
+export default function TicketCard({
+  view,
+  eventStartDate,
+  eventEndDate,
+}: {
+  view: PlanView;
+  eventStartDate?: string;
+  eventEndDate?: string;
+}) {
   const { candidate, weather, placeProvenance, activeConstraints } = view;
+  const dateLabel = eventDateLabel(eventStartDate, eventEndDate);
   return (
     <article className="ticket-card">
       {candidate.heroImage && (
@@ -55,7 +73,7 @@ export default function TicketCard({ view }: { view: PlanView }) {
       )}
 
       <div className="ticket-card__top">
-        <div className="eyebrow">{candidate.category}</div>
+        <div className="eyebrow">{candidate.category}{dateLabel ? ` · ${dateLabel}` : ""}</div>
         <h2>{candidate.title}</h2>
         <div className="row-gap ticket-badges">
           <span className="badge badge-pine">
