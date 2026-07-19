@@ -1,7 +1,10 @@
 # PlanBuddy — State
 
 ## Status
-v1 MVP is live at https://planbuddy.onrender.com from `main`, with a dedicated Neon Postgres project and DeepSeek V4 Flash through OpenRouter. Local and production QA are green.
+v0.1.1 “Lisbon Field Guide” is live at https://planbuddy.onrender.com from
+`main` (`f21acad`), with dedicated Neon Postgres persistence. Gemini 3.5 Flash
+plus Google Search grounds real places; DeepSeek V4 Flash powers chat,
+feedback, and grounded fallback. Local and production QA are green.
 
 ## Next concrete action
 Use the product with a real household and review recommendation/feedback quality before expanding venue, calendar, or booking integrations.
@@ -22,6 +25,13 @@ Use the product with a real household and review recommendation/feedback quality
 - 2026-07-19 — Build implementation: single package (not a monorepo) with Vite building `dist/client` and `tsc` building `dist-server`; IDs are application-generated UUIDs (no pgcrypto dependency) so the same SQL runs unmodified on Neon and on an embedded PGlite fallback; server-side sessions (opaque token in a signed cookie) rather than JWT; deterministic keyword-based constraint filter (`src/server/plans/engine/constraintKeywords.ts`) rather than an NLU dependency; demo AI ships with a hand-authored content pool seeded per (spec, batch) for replayable output when no OpenRouter key is present.
 - 2026-07-19 — Independent review hardened tenant isolation, CORS/origin checks, rejected-candidate locking, feedback learning, accessibility, dependency versions, and schema isolation.
 - 2026-07-19 — Production release deployed to Render with dedicated Neon persistence. Live canary verified real DeepSeek planning/chat, constraint-safe filtering, learning, and fresh-login persistence.
+- 2026-07-19 — Grounded planning uses a closed four-place Gemini Search dossier,
+  exact-name canonicalization, and a source firewall before scoring/enrichment.
+- 2026-07-19 — Plans expose real place photography, Google Maps place/direction/
+  full-route links, estimated leg distances, coherent timing, apparel, bring and
+  pet kits, checks, and a compact fallback.
+- 2026-07-19 — A grounding outage may retry Gemini and then DeepSeek web search,
+  but production never substitutes generic demo content for a real plan.
 
 ## Future ideas
 

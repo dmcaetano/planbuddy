@@ -34,7 +34,9 @@ memory, selected people and pets, recent plan history, home location, and an
 Open-Meteo forecast. Gemini with Google Search builds a closed dossier containing
 a meal venue, two distinct outdoor stops, and a fallback venue; a second
 structured call composes exactly one chronological three-beat itinerary using
-only those places.
+only those places. Empty Gemini dossier responses retry once, then fall back to
+grounded DeepSeek web search. If grounding is still unavailable, production
+reports that honestly instead of substituting generic demo content.
 
 Server code then validates citations and constraint claims, rejects any place
 outside the dossier, scores group fit using least-misery logic, and enriches the
@@ -164,9 +166,9 @@ npm start
 
 ## Status
 
-Version 0.1.1 is locally verified and prepared for production deployment with
-grounded Lisbon planning. See `STATE.md` and `PROGRESS.md` for live release
-status and next work.
+Version 0.1.1 is live on Render and production-verified with the exact Lisbon,
+grilled-fish, walking, and Pom scenario. See `STATE.md`, `PROGRESS.md`, and
+`QA-REPORT.md` for release evidence and next work.
 
 ## Glossary
 

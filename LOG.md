@@ -89,3 +89,33 @@ real DeepSeek recommendation and chat, two hard constraints on the winning
 ticket, lock, feedback-to-hunch learning, chat extraction, and persistence
 after a fresh login. All 68 Vitest tests, Playwright, typecheck, lint, build,
 visual review, and dependency audit are green.
+
+## 2026-07-19 — v0.1.1 “Lisbon Field Guide” grounded release
+
+### What we did
+Compared the desired answer shape across GPT-SOL, Claude Fable, and Claude
+Opus, then rebuilt recommendation output around a closed four-place Gemini
+Search dossier. Added exact-name place canonicalization and a source firewall,
+three distinct chronological stops, server-generated Google Maps place/
+directions/full-route links, real Wikimedia Commons photography, reconciled
+walking totals and distances, spend, weather-aware apparel and bring lists, a
+Pom kit, operational checks, and a compact fallback. Saved plans now reopen as
+the same rich ticket in History with the scheduled date.
+
+### Live issues found and fixed
+Production canaries exposed mutated grounding redirect URLs, inconsistent
+walking classification, transfer-heavy walking totals, NUL characters rejected
+by Postgres JSONB, meal descriptions that were misclassified as walks, Lisbon
+park ponds described as lakes, impossible activity timing, and a transient
+empty Gemini dossier that silently activated generic demo content. Each issue
+now has a deterministic guard or provider retry/fallback. Production returns an
+honest 503 if all grounded providers fail; it never presents demo inspiration
+as a real recommendation.
+
+### Result
+Render deploy `dep-d9eg1khoagis7399nd70` at commit `f21acad` is live. The exact
+Lisbon/Pom production canary returned three real stops, three Maps and three
+directions links, one full route, an attributed photo, €35–50 per person, and
+60 independently recomputed walking minutes. Lock, rich History, feedback, and
+hunch evidence persisted in Neon. All 77 Vitest tests, the mobile Playwright
+journey, typecheck, lint, build, and live 390×844 visual inspection are green.

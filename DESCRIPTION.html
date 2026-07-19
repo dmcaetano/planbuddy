@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PlanBuddy â€” Project Description</title>
+<title>PlanBuddy — Project Description</title>
 <style>
   :root {
     --bg: #ffffff; --fg: #1a1a1a; --muted: #6b7280; --border: #e5e7eb;
@@ -60,8 +60,8 @@
 <body>
   <div class="wrap">
     <div class="topbar">Project Description</div>
-    <div id="content">Renderingâ€¦</div>
-    <footer>Generated from <code>DESCRIPTION.md</code> Â· rendered with marked + mermaid</footer>
+    <div id="content">Rendering…</div>
+    <footer>Generated from <code>DESCRIPTION.md</code> · rendered with marked + mermaid</footer>
   </div>
 
   <!-- Canonical markdown source, injected verbatim. type="text/plain" keeps markdown chars inert. -->
@@ -71,10 +71,10 @@
 
 ## Purpose
 
-PlanBuddy removes the work between â€œwe should go outâ€ and an itinerary worth
-following. It is built for Diogoâ€™s Buddy app family and supports a day off,
+PlanBuddy removes the work between “we should go out” and an itinerary worth
+following. It is built for Diogo’s Buddy app family and supports a day off,
 weekend, getaway, or vacation in one product. Its durable advantage is an
-inspectable memory of the householdâ€™s tastes, constraints, feedback, family
+inspectable memory of the household’s tastes, constraints, feedback, family
 members, and pets, so it asks fewer questions over time without learning hidden
 or unsafe rules.
 
@@ -88,7 +88,7 @@ or unsafe rules.
   bring lists, a pet kit, operational checks, and one compact fallback.
 - Remembers household members and pets, hard constraints, loved/avoided tastes,
   and weak feedback-derived hunches with visible provenance and CRUD controls.
-- Uses thumbs, ratings, comments, and â€œNot thisâ€ reasons in a guarded
+- Uses thumbs, ratings, comments, and “Not this” reasons in a guarded
   self-improvement loop; hunches can become tastes but never safety constraints.
 - Persists accounts and planning history in Neon Postgres and runs publicly on
   Render with email/password login.
@@ -101,7 +101,9 @@ memory, selected people and pets, recent plan history, home location, and an
 Open-Meteo forecast. Gemini with Google Search builds a closed dossier containing
 a meal venue, two distinct outdoor stops, and a fallback venue; a second
 structured call composes exactly one chronological three-beat itinerary using
-only those places.
+only those places. Empty Gemini dossier responses retry once, then fall back to
+grounded DeepSeek web search. If grounding is still unavailable, production
+reports that honestly instead of substituting generic demo content.
 
 Server code then validates citations and constraint claims, rejects any place
 outside the dossier, scores group fit using least-misery logic, and enriches the
@@ -203,15 +205,15 @@ erDiagram
 
 ## External integrations
 
-- **Google Gemini API** â€” native Search grounding plus structured itinerary
+- **Google Gemini API** — native Search grounding plus structured itinerary
   composition. Reads `GEMINI_API_KEY` or local `GEMINI_API_KEY_FILE`.
-- **OpenRouter / DeepSeek V4 Flash** â€” chat, feedback extraction, and bounded
+- **OpenRouter / DeepSeek V4 Flash** — chat, feedback extraction, and bounded
   composition fallback. Reads `OPENROUTER_API_KEY` or local key-file path.
-- **Open-Meteo** â€” no-key weather forecast and geocoding.
-- **Google Maps URLs** â€” no-key server-generated search and directions links.
-- **Wikimedia Commons API** â€” no-key, cached route photography with attribution.
-- **Neon** â€” persistent Postgres via `DATABASE_URL`.
-- **Render** â€” builds and serves the single Node production process.
+- **Open-Meteo** — no-key weather forecast and geocoding.
+- **Google Maps URLs** — no-key server-generated search and directions links.
+- **Wikimedia Commons API** — no-key, cached route photography with attribution.
+- **Neon** — persistent Postgres via `DATABASE_URL`.
+- **Render** — builds and serves the single Node production process.
 
 ## How to run
 
@@ -231,16 +233,16 @@ npm start
 
 ## Status
 
-Version 0.1.1 is locally verified and prepared for production deployment with
-grounded Lisbon planning. See `STATE.md` and `PROGRESS.md` for live release
-status and next work.
+Version 0.1.1 is live on Render and production-verified with the exact Lisbon,
+grilled-fish, walking, and Pom scenario. See `STATE.md`, `PROGRESS.md`, and
+`QA-REPORT.md` for release evidence and next work.
 
 ## Glossary
 
-- **Dossier** â€” the four source-backed places the composer is allowed to name.
-- **Venue firewall** â€” server validation rejecting any place/source outside the dossier.
-- **Hunch** â€” weak feedback-derived preference evidence that can decay or promote to a taste.
-- **Least misery** â€” group-fit score based on the least-satisfied participant.
+- **Dossier** — the four source-backed places the composer is allowed to name.
+- **Venue firewall** — server validation rejecting any place/source outside the dossier.
+- **Hunch** — weak feedback-derived preference evidence that can decay or promote to a taste.
+- **Least misery** — group-fit score based on the least-satisfied participant.
 </script>
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -252,7 +254,7 @@ status and next work.
       var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
       try {
-        // Render markdown â†’ HTML.
+        // Render markdown → HTML.
         var html = (window.marked && (marked.parse ? marked.parse(md) : marked(md))) || '';
         contentEl.innerHTML = html;
 
@@ -273,7 +275,7 @@ status and next work.
 
         // Use the first <h1> as the document title if present.
         var h1 = contentEl.querySelector('h1');
-        if (h1) document.title = h1.textContent + ' â€” Project Description';
+        if (h1) document.title = h1.textContent + ' — Project Description';
       } catch (e) {
         contentEl.innerHTML = '<div class="render-error">Failed to render DESCRIPTION.md: ' +
           (e && e.message ? e.message : e) + '</div><pre></pre>';

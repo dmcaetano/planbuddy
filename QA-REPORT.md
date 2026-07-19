@@ -36,7 +36,7 @@ Reviewed 2026-07-19 by Codex after GPT-SOL, Claude Fable, and Claude Opus produc
 ## Phase 2 — Procedures
 
 1. Run strict client/server TypeScript, ESLint, production build, dependency
-   audit, 76 unit/contract/integration tests, and the Playwright mobile journey.
+   audit, 77 unit/contract/integration tests, and the Playwright mobile journey.
 2. Generate locally with the exact Lisbon prompt and remembered Saldanha home,
    18:30 meal, 45–60 minute easy walk, €35–50 preference, and Pom needs.
 3. Confirm the response is `gemini-grounded`, contains four source-backed
@@ -58,7 +58,7 @@ Reviewed 2026-07-19 by Codex after GPT-SOL, Claude Fable, and Claude Opus produc
 - Type-check: **PASS**
 - ESLint: **PASS** (zero errors and zero warnings)
 - Production build: **PASS**
-- Unit/contract/integration: **PASS — 76/76 across 11 files**
+- Unit/contract/integration: **PASS — 77/77 across 11 files**
 - Playwright mobile journey: **PASS — 1/1**
 - Real Gemini + Search Lisbon generation: **PASS**
 - Google Maps URL generation/source firewall: **PASS**
@@ -93,13 +93,36 @@ The browser console records one expected 401 for the initial anonymous
   forcing demo mode under `NODE_ENV=test`.
 - Sanitized NUL characters at the JSONB persistence boundary after a live
   Gemini payload exposed PostgreSQL's otherwise-valid-JSON incompatibility.
+- Protected meal duration from walking-language false positives, normalized
+  impossible displayed start times, and rewrote Lisbon “lake” framing to
+  accurate park/ornamental-pond language.
+- Added one Gemini dossier retry plus a grounded DeepSeek web-search fallback;
+  production now returns an honest 503 instead of silently showing demo content
+  when both grounding providers are unavailable.
+- Corrected History to show the scheduled event date and added that date to the
+  full ticket header.
 
 ## Phase 5 — Production canary
 
-Pending deployment of `v0.1.1`; this section is completed only after the Render
-deploy and live grounded Lisbon flow pass.
+**PASS** on Render deploy `dep-d9eg1khoagis7399nd70`, commit `f21acad`.
+
+- Exact Lisbon/Pom request returned `gemini-grounded`, `deadEnd=false` in 28.9s.
+- Winner: **A Scenic Saldanha Walk & Fresh Grilled Fish Dinner with Your Pom**.
+- Three distinct grounded stops: Jardim do Arco do Cego → Saldanha Mar →
+  Parque Eduardo VII; three place links, three directions links, and one full
+  Google Maps route.
+- Walking reconciliation: displayed **60 min**, independently recomputed
+  **60 min**, approximately **4 km**; spend **€35–50 per person**.
+- Meal remained 75 minutes; the last stop moved to 19:58 so meal plus transfer
+  chronology is possible. No “lake” copy remained.
+- Real Commons hero photo and attribution, four apparel items, two bring items,
+  three Pom-kit items, operational checks, and a grounded restaurant fallback.
+- Lock persisted in Neon, rich History reopen passed, feedback persisted, and
+  one new hunch-evidence item was created.
+- Mobile live inspection at 390×844 passed with no overflow; History showed
+  **Sat, 25 Jul 2026** and the ticket header showed **Sat 25 Jul**.
 
 ## Readiness
 
-Local release gates are green. Production readiness remains pending the final
-Render deploy and live canary.
+Local and production release gates are green. Version 0.1.1 is live and ready
+for real household use at https://planbuddy.onrender.com.

@@ -17,7 +17,7 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 
 ### Phase 3 — Planning loop
 - [x] Plan specs for Day off, Weekend, Getaway, and Vacation
-- [x] Weather context and pluggable live-place resolver (Inspiration mode by default)
+- [x] Live Open-Meteo context and Gemini Search place grounding with source firewall
 - [x] DeepSeek structured candidate generation with schema validation + one repair attempt
 - [x] Deterministic constraint filter, least-misery scoring, novelty, and diverse alternates
 - [x] Lock, show-another (one regeneration batch), not-this, tweak, and honest failure/looseners states
@@ -29,16 +29,16 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 - [x] Post-plan feedback and self-improvement loop (feedback -> hunch evidence -> promotion)
 
 ### Phase 5 — Ship quality
-- [x] Unit, contract, integration, and Playwright tests (68 Vitest + 1 Playwright, all green)
+- [x] Unit, contract, integration, and Playwright tests (77 Vitest + 1 Playwright, all green)
 - [x] Visual verification via Playwright (mobile viewport) and manual smoke testing
 - [x] Security/privacy pass (see below)
 - [x] Render deployment with a dedicated persistent Neon database: https://planbuddy.onrender.com
-- [x] Live recommendation and chat canary against DeepSeek V4 Flash through OpenRouter
+- [x] Live grounded recommendation canary via Gemini Search plus DeepSeek chat/feedback
 - [x] DESCRIPTION.md and DESCRIPTION.html
 
 ## Current state
 
-**The v1 MVP is live on Render from `main` and backed by a dedicated Neon project.** A fresh
+**Version 0.1.1 is live on Render from `main` and backed by a dedicated Neon project.** A fresh
 user can sign up, onboard a home base and participants (including pets),
 generate a plan for any of the four scales, have a typed or chat-quoted hard
 constraint mechanically enforced (peanut-allergy filtering demonstrated in
@@ -51,9 +51,12 @@ Verified green in this session:
 - `npm run typecheck` — client + server, strict TypeScript, zero errors.
 - `npm run lint` — ESLint, zero errors/warnings.
 - `npm run build` — Vite client build + tsc server build + migration asset copy.
-- `npm test` — 68 Vitest tests (unit engine tests, AI-contract/schema tests, Supertest integration tests against an in-memory PGlite DB), stable across repeated runs.
+- `npm test` — 77 Vitest tests (unit engine tests, AI-contract/schema tests, Supertest integration tests against an in-memory PGlite DB), stable across repeated runs.
 - `npm run test:e2e` — Playwright happy path (signup → onboard → generate → reject → lock → feedback → Memory) against the production build, in a mobile viewport.
-- A strict production canary confirmed real DeepSeek recommendation and chat calls, household and pet memory, two hard constraints on the winning ticket, lock, feedback → hunch learning, chat extraction, and Neon persistence after a fresh login.
+- A strict production canary confirmed a real Gemini-grounded three-stop Lisbon
+  route with Google Maps links, an attributed photo, 60 reconciled walking
+  minutes, clothing and Pom preparation, operational checks, lock, feedback →
+  hunch learning, and Neon persistence.
 
 One real bug was found and fixed during this build: the server's static
 file path pointed at `dist-server/client` instead of the actual Vite output
@@ -66,13 +69,15 @@ future-dated locked plans as "past") was caused by node-postgres parsing
 covered implicitly by the plan.test.ts lock→history assertion.
 
 ### Known gaps / what's next
-1. **Live place resolver** — no provider is wired up; the app deliberately labels recommendations as Inspiration mode rather than inventing venue facts.
+1. **Operational venue truth** — named places are grounded, but hours, booking,
+   current prices, accessibility, and pet policy remain explicit checks until a
+   transactional place/booking API is added.
 2. **Calendar/booking integrations** — intentionally deferred until the one-pick and learning loop has real usage evidence.
 3. **Broader browser coverage** — add separate Playwright scenarios for dead ends, trip modes, and hunch promotion.
 
 ## Next steps
 1. Collect real household feedback on recommendation quality and response time.
-2. Wire a live place resolver if venue-level facts are desired.
+2. Add a transactional place/booking provider for current operational facts.
 3. Add calendar conflict awareness and broader Playwright coverage.
 
 ## Log
