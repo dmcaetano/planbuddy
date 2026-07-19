@@ -8,6 +8,7 @@ import {
   type AiChatResponse,
   type AiFeedbackResponse,
   type AiGenerateResponse,
+  type AiPlaceResearchResponse,
 } from "../../shared/schemas.js";
 import { callAiJson, callAiJsonGrounded, AiUnavailableError, type GroundingSource } from "./deepseek.js";
 import {
@@ -72,7 +73,7 @@ export async function generateCandidates(
     }
     return {
       mode: env.GEMINI_API_KEY ? "gemini-grounded" : "deepseek",
-      response,
+      response: canonicalizeCandidatePlaces(response, groundedPlaces),
       groundingSources: research.groundingSources,
     };
   } catch (err) {
@@ -82,6 +83,46 @@ export async function generateCandidates(
     logger.error("DeepSeek generate failed, falling back to demo AI", { error: String(err) });
     return { mode: "demo", response: generateCandidatesDemo(ctx), groundingSources: [] };
   }
+}
+
+function normalizedPlaceName(value: string): string {
+  return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/**
+ * The composer is allowed to choose and arrange dossier places, but it never
+ * owns their factual payload. Replace every exact name match with the
+ * server-held canonical object so a model cannot subtly mutate a redirect URL,
+ * address, source label, or source-backed note. Unknown names remain untouched
+ * and are rejected by the downstream place-source firewall.
+ */
+export function canonicalizeCandidatePlaces(
+  response: AiGenerateResponse,
+  groundedPlaces: AiPlaceResearchResponse["places"]
+): AiGenerateResponse {
+  const byName = new Map(groundedPlaces.map((place) => [normalizedPlaceName(place.name), place]));
+  const canonicalPlace = (place: AiGenerateResponse["candidates"][number]["beats"][number]["place"]) => {
+    if (!place) return place;
+    const source = byName.get(normalizedPlaceName(place.name));
+    if (!source) return place;
+    return {
+      name: source.name,
+      address: source.address ?? null,
+      kind: source.kind,
+      sourceUrl: source.sourceUrl,
+      sourceLabel: source.sourceLabel,
+      factualNote: source.factualNote,
+    };
+  };
+  return {
+    candidates: response.candidates.map((candidate) => ({
+      ...candidate,
+      beats: candidate.beats.map((beat) => ({ ...beat, place: canonicalPlace(beat.place) })),
+      fallback: candidate.fallback
+        ? { ...candidate.fallback, place: canonicalPlace(candidate.fallback.place) }
+        : candidate.fallback,
+    })),
+  };
 }
 
 function normalizeSourceUrl(raw: string): string {
