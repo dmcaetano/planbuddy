@@ -102,4 +102,31 @@ describe("candidate enrichment", () => {
     expect(enriched.beats[0].durationMinutes! + enriched.beats[2].durationMinutes!).toBe(35);
     expect(enriched.checkBeforeYouGo.join(" ")).toMatch(/opening hours/i);
   });
+
+  it("keeps the full route inside the remembered range when transfers consume most of it", async () => {
+    const transferHeavy = structuredClone(candidate);
+    transferHeavy.beats[0].travelMode = "walking";
+    transferHeavy.beats[0].travelMinutes = 15;
+    transferHeavy.beats[0].distanceFromPreviousKm = 1.1;
+    transferHeavy.beats[1].travelMinutes = 15;
+    transferHeavy.beats[1].distanceFromPreviousKm = 1.2;
+    transferHeavy.beats[2].travelMinutes = 20;
+    transferHeavy.beats[2].distanceFromPreviousKm = 1.5;
+
+    const enriched = await enrichCandidate(transferHeavy, {
+      homeBaseLabel: "Saldanha, Lisboa",
+      participants: [],
+      weather: {
+        temperatureC: 25,
+        precipitationProbability: 0,
+        summary: "mild",
+        unavailable: false,
+      },
+      walkingTargetMinutes: { min: 45, max: 60 },
+    });
+
+    expect(enriched.walkingMinutes).toBe(60);
+    expect(enriched.beats[0].durationMinutes).toBe(5);
+    expect(enriched.beats[2].durationMinutes).toBe(5);
+  });
 });

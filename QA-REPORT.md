@@ -36,7 +36,7 @@ Reviewed 2026-07-19 by Codex after GPT-SOL, Claude Fable, and Claude Opus produc
 ## Phase 2 — Procedures
 
 1. Run strict client/server TypeScript, ESLint, production build, dependency
-   audit, 73 unit/contract/integration tests, and the Playwright mobile journey.
+   audit, 74 unit/contract/integration tests, and the Playwright mobile journey.
 2. Generate locally with the exact Lisbon prompt and remembered Saldanha home,
    18:30 meal, 45–60 minute easy walk, €35–50 preference, and Pom needs.
 3. Confirm the response is `gemini-grounded`, contains four source-backed
@@ -58,7 +58,7 @@ Reviewed 2026-07-19 by Codex after GPT-SOL, Claude Fable, and Claude Opus produc
 - Type-check: **PASS**
 - ESLint: **PASS** (zero errors and zero warnings)
 - Production build: **PASS**
-- Unit/contract/integration: **PASS — 73/73 across 10 files**
+- Unit/contract/integration: **PASS — 74/74 across 10 files**
 - Playwright mobile journey: **PASS — 1/1**
 - Real Gemini + Search Lisbon generation: **PASS**
 - Google Maps URL generation/source firewall: **PASS**

@@ -206,7 +206,10 @@ function normalizeWalkingDuration(
   const total = transferMinutes + activityMinutes;
   if (total >= target.min && total <= target.max) return beats;
 
-  const minimumPerWalk = 10;
+  // Five minutes is the schema floor and still represents an intentional
+  // pause/loop at the named green stop. Use it when point-to-point walking
+  // already consumes most of the household's remembered total-walk budget.
+  const minimumPerWalk = 5;
   const activityBudget = Math.max(walkingIndexes.length * minimumPerWalk, target.max - transferMinutes);
   const currentWeights = walkingIndexes.map((index) =>
     Math.max(minimumPerWalk, beats[index].durationMinutes ?? minimumPerWalk)
