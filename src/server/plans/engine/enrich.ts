@@ -101,6 +101,66 @@ function ensureOperationalChecks(
   return result.slice(0, 8);
 }
 
+function normalizeLisbonGeographyText(text: string): string {
+  return text
+    .replace(/\blakeside\b/gi, "garden-side")
+    .replace(/\blakes\b/gi, "ornamental ponds")
+    .replace(/\blake\b/gi, "ornamental pond");
+}
+
+function normalizeLisbonGeography(candidate: AiCandidate, homeBaseLabel: string | null): AiCandidate {
+  if (!/lisbo[an]|lisbon/i.test(homeBaseLabel ?? "")) return candidate;
+  const normalizePlace = (place: AiCandidate["beats"][number]["place"]) =>
+    place ? { ...place, factualNote: normalizeLisbonGeographyText(place.factualNote) } : place;
+  return {
+    ...candidate,
+    title: normalizeLisbonGeographyText(candidate.title),
+    rationale: normalizeLisbonGeographyText(candidate.rationale),
+    photoSearchTerm: candidate.photoSearchTerm ? normalizeLisbonGeographyText(candidate.photoSearchTerm) : candidate.photoSearchTerm,
+    beats: candidate.beats.map((beat) => ({
+      ...beat,
+      title: normalizeLisbonGeographyText(beat.title),
+      description: normalizeLisbonGeographyText(beat.description),
+      place: normalizePlace(beat.place),
+    })),
+    checkBeforeYouGo: candidate.checkBeforeYouGo.map(normalizeLisbonGeographyText),
+    fallback: candidate.fallback
+      ? {
+          ...candidate.fallback,
+          title: normalizeLisbonGeographyText(candidate.fallback.title),
+          description: normalizeLisbonGeographyText(candidate.fallback.description),
+          place: normalizePlace(candidate.fallback.place),
+        }
+      : candidate.fallback,
+  };
+}
+
+function parseClockMinutes(value: string | null | undefined): number | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value ?? "");
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function formatClockMinutes(value: number): string {
+  const normalized = ((value % 1440) + 1440) % 1440;
+  return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
+}
+
+function normalizeBeatStartTimes(beats: AiCandidate["beats"]): AiCandidate["beats"] {
+  let previousEnd: number | null = null;
+  return beats.map((beat) => {
+    const statedStart = parseClockMinutes(beat.startTime);
+    const earliestStart = previousEnd == null ? null : previousEnd + (beat.travelMinutes ?? 0);
+    const start = statedStart == null ? earliestStart : earliestStart == null ? statedStart : Math.max(statedStart, earliestStart);
+    if (start == null) return beat;
+    previousEnd = start + (beat.durationMinutes ?? 0);
+    return { ...beat, startTime: formatClockMinutes(start) };
+  });
+}
+
 export async function enrichCandidate(
   candidate: AiCandidate,
   input: {
@@ -110,7 +170,10 @@ export async function enrichCandidate(
     walkingTargetMinutes?: { min: number; max: number } | null;
   }
 ): Promise<AiCandidate> {
-  const normalizedBeats = normalizeWalkingDuration(candidate.beats, input.walkingTargetMinutes);
+  const groundedCopy = normalizeLisbonGeography(candidate, input.homeBaseLabel);
+  const normalizedBeats = normalizeBeatStartTimes(
+    normalizeWalkingDuration(groundedCopy.beats, input.walkingTargetMinutes)
+  );
   let previous = input.homeBaseLabel || "Current location";
   const queries: string[] = [];
   const beats = normalizedBeats.map((beat) => {
@@ -126,23 +189,23 @@ export async function enrichCandidate(
     };
   });
 
-  const fallback = candidate.fallback?.place
+  const fallback = groundedCopy.fallback?.place
     ? {
-        ...candidate.fallback,
+        ...groundedCopy.fallback,
         place: {
-          ...candidate.fallback.place,
-          mapsUrl: mapsSearchUrl(placeQuery(candidate.fallback.place)),
+          ...groundedCopy.fallback.place,
+          mapsUrl: mapsSearchUrl(placeQuery(groundedCopy.fallback.place)),
         },
       }
-    : candidate.fallback ?? null;
+    : groundedCopy.fallback ?? null;
 
-  const heroImage = await resolveWikimediaImage(candidate.photoSearchTerm);
-  const walkingMetrics = calculateWalkingMetrics(beats, candidate.walkingMinutes, candidate.walkingDistanceKm);
+  const heroImage = await resolveWikimediaImage(groundedCopy.photoSearchTerm);
+  const walkingMetrics = calculateWalkingMetrics(beats, groundedCopy.walkingMinutes, groundedCopy.walkingDistanceKm);
   return {
-    ...candidate,
+    ...groundedCopy,
     beats,
     checkBeforeYouGo: ensureOperationalChecks(
-      candidate.checkBeforeYouGo,
+      groundedCopy.checkBeforeYouGo,
       beats,
       input.participants.some((participant) => participant.kind === "pet")
     ),

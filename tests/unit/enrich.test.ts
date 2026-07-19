@@ -131,4 +131,35 @@ describe("candidate enrichment", () => {
     expect(enriched.beats[0].durationMinutes).toBe(5);
     expect(enriched.beats[2].durationMinutes).toBe(5);
   });
+
+  it("keeps chronology coherent and avoids fake lake framing in Lisbon", async () => {
+    const timed = structuredClone(candidate);
+    timed.title = "A lakeside Lisbon evening";
+    timed.beats[0].startTime = "17:45";
+    timed.beats[0].durationMinutes = 15;
+    timed.beats[0].place!.factualNote = "A garden beside a lake.";
+    timed.beats[1].startTime = "18:30";
+    timed.beats[1].durationMinutes = 75;
+    timed.beats[1].travelMinutes = 7;
+    timed.beats[2].startTime = "19:55";
+    timed.beats[2].durationMinutes = 20;
+    timed.beats[2].travelMinutes = 18;
+    timed.beats[2].description = "Finish beside the circular lake.";
+
+    const enriched = await enrichCandidate(timed, {
+      homeBaseLabel: "Saldanha, Lisbon",
+      participants: [],
+      weather: {
+        temperatureC: 25,
+        precipitationProbability: 0,
+        summary: "mild",
+        unavailable: false,
+      },
+      walkingTargetMinutes: null,
+    });
+
+    expect(enriched.beats[2].startTime).toBe("20:03");
+    expect(JSON.stringify(enriched)).not.toMatch(/\blake/i);
+    expect(enriched.beats[2].description).toContain("ornamental pond");
+  });
 });
