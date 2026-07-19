@@ -37,13 +37,27 @@ export async function generateCandidates(
     return { mode: "demo", response: generateCandidatesDemo(ctx), groundingSources: [] };
   }
   try {
-    const research = env.GEMINI_API_KEY
-      ? await researchPlacesWithGemini(ctx)
-      : await callAiJsonGrounded(
+    let research;
+    if (env.GEMINI_API_KEY) {
+      try {
+        research = await researchPlacesWithGemini(ctx);
+      } catch (geminiGroundingError) {
+        logger.warn("Gemini place grounding failed; retrying with DeepSeek web search", {
+          error: String(geminiGroundingError),
+        });
+        research = await callAiJsonGrounded(
           buildPlaceResearchSystemPrompt(),
           buildPlaceResearchUserPrompt(ctx),
           aiPlaceResearchResponseSchema
         );
+      }
+    } else {
+      research = await callAiJsonGrounded(
+        buildPlaceResearchSystemPrompt(),
+        buildPlaceResearchUserPrompt(ctx),
+        aiPlaceResearchResponseSchema
+      );
+    }
     const allowedUrls = new Set(research.groundingSources.map((source) => normalizeSourceUrl(source.url)));
     const groundedPlaces = research.data.places.filter((place) => allowedUrls.has(normalizeSourceUrl(place.sourceUrl)));
     if (groundedPlaces.length < 4) {
@@ -77,11 +91,9 @@ export async function generateCandidates(
       groundingSources: research.groundingSources,
     };
   } catch (err) {
-    if (err instanceof AiUnavailableError) {
-      return { mode: "demo", response: generateCandidatesDemo(ctx), groundingSources: [] };
-    }
-    logger.error("DeepSeek generate failed, falling back to demo AI", { error: String(err) });
-    return { mode: "demo", response: generateCandidatesDemo(ctx), groundingSources: [] };
+    logger.error("Grounded plan generation unavailable", { error: String(err) });
+    if (err instanceof AiUnavailableError) throw err;
+    throw new AiUnavailableError("Grounded plan generation unavailable");
   }
 }
 

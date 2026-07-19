@@ -175,7 +175,8 @@ const PLAN_JSON_SCHEMA = {
 };
 
 export async function researchPlacesWithGemini(
-  ctx: GenerateContext
+  ctx: GenerateContext,
+  attempt = 0
 ): Promise<{ data: AiPlaceResearchResponse; groundingSources: GroundingSource[] }> {
   if (!env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
   const endpoint = new URL(
@@ -203,15 +204,37 @@ export async function researchPlacesWithGemini(
   }
   const payload = (await response.json()) as {
     candidates?: {
+      finishReason?: string;
+      finishMessage?: string;
       content?: { parts?: { text?: string }[] };
       groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] };
     }[];
+    promptFeedback?: { blockReason?: string; blockReasonMessage?: string };
   };
   const candidate = payload.candidates?.[0];
   const text = candidate?.content?.parts?.map((part) => part.text ?? "").join("").trim();
+  if (!text && attempt < 1) {
+    logger.warn("Gemini place grounding returned no text; retrying once", {
+      model: env.GROUNDING_MODEL_ID,
+      finishReason: candidate?.finishReason,
+      finishMessage: candidate?.finishMessage,
+      blockReason: payload.promptFeedback?.blockReason,
+      partCount: candidate?.content?.parts?.length ?? 0,
+    });
+    return researchPlacesWithGemini(ctx, attempt + 1);
+  }
   const parsed = text ? safeJsonParse(text) : null;
   const validated = aiPlaceResearchResponseSchema.safeParse(parsed);
-  if (!validated.success) throw new Error(`Gemini place dossier failed validation: ${validated.error.message.slice(0, 400)}`);
+  if (!validated.success) {
+    if (attempt < 1) {
+      logger.warn("Gemini place dossier failed validation; retrying once", {
+        model: env.GROUNDING_MODEL_ID,
+        issue: validated.error.message.slice(0, 400),
+      });
+      return researchPlacesWithGemini(ctx, attempt + 1);
+    }
+    throw new Error(`Gemini place dossier failed validation: ${validated.error.message.slice(0, 400)}`);
+  }
 
   const chunkSources: GroundingSource[] = (candidate?.groundingMetadata?.groundingChunks ?? [])
     .filter((chunk) => chunk.web?.uri)

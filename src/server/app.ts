@@ -16,6 +16,7 @@ import { historyRouter } from "./plans/history.routes.js";
 import { chatRouter } from "./chat/routes.js";
 import { HttpError } from "./http.js";
 import { logger } from "./logger.js";
+import { AiUnavailableError } from "./ai/deepseek.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -66,6 +67,10 @@ export function createApp() {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (err instanceof AiUnavailableError) {
+      res.status(503).json({ error: "Grounded planning is temporarily unavailable. Please try again." });
+      return;
+    }
     if (err instanceof HttpError) {
       res.status(err.status).json({ error: err.message });
       return;

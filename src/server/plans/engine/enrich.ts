@@ -252,7 +252,7 @@ function isWalkingBeat(beat: AiCandidate["beats"][number]): boolean {
   if (/food|meal|dinner|lunch|restaurant|dining|cafe|café/i.test(`${beat.category} ${beat.place?.kind ?? ""}`)) {
     return false;
   }
-  return /walk|stroll|hike|promenade|wander|park|garden|viewpoint|miradouro|jardim/i.test(
+  return /walk|stroll|hike|promenade|park|garden|viewpoint|miradouro|jardim/i.test(
     `${beat.title} ${beat.category} ${beat.description} ${beat.place?.kind ?? ""}`
   );
 }
@@ -289,9 +289,16 @@ function normalizeWalkingDuration(
     const walkingPosition = walkingIndexes.indexOf(index);
     if (walkingPosition < 0) return beat;
     const isLast = walkingPosition === walkingIndexes.length - 1;
+    const remainingMinimum = (walkingIndexes.length - walkingPosition - 1) * minimumPerWalk;
     const durationMinutes = isLast
       ? activityBudget - allocated
-      : Math.max(minimumPerWalk, Math.round((activityBudget * currentWeights[walkingPosition]) / weightTotal));
+      : Math.max(
+          minimumPerWalk,
+          Math.min(
+            Math.round((activityBudget * currentWeights[walkingPosition]) / weightTotal),
+            activityBudget - allocated - remainingMinimum
+          )
+        );
     allocated += durationMinutes;
     return { ...beat, durationMinutes };
   });
