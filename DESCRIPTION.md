@@ -5,9 +5,10 @@ involved. It supports four scales — Day off, Weekend, Getaway, and Vacation
 — as modes of a single engine, and learns safely from explicit choices and
 feedback while keeping a fully inspectable household memory.
 
-This is the local v1 MVP: a complete, runnable single-package application
-(React/Vite/TypeScript client + Express/TypeScript API), built exactly to
-[`PRODUCT-CONTRACT.md`](./PRODUCT-CONTRACT.md), ready for independent QA.
+The v1 MVP is live at **https://planbuddy.onrender.com** and mirrored at
+**https://github.com/dmcaetano/planbuddy**. It is a single-package application
+(React/Vite/TypeScript client + Express/TypeScript API), built to
+[`PRODUCT-CONTRACT.md`](./PRODUCT-CONTRACT.md).
 
 ## The loop
 
@@ -116,14 +117,14 @@ npm test              # Vitest: unit + AI-contract + Supertest integration
 npm run test:e2e     # Playwright: signup → onboard → generate → reject → lock → feedback → Memory
 ```
 
-All of the above are green as of this build (59 Vitest tests, 1 Playwright
+All of the above are green as of this build (68 Vitest tests, 1 Playwright
 scenario, zero TypeScript or ESLint errors).
 
 ## What's intentionally out of scope for v1
 
 - No live place-resolver integration is wired up (the pluggable interface
   exists; the app runs in Inspiration mode without a provider key).
-- No Render/Neon deployment was performed in this session — this is local,
-  build-verified work on the `build-mvp` branch, not pushed or deployed.
+- Venue-specific live facts remain disabled until a place-resolver provider is
+  configured; the deployed app labels this honestly as Inspiration mode.
 - No booking or detailed itinerary generation (by design — see the product
   contract's immutable principle #10).

@@ -49,13 +49,17 @@ Reviewed 2026-07-19 by Codex after the Claude/Fable/Sonnet build handoff.
 - Added accessible names to onboarding participant controls.
 - Upgraded Vite/Vitest to patched releases after the initial audit flagged
   development-server advisories.
+- Routed the large DeepSeek request through a low-latency provider with fallback,
+  normalized harmless JSON envelopes, and added a bounded timeout.
+- Corrected the hard-filter false positive that treated “gluten-safe,”
+  “gluten-free,” and explicit avoidance language as violations.
 
 ## 4. Final local results
 
 - Type-check: **pass**
 - Lint: **pass**
 - Production build: **pass**
-- Unit/contract/integration: **61/61 pass** across 7 files
+- Unit/contract/integration: **68/68 pass** across 8 files
 - Browser journey: **1/1 pass** on mobile Chrome
 - Dependency audit: **0 vulnerabilities**
 - Visual inspection: **pass** on desktop and mobile
@@ -64,8 +68,17 @@ The browser console records one expected 401 for the initial anonymous
 `/api/auth/me` probe; it is handled by the auth provider and is not an app
 failure or leaked exception.
 
-## 5. Readiness
+## 5. Production canary
 
-The local MVP is accepted for merge and production deployment. The remaining
-gate is a live Render/Neon/OpenRouter canary using deployed secrets and the real
-DeepSeek model.
+- URL: https://planbuddy.onrender.com
+- Render deploy: `dep-d9ed6fhoagis7397kurg` (`d8ba6cc`, live)
+- Neon project: `aged-dream-11028120`, dedicated to PlanBuddy
+- Health, signup/login, family and pet persistence: **pass**
+- Real DeepSeek V4 Flash recommendation and chat: **pass**
+- Two hard constraints visible on the winning ticket: **pass**
+- Lock, feedback-to-hunch learning, chat memory extraction: **pass**
+- Fresh-login history and memory persistence: **pass**
+
+## 6. Readiness
+
+The v1 MVP is accepted, merged, deployed, and production-canary verified.

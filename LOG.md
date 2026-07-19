@@ -64,3 +64,28 @@ Independent QA of `build-mvp`. Then: live DeepSeek canary with a real
 `OPENROUTER_API_KEY`, Neon provisioning + `DATABASE_URL` + `npm run migrate`,
 Render deployment, and a live Lighthouse/accessibility pass. Not deployed,
 pushed, or exercised against live external services in this session.
+
+## 2026-07-19 — Reviewed and released to production
+
+### What we did
+Reviewed the Claude/Sonnet handoff independently, fixed persistence and tenant
+safety gaps, upgraded vulnerable development dependencies, added explicit
+thumbs learning, verified the responsive UI, and merged the MVP to `main`.
+Published https://github.com/dmcaetano/planbuddy and deployed
+https://planbuddy.onrender.com on Render with dedicated Neon project
+`aged-dream-11028120` in Frankfurt.
+
+### Live issues found and fixed
+The first database target had exhausted its transfer quota, so PlanBuddy was
+moved to its own Neon project. The large DeepSeek request then exposed provider
+latency, JSON-envelope variability, and a false positive where “gluten-safe”
+was treated as a gluten violation. Added bounded provider routing, conservative
+JSON-envelope normalization followed by Zod validation, and safe-context-aware
+mechanical filtering with regression tests.
+
+### Result
+The final public canary passed health, signup/login, household and pet memory,
+real DeepSeek recommendation and chat, two hard constraints on the winning
+ticket, lock, feedback-to-hunch learning, chat extraction, and persistence
+after a fresh login. All 68 Vitest tests, Playwright, typecheck, lint, build,
+visual review, and dependency audit are green.

@@ -51,12 +51,11 @@
     <span class="badge b-sky">DeepSeek V4 Flash + demo AI</span>
   </div>
 
-  <p>PlanBuddy turns "what should we do?" into one lockable plan. This is the
-  local v1 MVP built to the frozen product contract: a single-package React
-  client and Express API, normalized Postgres with a zero-setup local
-  fallback, secure auth, full-CRUD household memory, four planning modes,
-  and a deterministic recommendation engine sitting on top of a pluggable
-  AI proposer.</p>
+  <p>PlanBuddy turns "what should we do?" into one lockable plan. The v1 MVP
+  is live at <a href="https://planbuddy.onrender.com">planbuddy.onrender.com</a>:
+  a single-package React client and Express API, dedicated Neon persistence,
+  secure auth, full-CRUD household memory, four planning modes, and a
+  deterministic recommendation engine sitting on top of DeepSeek V4 Flash.</p>
 
   <h2>The smallest lovable loop</h2>
   <ol>
@@ -107,12 +106,12 @@ npm run lint          # ESLint
 npm run build          # vite build + tsc build
 npm test                 # Vitest: unit + AI-contract + Supertest integration
 npm run test:e2e        # Playwright: signup → onboard → generate → reject → lock → feedback → Memory</pre>
-  <p>All green as of this build: 59 Vitest tests, 1 Playwright scenario, zero TypeScript/ESLint errors.</p>
+  <p>All green as of this build: 68 Vitest tests, 1 Playwright scenario, a live production canary, and zero TypeScript/ESLint errors.</p>
 
   <h2>Out of scope for v1</h2>
   <ul>
     <li>No live place-resolver provider wired up (interface is pluggable; Inspiration mode by default).</li>
-    <li>No Render/Neon deployment performed — local, build-verified work on <code>build-mvp</code>, not pushed.</li>
+    <li>No venue-specific live facts until a place-resolver provider is configured; the deployed app labels this as Inspiration mode.</li>
     <li>No booking or detailed itinerary generation, by design.</li>
   </ul>
 
