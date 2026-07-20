@@ -90,6 +90,24 @@ export async function getActiveJobForUser(userId: string): Promise<JobView | nul
   return row ? toView(row) : null;
 }
 
+const ACTIVE_JOB_UNIQUE_INDEX = "idx_plan_generation_jobs_one_active_per_user";
+
+/**
+ * True if `err` is the Postgres/PGlite unique-violation raised by the
+ * partial unique index that enforces "one active job per user"
+ * (migration 0008). Both drivers surface the same SQLSTATE (23505) and
+ * `constraint` name, but we also fall back to a message match in case a
+ * future driver/version doesn't populate `constraint`.
+ */
+function isActiveJobUniqueViolation(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: unknown; constraint?: unknown; message?: unknown };
+  const isUniqueViolation = e.code === "23505";
+  if (!isUniqueViolation) return false;
+  if (e.constraint === ACTIVE_JOB_UNIQUE_INDEX) return true;
+  return typeof e.message === "string" && e.message.includes(ACTIVE_JOB_UNIQUE_INDEX);
+}
+
 async function createJobRow(input: {
   userId: string;
   operation: JobOperation;
@@ -127,12 +145,19 @@ async function persistStage(id: string, stage: StageKey): Promise<void> {
 
 async function completeJob(id: string, result: unknown): Promise<void> {
   const db = await getDb();
-  await db.query(
+  // Only transition a job that is still 'running' — if the sweep already
+  // failed it out (interrupted-job cutoff) while the executor kept working,
+  // that terminal state must win; a late success must never resurrect it.
+  const { rows } = await db.query<{ id: string }>(
     `UPDATE plan_generation_jobs
      SET status = 'succeeded', result = $2, progress_pct = 100, updated_at = now()
-     WHERE id = $1`,
+     WHERE id = $1 AND status = 'running'
+     RETURNING id`,
     [id, stringifyJsonForDb(result)]
   );
+  if (rows.length === 0) {
+    logger.warn("completeJob: job was not 'running' (already terminalized elsewhere) — result discarded", { jobId: id });
+  }
 }
 
 async function failJob(id: string, errorCode: string, errorMessage: string): Promise<void> {
@@ -140,7 +165,7 @@ async function failJob(id: string, errorCode: string, errorMessage: string): Pro
   await db.query(
     `UPDATE plan_generation_jobs
      SET status = 'failed', error_code = $2, error_message = $3, updated_at = now()
-     WHERE id = $1`,
+     WHERE id = $1 AND status = 'running'`,
     [id, errorCode, errorMessage]
   );
 }
@@ -223,15 +248,33 @@ export async function enqueueGenerationJob(params: {
     if (existing) return { jobId: existing.id, existing: true };
   }
 
+  // Fast path: pre-check to avoid the round-trip cost of a doomed insert in
+  // the common (non-racing) case. This alone is NOT the guarantee — two
+  // concurrent requests can both pass this check before either inserts — so
+  // the partial unique index (migration 0008) on
+  // plan_generation_jobs(user_id) WHERE status IN ('queued','running') is
+  // the real enforcement, and the catch below folds the loser of the race
+  // onto the winner's job instead of erroring.
   const active = await findActiveJobForUser(params.userId);
   if (active) return { jobId: active.id, existing: true };
 
-  const job = await createJobRow({
-    userId: params.userId,
-    operation: params.operation,
-    requestPayload: params.requestPayload,
-    idempotencyKey,
-  });
+  let job: JobRow;
+  try {
+    job = await createJobRow({
+      userId: params.userId,
+      operation: params.operation,
+      requestPayload: params.requestPayload,
+      idempotencyKey,
+    });
+  } catch (err) {
+    if (!isActiveJobUniqueViolation(err)) throw err;
+    const winner = await findActiveJobForUser(params.userId);
+    if (winner) return { jobId: winner.id, existing: true };
+    // Extremely unlikely: the row that caused the violation was already
+    // terminalized between the failed insert and this re-read. Re-throw so
+    // the caller sees a real error rather than silently fabricating a job.
+    throw err;
+  }
 
   // Fire-and-forget: never await this in the request handler. Errors are
   // fully contained inside runDetached (terminalized on the job row), so an

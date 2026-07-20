@@ -83,4 +83,10 @@ test("signup -> generate -> Love -> Buddy edit -> share -> dislike -> lock -> fe
   await page.getByRole("link", { name: "Memory" }).click();
   await expect(page.getByText(/peanut/i).first()).toBeVisible();
   await expect(page.getByText("Unverified quote")).toBeVisible();
+
+  // Logout affordance: signed-in email + Log out control at the bottom of Memory, and it actually
+  // signs the user out (lands back on the auth page).
+  await expect(page.getByText(email)).toBeVisible();
+  await page.getByRole("button", { name: /Log out/i }).click();
+  await expect(page.getByRole("button", { name: "Create account" })).toBeVisible({ timeout: 10000 });
 });

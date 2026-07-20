@@ -196,7 +196,10 @@ export async function researchPlacesWithGemini(
         thinkingConfig: { thinkingBudget: 400 },
       },
     }),
-    signal: AbortSignal.timeout(env.AI_TIMEOUT_MS),
+    // Gemini attempts must fail over to the DeepSeek fallback chain fast
+    // during a provider outage (e.g. 503 "high demand"); this stays short and
+    // independent of the much larger DeepSeek grounded/composition timeout.
+    signal: AbortSignal.timeout(env.GEMINI_TIMEOUT_MS),
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
@@ -287,7 +290,10 @@ export async function composePlanWithGemini(ctx: GenerateContext): Promise<AiGen
         thinkingConfig: { thinkingBudget: 400 },
       },
     }),
-    signal: AbortSignal.timeout(env.AI_TIMEOUT_MS),
+    // Gemini attempts must fail over to the DeepSeek fallback chain fast
+    // during a provider outage (e.g. 503 "high demand"); this stays short and
+    // independent of the much larger DeepSeek grounded/composition timeout.
+    signal: AbortSignal.timeout(env.GEMINI_TIMEOUT_MS),
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");

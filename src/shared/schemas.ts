@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SCALES } from "./scale.js";
+import { QUIZ_QUESTIONS } from "./quiz.js";
 
 /* ---------------------------------------------------------------------- */
 /* Auth                                                                    */
@@ -70,8 +71,45 @@ export const quizAnswerSchema = z.object({
   optionIds: z.array(z.string().trim().min(1).max(40)).max(10),
 });
 
+const QUIZ_QUESTIONS_BY_ID = new Map(QUIZ_QUESTIONS.map((q) => [q.id, q]));
+
+/**
+ * Beyond shape validation, guards against "row amplification": a payload
+ * that answers the same question twice (each copy would independently
+ * produce writes downstream), or that selects more options than a question
+ * actually allows (a single-select question accepts exactly 1 option id; a
+ * multi-select question is capped at its declared maxSelect, or — for a
+ * "select all that apply" question with no maxSelect, like "avoid" — at its
+ * total option count). Unknown question/option ids are intentionally left
+ * for resolveQuizWrites to silently drop (see src/shared/quiz.ts) rather
+ * than rejected here, since the quiz is optional/best-effort by design.
+ */
 export const quizSubmitSchema = z.object({
   answers: z.array(quizAnswerSchema).max(20),
+}).superRefine((body, ctx) => {
+  const seenQuestionIds = new Set<string>();
+  body.answers.forEach((answer, index) => {
+    if (seenQuestionIds.has(answer.questionId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Duplicate answer for question "${answer.questionId}"`,
+        path: ["answers", index, "questionId"],
+      });
+      return;
+    }
+    seenQuestionIds.add(answer.questionId);
+
+    const question = QUIZ_QUESTIONS_BY_ID.get(answer.questionId);
+    if (!question) return;
+    const selectLimit = question.multi ? question.maxSelect ?? question.options.length : 1;
+    if (answer.optionIds.length > selectLimit) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Question "${answer.questionId}" allows at most ${selectLimit} selection(s)`,
+        path: ["answers", index, "optionIds"],
+      });
+    }
+  });
 });
 
 /* ---------------------------------------------------------------------- */

@@ -6,6 +6,20 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 export class AiUnavailableError extends Error {}
 
+/**
+ * OpenRouter returned finish_reason "length" with an empty message: the
+ * reasoning model spent its entire completion-token budget on hidden
+ * reasoning tokens and had nothing left for visible content. This is
+ * recoverable -- a single retry with reasoning forced low/excluded almost
+ * always yields real content -- so it is distinguished from a hard failure.
+ */
+export class ReasoningStarvedError extends Error {
+  constructor(message = "OpenRouter exhausted its token budget on reasoning and returned no content") {
+    super(message);
+    this.name = "ReasoningStarvedError";
+  }
+}
+
 export interface GroundingSource {
   url: string;
   title: string;
@@ -14,6 +28,10 @@ export interface GroundingSource {
 interface AiCallOptions {
   webSearch?: boolean;
   repairNote?: string;
+  /** Full plan composition runs a materially larger schema than chat/feedback/etc. and needs more token + time headroom. */
+  heavy?: boolean;
+  /** Internal: set on the single retry after a ReasoningStarvedError to force a short, low-reasoning answer. */
+  directAnswer?: boolean;
 }
 
 interface RawAiReply {
@@ -25,10 +43,13 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
   if (!env.OPENROUTER_API_KEY) {
     throw new AiUnavailableError("OPENROUTER_API_KEY not configured");
   }
+  const directAnswerNote = options.directAnswer
+    ? "\n\nAnswer directly now. Do not use extended step-by-step reasoning -- respond immediately with the final JSON only."
+    : "";
   const messages = options.webSearch
-    ? [{ role: "user", content: `${systemPrompt}\n\nREQUEST\n${userPrompt}` }]
+    ? [{ role: "user", content: `${systemPrompt}${directAnswerNote}\n\nREQUEST\n${userPrompt}` }]
     : [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: `${systemPrompt}${directAnswerNote}` },
         { role: "user", content: userPrompt },
       ];
   if (options.repairNote) {
@@ -36,11 +57,28 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
   }
 
   const controller = new AbortController();
-  // Candidate generation is materially larger than chat/feedback JSON. Give
-  // the fast model enough room for a cold provider start while retaining a
-  // hard upper bound so the deterministic fallback can still take over.
-  const timeout = setTimeout(() => controller.abort(), env.AI_TIMEOUT_MS);
+  // Grounded web-search and full plan-composition calls carry much larger
+  // reasoning+content budgets than chat/feedback JSON and need real
+  // wall-clock headroom, especially when running as the DeepSeek fallback
+  // for a degraded Gemini. Lightweight calls keep the shorter timeout.
+  const timeoutMs = options.webSearch || options.heavy ? env.AI_COMPOSE_TIMEOUT_MS : env.AI_TIMEOUT_MS;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    // Candidate generation (composition) is materially larger than
+    // chat/feedback JSON. Give the fast model enough room for a cold
+    // provider start while retaining a hard upper bound so the deterministic
+    // fallback can still take over.
+    const maxTokens = options.webSearch ? 12000 : options.heavy ? 28000 : 6000;
+    // Reasoning models can silently spend the *entire* completion-token
+    // budget on hidden reasoning and emit zero visible content (see
+    // ReasoningStarvedError above -- this is exactly what happened in
+    // production: 24.5k reasoning tokens, 0 content, against a 6000-token
+    // cap). Always cap reasoning tokens well under max_tokens so real
+    // content headroom survives even a "high demand" degraded run.
+    const reasoning =
+      options.webSearch || options.directAnswer
+        ? { effort: "low" as const, exclude: true }
+        : { max_tokens: options.heavy ? 8000 : Math.min(2500, Math.floor(maxTokens / 2)) };
     const res = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: {
@@ -52,8 +90,8 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
         messages,
         response_format: { type: "json_object" },
         temperature: options.webSearch ? 0.45 : 0.7,
-        max_tokens: options.webSearch ? 5000 : 6000,
-        ...(options.webSearch ? { reasoning: { effort: "low", exclude: true } } : {}),
+        max_tokens: maxTokens,
+        reasoning,
         ...(options.webSearch
           ? {
               // DeepSeek currently completes a single injected Exa search far
@@ -93,15 +131,19 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
     };
     const message = data.choices?.[0]?.message;
     const content = message?.content;
+    const finishReason = data.choices?.[0]?.finish_reason;
     if (!content) {
       logger.warn("OpenRouter returned an empty assistant message", {
         choiceCount: data.choices?.length ?? 0,
         messageKeys: message ? Object.keys(message) : [],
-        finishReason: data.choices?.[0]?.finish_reason,
+        finishReason,
         reasoningLength: ((message as { reasoning?: string } | undefined)?.reasoning ?? "").length,
         annotationCount: message?.annotations?.length ?? 0,
         hasToolCalls: Boolean((message as { tool_calls?: unknown[] } | undefined)?.tool_calls?.length),
       });
+      if (finishReason === "length" && !options.directAnswer) {
+        throw new ReasoningStarvedError();
+      }
       throw new Error("OpenRouter returned no content");
     }
     const groundingSources = (message.annotations ?? [])
@@ -114,6 +156,29 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
 }
 
 /**
+ * Wraps a single OpenRouter call with the one-shot reasoning-starvation
+ * recovery: if the model burned its whole token budget on reasoning and
+ * returned no content, retry exactly once with reasoning forced low and an
+ * explicit "answer directly" instruction instead of failing the whole
+ * generation outright.
+ */
+async function callWithLengthRetry(systemPrompt: string, userPrompt: string, options: AiCallOptions): Promise<RawAiReply> {
+  try {
+    return await callOpenRouter(systemPrompt, userPrompt, options);
+  } catch (err) {
+    if (err instanceof ReasoningStarvedError) {
+      logger.warn("AI call hit its reasoning token cap with no content; retrying once as a direct answer", {
+        model: env.MODEL_ID,
+        webSearch: Boolean(options.webSearch),
+        heavy: Boolean(options.heavy),
+      });
+      return callOpenRouter(systemPrompt, userPrompt, { ...options, directAnswer: true });
+    }
+    throw err;
+  }
+}
+
+/**
  * Calls the model, validates the JSON reply against `schema`, and — on any
  * parse or schema failure — retries exactly once with a repair note before
  * giving up. Non-sensitive request metadata only is logged; full prompts
@@ -122,16 +187,17 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
 export async function callAiJson<T>(
   systemPrompt: string,
   userPrompt: string,
-  schema: ZodType<T, ZodTypeDef, unknown>
+  schema: ZodType<T, ZodTypeDef, unknown>,
+  options: { heavy?: boolean } = {}
 ): Promise<T> {
-  let raw = await callOpenRouter(systemPrompt, userPrompt);
+  let raw = await callWithLengthRetry(systemPrompt, userPrompt, options);
   let parsed = safeJsonParse(raw.content);
   let result = parsed ? schema.safeParse(parsed) : null;
 
   if (!result || !result.success) {
     const issue = result ? JSON.stringify(result.error.flatten()).slice(0, 400) : "not valid JSON";
     logger.warn("AI response failed validation, attempting one repair", { model: env.MODEL_ID, issue });
-    raw = await callOpenRouter(systemPrompt, userPrompt, { repairNote: issue });
+    raw = await callWithLengthRetry(systemPrompt, userPrompt, { ...options, repairNote: issue });
     parsed = safeJsonParse(raw.content);
     result = parsed ? schema.safeParse(parsed) : null;
   }
@@ -155,14 +221,14 @@ export async function callAiJsonGrounded<T>(
   userPrompt: string,
   schema: ZodType<T, ZodTypeDef, unknown>
 ): Promise<{ data: T; groundingSources: GroundingSource[] }> {
-  let raw = await callOpenRouter(systemPrompt, userPrompt, { webSearch: true });
+  let raw = await callWithLengthRetry(systemPrompt, userPrompt, { webSearch: true });
   let parsed = safeJsonParse(raw.content);
   let result = parsed ? schema.safeParse(parsed) : null;
 
   if (!result || !result.success) {
     const issue = result ? JSON.stringify(result.error.flatten()).slice(0, 500) : "not valid JSON";
     logger.warn("Grounded AI response failed validation, attempting one repair", { model: env.MODEL_ID, issue });
-    raw = await callOpenRouter(systemPrompt, userPrompt, { webSearch: true, repairNote: issue });
+    raw = await callWithLengthRetry(systemPrompt, userPrompt, { webSearch: true, repairNote: issue });
     parsed = safeJsonParse(raw.content);
     result = parsed ? schema.safeParse(parsed) : null;
   }

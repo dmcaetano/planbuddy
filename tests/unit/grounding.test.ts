@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { canonicalizeCandidatePlaces } from "../../src/server/ai/index.js";
 import { buildGenerateUserPrompt, buildPlaceResearchUserPrompt } from "../../src/server/ai/prompts.js";
+import { composePlanWithGemini, researchPlacesWithGemini } from "../../src/server/grounding/geminiPlaces.js";
+import { env } from "../../src/server/env.js";
 import type { GenerateContext } from "../../src/server/ai/demoAi.js";
 import type { AiGenerateResponse, AiPlaceResearchResponse } from "../../src/shared/schemas.js";
 
@@ -84,5 +86,50 @@ describe("grounded novelty prompts", () => {
     };
     expect(buildPlaceResearchUserPrompt(context)).toContain("Jardim Central");
     expect(buildGenerateUserPrompt(context)).toContain("Jardim Central");
+  });
+});
+
+describe("Gemini 503 fails over fast without extra retries", () => {
+  const originalKey = env.GEMINI_API_KEY;
+  const originalFetch = global.fetch;
+  const minimalCtx: GenerateContext = {
+    scale: "day_off",
+    moodContext: null,
+    radiusKm: 25,
+    activeConstraints: [],
+    loveTastes: [],
+    seed: "gemini-outage-test",
+  };
+
+  beforeEach(() => {
+    env.GEMINI_API_KEY = "test-gemini-key";
+  });
+
+  afterEach(() => {
+    env.GEMINI_API_KEY = originalKey;
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("throws immediately on a 503 from place research -- exactly one HTTP call, no internal retry", async () => {
+    global.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      text: async () => "UNAVAILABLE: high demand",
+    })) as unknown as typeof fetch;
+
+    await expect(researchPlacesWithGemini(minimalCtx)).rejects.toThrow(/503/);
+    expect((global.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+  });
+
+  it("throws immediately on a 503 from plan composition -- exactly one HTTP call, no internal retry", async () => {
+    global.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      text: async () => "UNAVAILABLE: high demand",
+    })) as unknown as typeof fetch;
+
+    await expect(composePlanWithGemini(minimalCtx)).rejects.toThrow(/503/);
+    expect((global.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
   });
 });

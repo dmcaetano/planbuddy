@@ -139,6 +139,11 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
   userIdRef.current = userId;
   // Indirection so scheduleNext/pollOnce can reference each other without a use-before-define cycle.
   const pollFnRef = useRef<((jobId: string) => Promise<void>) | null>(null);
+  // Bumped on user change (incl. logout), dismiss(), and provider unmount. An in-flight poll request
+  // or an already-armed setTimeout captures the epoch at issue time; if the epoch has moved on by the
+  // time the response/timer fires, it's a stale callback from a previous "session" (old user, or a
+  // dismissed job) and must not schedule another timer or apply its result to state.
+  const epochRef = useRef(0);
 
   useEffect(() => {
     jobRef.current = job;
@@ -154,16 +159,24 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
   const scheduleNext = useCallback((jobId: string, overrideDelay?: number) => {
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     const delay = overrideDelay ?? (typeof document !== "undefined" && document.hidden ? 5000 : 1500);
+    const epoch = epochRef.current;
     timerRef.current = window.setTimeout(() => {
+      // The epoch moved on (user change/logout, dismiss, or unmount) between scheduling and firing —
+      // this timer is for a stopped session and must not resurrect polling.
+      if (epochRef.current !== epoch) return;
       void pollFnRef.current?.(jobId);
     }, delay);
   }, []);
 
   const pollOnce = useCallback(
     async (jobId: string) => {
+      const epoch = epochRef.current;
       let backoffDelay: number | undefined;
       try {
         const data = await api.get<PlanJobPollResponse>(`/plan-jobs/${jobId}`);
+        // The request was in flight when the session stopped (logout/dismiss/unmount/user switch) —
+        // never apply a stale response to whatever state exists now.
+        if (epochRef.current !== epoch) return;
         failureStartRef.current = null;
         failureCountRef.current = 0;
         setConnectionWarning(false);
@@ -192,6 +205,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           return;
         }
       } catch (err) {
+        if (epochRef.current !== epoch) return;
         if (err instanceof ApiError && err.status === 404) {
           stopPolling();
           setJob(null);
@@ -208,6 +222,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
         backoffDelay = Math.min(1500 * 2 ** failureCountRef.current, MAX_BACKOFF_MS);
       }
 
+      if (epochRef.current !== epoch) return;
       const current = jobRef.current;
       if (current && current.jobId === jobId && isActiveStatus(current.status)) {
         scheduleNext(jobId, backoffDelay);
@@ -262,6 +277,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
 
   // Bootstrap / reattach whenever the signed-in user changes (including logout, which clears everything).
   useEffect(() => {
+    epochRef.current += 1; // invalidate any poll/timer left over from the previous user/session
     stopPolling();
     setJob(null);
     jobRef.current = null;
@@ -319,7 +335,13 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     };
   }, [pollOnce, stopPolling]);
 
-  useEffect(() => stopPolling, [stopPolling]);
+  useEffect(
+    () => () => {
+      epochRef.current += 1; // provider unmounting — no timer/response fired after this may act
+      stopPolling();
+    },
+    [stopPolling]
+  );
 
   const startAction = useCallback(
     async (kind: JobKind, specId: string | null, path: string, body: Record<string, unknown>) => {
@@ -368,6 +390,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
   }, [startAction]);
 
   const dismiss = useCallback(() => {
+    epochRef.current += 1; // any poll/timer already in flight for this job must not act after dismiss
     stopPolling();
     setJob(null);
     jobRef.current = null;

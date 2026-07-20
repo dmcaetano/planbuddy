@@ -87,6 +87,33 @@ describe("friend blocking", () => {
     expect((await alice.agent.get("/api/friends")).body.friends).toHaveLength(1);
   });
 
+  it("a block racing an invite acceptance never leaves an active friendship coexisting with an active block", async () => {
+    // acceptFriendInvite checks isBlockedPair before activating the friendship, but the check and
+    // the activation aren't in one transaction -- a block created in that window used to be able to
+    // slip through. acceptFriendInvite now re-checks isBlockedPair immediately after activation and
+    // tears the friendship back down if a block landed in between. Firing the accept and the block
+    // concurrently exercises both the pre-check and (whichever request's activation lands first) the
+    // post-check compensation; either way the invariant below must hold.
+    const alice = await account(app, "block-race-alice@example.com");
+    const bob = await account(app, "block-race-bob@example.com");
+    const token = await sendInvite(alice);
+
+    const [, blockRes] = await Promise.all([
+      bob.agent.post(`/api/friends/invites/${token}/accept`).set(HDR, "1"),
+      alice.agent.post(`/api/friends/${bob.userId}/block`).set(HDR, "1"),
+    ]);
+    expect(blockRes.status).toBe(204);
+
+    const blocked = (await alice.agent.get("/api/friends/blocked").set(HDR, "1")).body.blocked;
+    expect(blocked).toHaveLength(1);
+    expect(blocked[0].userId).toBe(bob.userId);
+
+    // The invariant that must never break, regardless of which request "won" the race: a blocked
+    // pair is never simultaneously an active friendship.
+    expect((await alice.agent.get("/api/friends").set(HDR, "1")).body.friends).toHaveLength(0);
+    expect((await bob.agent.get("/api/friends").set(HDR, "1")).body.friends).toHaveLength(0);
+  });
+
   it("a second unblock of a never-blocked user 404s, and self-block is rejected", async () => {
     const alice = await account(app, "block-self-alice@example.com");
     const bob = await account(app, "block-self-bob@example.com");

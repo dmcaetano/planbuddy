@@ -123,6 +123,33 @@ describe("filterCandidates", () => {
     expect(kept).toHaveLength(1);
   });
 
+  it("strips an unresolvable memory-prefixed citation instead of rejecting the candidate", () => {
+    const knownFacts = new Map([["t1", "loves parks and picnics"]]);
+    const candidate = makeCandidate({
+      citations: [
+        { factId: "t1", quote: "loves parks", source: "taste" },
+        { factId: "memory-234cf483", quote: "some prior conversation detail", source: "taste" },
+      ],
+    });
+    const { kept, rejected } = filterCandidates([candidate], baseCtx({ knownFacts }));
+    expect(rejected).toHaveLength(0);
+    expect(kept).toHaveLength(1);
+    expect(kept[0].citations).toEqual([{ factId: "t1", quote: "loves parks", source: "taste" }]);
+  });
+
+  it("still rejects a genuinely fabricated citation id that is not memory-prefixed", () => {
+    const candidate = makeCandidate({ citations: [{ factId: "invented-fact", quote: "loves museums", source: "taste" }] });
+    const { kept, rejected } = filterCandidates([candidate], baseCtx());
+    expect(kept).toHaveLength(0);
+    expect(rejected[0].reason).toContain("invalid citation");
+  });
+
+  it("never includes the raw internal fact id in the rejection reason", () => {
+    const candidate = makeCandidate({ citations: [{ factId: "missing-secret-id-abc123", quote: "loves parks", source: "taste" }] });
+    const { rejected } = filterCandidates([candidate], baseCtx());
+    expect(rejected[0].reason).not.toContain("missing-secret-id-abc123");
+  });
+
   it("rejects candidates with an impossible travel radius for non-trip scales", () => {
     const candidate = makeCandidate({ travelEstimateKm: 500 });
     const { kept, rejected } = filterCandidates([candidate], baseCtx({ radiusKm: 25, isTripScale: false }));

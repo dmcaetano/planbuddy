@@ -95,4 +95,46 @@ describe("friend circle labels", () => {
     const carolSummary = await carol.agent.get("/api/friends/labels").set(HDR, "1");
     expect(carolSummary.body.labels).toEqual([]);
   });
+
+  it("removing or blocking a labeled friend drops them from friendUserIds/memberCount but keeps the label (as the owner's vocabulary) at memberCount 0", async () => {
+    const alice = await account(app, "labels-removed-alice@example.com");
+    const bob = await account(app, "labels-removed-bob@example.com");
+    const carol = await account(app, "labels-removed-carol@example.com");
+    await connect(alice, bob);
+    await connect(alice, carol);
+
+    await alice.agent.put(`/api/friends/${bob.userId}/labels`).set(HDR, "1").send({ labels: ["Family"] });
+    await alice.agent.put(`/api/friends/${carol.userId}/labels`).set(HDR, "1").send({ labels: ["Family"] });
+
+    // Sanity: both are active members before either is removed.
+    const before = await alice.agent.get("/api/friends/labels").set(HDR, "1");
+    const familyBefore = (before.body.labels as { name: string; memberCount: number; friendUserIds: string[] }[]).find(
+      (l) => l.name === "Family"
+    )!;
+    expect(familyBefore.memberCount).toBe(2);
+
+    // Remove bob as a friend -- he must disappear from the summary's friendUserIds/memberCount even
+    // though the friend_label_assignments row for him was never deleted.
+    const remove = await alice.agent.delete(`/api/friends/${bob.userId}`).set(HDR, "1");
+    expect(remove.status).toBe(204);
+
+    const afterRemove = await alice.agent.get("/api/friends/labels").set(HDR, "1");
+    const familyAfterRemove = (afterRemove.body.labels as { name: string; memberCount: number; friendUserIds: string[] }[]).find(
+      (l) => l.name === "Family"
+    )!;
+    expect(familyAfterRemove.memberCount).toBe(1);
+    expect(familyAfterRemove.friendUserIds).toEqual([carol.userId]);
+
+    // Now block carol too -- blocking also ends the friendship, so she must drop out as well, but the
+    // "Family" label itself (the owner's vocabulary) must still be returned, at memberCount 0.
+    const block = await alice.agent.post(`/api/friends/${carol.userId}/block`).set(HDR, "1");
+    expect(block.status).toBe(204);
+
+    const afterBlock = await alice.agent.get("/api/friends/labels").set(HDR, "1");
+    const familyAfterBlock = (afterBlock.body.labels as { name: string; memberCount: number; friendUserIds: string[] }[]).find(
+      (l) => l.name === "Family"
+    )!;
+    expect(familyAfterBlock.memberCount).toBe(0);
+    expect(familyAfterBlock.friendUserIds).toEqual([]);
+  });
 });

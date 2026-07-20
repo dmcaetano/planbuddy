@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { Constraint, Hunch, Participant, Taste } from "../api/types";
-import { Check, Plus, ShieldCheck, ShieldQuestion, Sparkles, Trash2, X } from "lucide-react";
+import { Check, LogOut, Plus, ShieldCheck, ShieldQuestion, Sparkles, Trash2, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Users } from "lucide-react";
 import { SkeletonList } from "../components/Skeleton";
 import TasteQuiz from "../components/TasteQuiz";
+import { useAuth } from "../state/AuthContext";
 
 type Tab = "constraints" | "tastes" | "hunches";
 
 export default function MemoryPage() {
   const navigate = useNavigate();
+  const auth = useAuth();
   const [tab, setTab] = useState<Tab>("constraints");
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [constraints, setConstraints] = useState<Constraint[]>([]);
@@ -87,6 +89,20 @@ export default function MemoryPage() {
   async function actOnHunch(id: string, action: "confirm" | "dismiss") {
     const data = await api.post<{ hunch: Hunch }>(`/hunches/${id}`, { action });
     setHunches((prev) => prev.map((h) => (h.id === id ? data.hunch : h)));
+  }
+
+  // Account / logout
+  const [loggingOut, setLoggingOut] = useState(false);
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await auth.logout();
+      // AuthContext clears the user; App re-renders straight to AuthPage — no navigate needed,
+      // but GenerationContext's own user-change epoch effect handles clearing its job/polling.
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't log out. Please try again.");
+      setLoggingOut(false);
+    }
   }
 
   return (
@@ -278,6 +294,13 @@ export default function MemoryPage() {
       )}
         </>
       )}
+
+      <div className="memory-account-row">
+        <span className="memory-account-row__email">{auth.user?.email}</span>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={handleLogout} disabled={loggingOut}>
+          <LogOut size={14} /> {loggingOut ? "Logging out…" : "Log out"}
+        </button>
+      </div>
     </div>
   );
 }

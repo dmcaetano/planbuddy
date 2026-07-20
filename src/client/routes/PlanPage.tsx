@@ -320,6 +320,15 @@ export default function PlanPage() {
     setResult(revision);
     setDisplayIndex(0);
     setState("browsing");
+    // A synchronous tweak (submitTweak, or PlanEditChat's onRevision) just moved local state onto a
+    // newer child spec. If a previously-tracked generate/regenerate job is still sitting around in a
+    // terminal state, it must be dismissed here rather than merely left "seen": staying in the
+    // provider means a later remount of this page (e.g. navigating away and back) re-runs the fold
+    // effect above, and — because local state has reset — that effect can no longer see this tweak
+    // happened, so it would resurrect the stale pre-edit job result over the freshly tweaked plan.
+    if (generation.job && (generation.job.status === "succeeded" || generation.job.status === "failed")) {
+      generation.dismiss();
+    }
   }
 
   function swapVersion() {
@@ -460,7 +469,7 @@ export default function PlanPage() {
       <div>
         <div className="row-gap" style={{ alignItems: "center", marginBottom: 4 }}>
           <div className="eyebrow" style={{ marginBottom: 0 }}>Plan</div>
-          <span className="version-pill">v1.0.0 · iron man</span>
+          <span className="version-pill">v1.0.1 · iron man</span>
         </div>
         <h1>One click. One genuinely good plan.</h1>
         <p>PlanBuddy combines what it remembers with live context, then commits to the best fit.</p>

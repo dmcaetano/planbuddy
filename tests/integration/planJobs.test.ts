@@ -3,7 +3,7 @@ import request from "supertest";
 import { getTestApp } from "../helpers/testApp.js";
 import { getDb } from "../../src/server/db/client.js";
 import { newId } from "../../src/server/db/id.js";
-import { sweepInterruptedJobs } from "../../src/server/plans/jobs.js";
+import { enqueueGenerationJob, sweepInterruptedJobs } from "../../src/server/plans/jobs.js";
 import { createPlanSpec } from "../../src/server/plans/specs.repo.js";
 import { runGeneration } from "../../src/server/plans/engine/pipeline.js";
 import { STAGE_META, type StageKey } from "../../src/server/plans/engine/stages.js";
@@ -110,6 +110,56 @@ describe("async plan generation jobs", () => {
     expect(rows[0].status).toBe("running");
   });
 
+  it("the partial unique index rejects a second active ('queued'/'running') row for the same user at the DB level", async () => {
+    const { userId } = await signUpWithHomeBase(app, "jobs-index@example.com");
+    const db = await getDb();
+    await db.query(
+      `INSERT INTO plan_generation_jobs (id, user_id, operation, request_payload, status)
+       VALUES ($1, $2, 'create', $3, 'running')`,
+      [newId(), userId, {}]
+    );
+    await expect(
+      db.query(
+        `INSERT INTO plan_generation_jobs (id, user_id, operation, request_payload, status)
+         VALUES ($1, $2, 'create', $3, 'queued')`,
+        [newId(), userId, {}]
+      )
+    ).rejects.toMatchObject({ code: "23505" });
+  });
+
+  it("enqueueGenerationJob folds a concurrent race (both callers pass the pre-check before either inserts) onto a single job via the unique-violation catch path", async () => {
+    const { userId } = await signUpWithHomeBase(app, "jobs-race@example.com");
+
+    // A gated executor so the job stays 'running' for the duration of the assertions below, and so
+    // both concurrent enqueueGenerationJob calls are racing against the same not-yet-settled state.
+    let releaseGate: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    const execute = async () => {
+      await gate;
+      return { done: true };
+    };
+
+    const [first, second] = await Promise.all([
+      enqueueGenerationJob({ userId, operation: "create", requestPayload: {}, execute }),
+      enqueueGenerationJob({ userId, operation: "create", requestPayload: {}, execute }),
+    ]);
+
+    // Exactly one job row was created for this user; both calls resolved to it.
+    expect(first.jobId).toBe(second.jobId);
+    expect(first.existing || second.existing).toBe(true);
+
+    const db = await getDb();
+    const { rows } = await db.query<{ id: string }>(`SELECT id FROM plan_generation_jobs WHERE user_id = $1`, [
+      userId,
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(first.jobId);
+
+    releaseGate();
+  });
+
   it("is owner-only: another user's job id 404s instead of leaking status or results", async () => {
     const owner = await signUpWithHomeBase(app, "jobs-owner@example.com");
     const stranger = await signUpWithHomeBase(app, "jobs-stranger@example.com");
@@ -153,7 +203,11 @@ describe("async plan generation jobs", () => {
   });
 
   it("marks a stale queued/running job as failed with error_code 'interrupted' on sweep", async () => {
-    const { userId } = await signUpWithHomeBase(app, "jobs-sweep@example.com");
+    // Two different users: the DB-enforced "one active job per user" partial unique index
+    // (migration 0008) forbids two active rows for the *same* user, so this needs separate users to
+    // seed one stale-and-one-fresh active job simultaneously.
+    const { userId: staleUserId } = await signUpWithHomeBase(app, "jobs-sweep-stale@example.com");
+    const { userId: freshUserId } = await signUpWithHomeBase(app, "jobs-sweep-fresh@example.com");
     const db = await getDb();
     const staleId = newId();
     const freshId = newId();
@@ -161,12 +215,12 @@ describe("async plan generation jobs", () => {
     await db.query(
       `INSERT INTO plan_generation_jobs (id, user_id, operation, request_payload, status, updated_at)
        VALUES ($1, $2, 'create', $3, 'running', now() - interval '11 minutes')`,
-      [staleId, userId, {}]
+      [staleId, staleUserId, {}]
     );
     await db.query(
       `INSERT INTO plan_generation_jobs (id, user_id, operation, request_payload, status, updated_at)
        VALUES ($1, $2, 'create', $3, 'queued', now())`,
-      [freshId, userId, {}]
+      [freshId, freshUserId, {}]
     );
 
     const swept = await sweepInterruptedJobs();
@@ -181,6 +235,44 @@ describe("async plan generation jobs", () => {
     expect(stale.status).toBe("failed");
     expect(stale.error_code).toBe("interrupted");
     expect(fresh.status).toBe("queued"); // untouched — not old enough to sweep
+  });
+
+  it("never lets a late executor completion resurrect a job that was already swept to 'failed'", async () => {
+    const { userId } = await signUpWithHomeBase(app, "jobs-guard@example.com");
+    const db = await getDb();
+    const jobId = newId();
+    // Seed a job already 'running' (as if claimJob had run), then simulate the sweep failing it out
+    // from under a still-executing detached job — exactly the race completeJob/failJob must guard
+    // against with `WHERE status = 'running'`.
+    await db.query(
+      `INSERT INTO plan_generation_jobs (id, user_id, operation, request_payload, status)
+       VALUES ($1, $2, 'create', $3, 'running')`,
+      [jobId, userId, {}]
+    );
+    await db.query(
+      `UPDATE plan_generation_jobs
+       SET status = 'failed', error_code = 'interrupted', error_message = 'swept'
+       WHERE id = $1`,
+      [jobId]
+    );
+
+    // A late completeJob-shaped UPDATE (mirrors src/server/plans/jobs.ts completeJob) must not
+    // overwrite the terminal 'failed' state because the row is no longer 'running'.
+    const { rows } = await db.query<{ id: string }>(
+      `UPDATE plan_generation_jobs
+       SET status = 'succeeded', result = $2, progress_pct = 100
+       WHERE id = $1 AND status = 'running'
+       RETURNING id`,
+      [jobId, JSON.stringify({ winner: {} })]
+    );
+    expect(rows).toHaveLength(0);
+
+    const { rows: after } = await db.query<{ status: string; error_code: string | null }>(
+      `SELECT status, error_code FROM plan_generation_jobs WHERE id = $1`,
+      [jobId]
+    );
+    expect(after[0].status).toBe("failed");
+    expect(after[0].error_code).toBe("interrupted");
   });
 
   it("reports stage transitions with non-null stage/progressPct and monotonically increasing progress", async () => {

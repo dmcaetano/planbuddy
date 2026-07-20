@@ -152,6 +152,75 @@ describe("taste quiz integration", () => {
     ).toBe(true);
   });
 
+  it("rejects a payload that answers the same question twice (row amplification via duplicate questions)", async () => {
+    const { agent } = await signUp(app, "quiz-dup-question@example.com");
+    const res = await agent
+      .post("/api/tastes/quiz")
+      .set(HDR, "1")
+      .send({
+        answers: [
+          { questionId: "days", optionIds: ["nature"] },
+          { questionId: "days", optionIds: ["food"] },
+        ],
+      });
+    expect(res.status).toBe(400);
+
+    // Nothing was written -- the whole submission was rejected, not partially applied.
+    const tastesList = await agent.get("/api/tastes");
+    expect(tastesList.body.tastes.filter((t: { source: string }) => t.source === "onboarding_quiz")).toHaveLength(0);
+  });
+
+  it("rejects a single-select question answered with more than one option", async () => {
+    const { agent } = await signUp(app, "quiz-over-single@example.com");
+    const res = await agent
+      .post("/api/tastes/quiz")
+      .set(HDR, "1")
+      .send({ answers: [{ questionId: "energy", optionIds: ["slow", "full"] }] });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a multi-select question over its declared maxSelect (e.g. 'days' allows at most 3)", async () => {
+    const { agent } = await signUp(app, "quiz-over-max@example.com");
+    const res = await agent
+      .post("/api/tastes/quiz")
+      .set(HDR, "1")
+      .send({ answers: [{ questionId: "days", optionIds: ["nature", "food", "arts", "active"] }] });
+    expect(res.status).toBe(400);
+  });
+
+  it("allows a select-all-that-apply question ('avoid', no maxSelect) up to its full option count", async () => {
+    const { agent } = await signUp(app, "quiz-select-all@example.com");
+    const res = await agent
+      .post("/api/tastes/quiz")
+      .set(HDR, "1")
+      .send({
+        answers: [
+          {
+            questionId: "avoid",
+            optionIds: ["peanuts", "shellfish", "dairy", "gluten", "alcohol", "stairs", "noise", "none"],
+          },
+        ],
+      });
+    expect(res.status).toBe(201);
+  });
+
+  it("legitimate quiz submissions (one answer per question, within each question's own select limit) still pass", async () => {
+    const { agent } = await signUp(app, "quiz-legit@example.com");
+    const res = await agent
+      .post("/api/tastes/quiz")
+      .set(HDR, "1")
+      .send({
+        answers: [
+          { questionId: "days", optionIds: ["nature", "food", "arts"] }, // exactly at maxSelect (3)
+          { questionId: "energy", optionIds: ["slow"] }, // exactly at single-select limit (1)
+          { questionId: "avoid", optionIds: ["peanuts", "shellfish"] }, // select-all, under full count
+        ],
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.tastes.length).toBeGreaterThan(0);
+    expect(res.body.constraints).toHaveLength(2);
+  });
+
   it("allergy answers create real constraints that the existing constraint filter respects", async () => {
     const { agent } = await signUp(app, "quiz4@example.com");
     const res = await agent

@@ -143,6 +143,21 @@ export async function acceptFriendInvite(
      DO UPDATE SET status = 'active', ended_at = NULL`,
     [userA, userB]
   );
+
+  // Compensating check for the non-transactional window between the earlier
+  // isBlockedPair read and this activation: a block could have been created
+  // by either side in between. Re-check post-activation and, if now blocked,
+  // immediately end the friendship we just created/reactivated (same as
+  // removeFriend) rather than leave a blocked pair "active".
+  if (await isBlockedPair(invite.inviter_user_id, acceptingUserId)) {
+    await db.query(
+      `UPDATE friendships SET status = 'removed', ended_at = now()
+       WHERE user_a_id = $1 AND user_b_id = $2 AND status = 'active'`,
+      [userA, userB]
+    );
+    return null;
+  }
+
   return { inviterUserId: invite.inviter_user_id, inviterDisplayName: displayName(invite.inviter_email) };
 }
 
@@ -343,13 +358,30 @@ export async function replaceFriendLabels(
   return getFriendLabels(ownerId, friendUserId);
 }
 
-/** Distinct labels for a user with member counts, shaped for a future one-tap group picker in plan creation. */
+/**
+ * Distinct labels for a user with member counts, shaped for a future
+ * one-tap group picker in plan creation. Uses LEFT JOINs throughout so a
+ * label with zero assignments (or zero *currently active* assignments)
+ * still appears with memberCount 0 -- labels are the user's own vocabulary
+ * and shouldn't vanish just because everyone tagged with them was later
+ * unfriended/blocked/removed. friendUserIds only ever contains ids whose
+ * friendship with ownerId is still 'active', so a removed/blocked friend
+ * can never leak into a label summary.
+ */
 export async function listFriendLabelSummaries(ownerId: string): Promise<FriendLabelSummary[]> {
   const db = await getDb();
-  const { rows } = await db.query<{ id: string; name: string; friend_user_id: string }>(
-    `SELECT l.id, l.name, a.friend_user_id
+  const { rows } = await db.query<{
+    id: string;
+    name: string;
+    friend_user_id: string | null;
+    friendship_status: string | null;
+  }>(
+    `SELECT l.id, l.name, a.friend_user_id, f.status AS friendship_status
      FROM friend_labels l
-     JOIN friend_label_assignments a ON a.label_id = l.id
+     LEFT JOIN friend_label_assignments a ON a.label_id = l.id
+     LEFT JOIN friendships f
+       ON f.user_a_id = LEAST(l.owner_user_id, a.friend_user_id)
+      AND f.user_b_id = GREATEST(l.owner_user_id, a.friend_user_id)
      WHERE l.owner_user_id = $1
      ORDER BY l.name, a.friend_user_id`,
     [ownerId]
@@ -361,8 +393,10 @@ export async function listFriendLabelSummaries(ownerId: string): Promise<FriendL
       entry = { id: row.id, name: row.name, memberCount: 0, friendUserIds: [] };
       byId.set(row.id, entry);
     }
-    entry.friendUserIds.push(row.friend_user_id);
-    entry.memberCount += 1;
+    if (row.friend_user_id && row.friendship_status === "active") {
+      entry.friendUserIds.push(row.friend_user_id);
+      entry.memberCount += 1;
+    }
   }
   return Array.from(byId.values());
 }

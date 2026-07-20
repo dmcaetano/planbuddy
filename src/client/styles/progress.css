@@ -122,6 +122,14 @@
   color: var(--clay);
 }
 
+/* Extra bottom clearance on whatever page is behind the banner (see GenerationBanner's
+   body.has-generation-banner toggle) so the fixed banner never overlaps real content —
+   e.g. a "Save feedback" button near the bottom of a History detail view. Only applied while
+   a banner is actually on screen; normal pages keep the default (smaller) app-main padding. */
+body.has-generation-banner .app-main {
+  padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 104px);
+}
+
 /* Cross-page banner */
 .generation-banner {
   position: fixed;
@@ -132,21 +140,61 @@
   width: min(calc(100% - var(--space-6)), var(--content-max));
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-card);
   border: 1px solid var(--hairline-strong);
   background: var(--paper-raised);
   box-shadow: var(--shadow-card);
   font-family: var(--font-ui);
-  text-align: left;
-  cursor: pointer;
   color: var(--ink);
 }
 
 .generation-banner:hover {
   border-color: var(--clay);
+}
+
+.generation-banner--failed {
+  border-color: var(--clay);
+}
+
+.generation-banner__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.generation-banner__dismiss {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.generation-banner__dismiss:hover {
+  color: var(--ink);
+  background: var(--clay-soft);
+}
+
+.generation-banner--failed .generation-banner__right {
+  color: var(--clay);
 }
 
 .generation-banner__text {

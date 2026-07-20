@@ -16,6 +16,14 @@ const envSchema = z.object({
   GEMINI_API_KEY_FILE: z.string().optional(),
   GROUNDING_MODEL_ID: z.string().default("gemini-3.5-flash"),
   AI_TIMEOUT_MS: z.coerce.number().int().min(5000).max(120000).default(45000),
+  // Gemini should fail over to the DeepSeek fallback chain fast during a
+  // provider outage (e.g. 503 "high demand") rather than let a hung request
+  // eat into the overall generation budget.
+  GEMINI_TIMEOUT_MS: z.coerce.number().int().min(5000).max(60000).default(30000),
+  // Grounded web-search and full plan-composition DeepSeek calls carry much
+  // larger reasoning+content token budgets than chat/feedback JSON and need
+  // real wall-clock headroom to finish, especially as a Gemini fallback.
+  AI_COMPOSE_TIMEOUT_MS: z.coerce.number().int().min(15000).max(180000).default(90000),
   PLACE_RESOLVER_API_KEY: z.string().optional(),
 });
 

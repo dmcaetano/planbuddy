@@ -84,14 +84,16 @@ export async function generateCandidates(
         response = await callAiJson(
           buildGenerateSystemPrompt(generationContext),
           buildGenerateUserPrompt(generationContext),
-          aiGenerateResponseSchema
+          aiGenerateResponseSchema,
+          { heavy: true }
         );
       }
     } else {
       response = await callAiJson(
         buildGenerateSystemPrompt(generationContext),
         buildGenerateUserPrompt(generationContext),
-        aiGenerateResponseSchema
+        aiGenerateResponseSchema,
+        { heavy: true }
       );
     }
     return {

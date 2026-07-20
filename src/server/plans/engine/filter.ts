@@ -39,7 +39,7 @@ export function filterCandidates(candidates: AiCandidate[], ctx: FilterContext):
   const seenTitles = new Set<string>();
   const groundedUrls = new Set((ctx.groundedSourceUrls ?? []).map(normalizeSourceUrl));
 
-  for (const candidate of candidates) {
+  for (let candidate of candidates) {
     const text = candidateText(candidate);
     const normalizedTitle = candidate.title.trim().toLowerCase();
 
@@ -55,15 +55,28 @@ export function filterCandidates(candidates: AiCandidate[], ctx: FilterContext):
       continue;
     }
 
-    const invalidCitation = candidate.citations.find((cite) => {
+    // Models occasionally cite an id shaped like a user-memory reference
+    // (e.g. "memory-234cf483") that doesn't match any known fact id given in
+    // the prompt, rather than an actual dossier source. That's a legitimate
+    // (if slightly hallucinated) reference to conversational memory context,
+    // not a fabricated dossier fact -- drop it instead of failing the whole
+    // candidate. Anything else unmatched is still treated as fabricated.
+    const sanitizedCitations = candidate.citations.filter(
+      (cite) => ctx.knownFacts.has(cite.factId) || !/^memory-/i.test(cite.factId)
+    );
+    const invalidCitation = sanitizedCitations.find((cite) => {
       const factText = ctx.knownFacts.get(cite.factId);
       if (!factText) return true;
       return !factText.toLowerCase().includes(cite.quote.toLowerCase());
     });
     if (invalidCitation) {
-      rejected.push({ candidate, reason: `invalid citation: ${invalidCitation.factId}` });
+      // Never surface the raw internal fact id to the user -- this reason
+      // string can end up in a user-visible "every candidate was rejected"
+      // message.
+      rejected.push({ candidate, reason: "invalid citation: source could not be verified" });
       continue;
     }
+    candidate = { ...candidate, citations: sanitizedCitations };
 
     if (!ctx.isTripScale && candidate.travelEstimateKm != null) {
       if (candidate.travelEstimateKm > ctx.radiusKm * RADIUS_MULTIPLIER) {
