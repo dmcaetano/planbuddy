@@ -25,7 +25,7 @@ export type {
 } from "@shared/types";
 export type { Scale } from "@shared/scale";
 
-import type { Candidate, WeatherSnapshot, PlanSpec } from "@shared/types";
+import type { Candidate, WeatherSnapshot, PlanSpec, Friend } from "@shared/types";
 
 export interface PlanView {
   candidate: Candidate;
@@ -44,4 +44,27 @@ export interface PipelineResponse {
   generationsUsed: number;
   generationsRemaining: number;
   looseners?: string[];
+}
+
+export interface FriendLabel {
+  id: string;
+  name: string;
+}
+
+export interface FriendWithLabels extends Friend {
+  labels: FriendLabel[];
+}
+
+export interface FriendLabelSummary {
+  id: string;
+  name: string;
+  memberCount: number;
+  friendUserIds: string[];
+}
+
+export interface BlockedFriend {
+  userId: string;
+  email: string;
+  displayName: string;
+  blockedAt: string;
 }

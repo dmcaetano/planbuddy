@@ -107,3 +107,18 @@ export async function deleteTaste(userId: string, id: string): Promise<boolean> 
   ]);
   return rows.length > 0;
 }
+
+/**
+ * Bulk-removes every taste with a given source for this user. Used by the
+ * taste quiz's retake flow so re-taking never duplicates previous answers —
+ * the source acts as the provenance marker that scopes the wipe to
+ * quiz-written rows only, leaving manually stated tastes untouched.
+ */
+export async function deleteTastesBySource(userId: string, source: TasteSource): Promise<number> {
+  const db = await getDb();
+  const { rows } = await db.query(
+    "DELETE FROM tastes WHERE user_id = $1 AND source = $2 RETURNING id",
+    [userId, source]
+  );
+  return rows.length;
+}

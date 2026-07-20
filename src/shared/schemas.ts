@@ -62,6 +62,19 @@ export const hunchUpdateSchema = z.object({
 });
 
 /* ---------------------------------------------------------------------- */
+/* Memory: taste quiz                                                      */
+/* ---------------------------------------------------------------------- */
+
+export const quizAnswerSchema = z.object({
+  questionId: z.string().trim().min(1).max(40),
+  optionIds: z.array(z.string().trim().min(1).max(40)).max(10),
+});
+
+export const quizSubmitSchema = z.object({
+  answers: z.array(quizAnswerSchema).max(20),
+});
+
+/* ---------------------------------------------------------------------- */
 /* Plan specs                                                              */
 /* ---------------------------------------------------------------------- */
 

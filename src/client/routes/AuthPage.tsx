@@ -31,7 +31,7 @@ export default function AuthPage() {
     <div className="centered-page">
       <div className="auth-card">
         <div className="brand-mark">PlanBuddy</div>
-        <p style={{ marginBottom: "var(--space-5)" }}>
+        <p className="mb-5">
           One confident plan for the people involved — day off, weekend, getaway, or vacation.
         </p>
 

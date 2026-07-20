@@ -21,6 +21,29 @@ interface FriendRow extends PlanningParticipantRow {
   connected_at: string;
 }
 
+export interface FriendLabel {
+  id: string;
+  name: string;
+}
+
+export interface FriendWithLabels extends Friend {
+  labels: FriendLabel[];
+}
+
+export interface FriendLabelSummary {
+  id: string;
+  name: string;
+  memberCount: number;
+  friendUserIds: string[];
+}
+
+export interface BlockedFriend {
+  userId: string;
+  email: string;
+  displayName: string;
+  blockedAt: string;
+}
+
 interface InviteRow {
   id: string;
   inviter_user_id: string;
@@ -94,6 +117,10 @@ export async function acceptFriendInvite(
   const invite = await getFriendInvite(token);
   if (!invite || invite.inviter_user_id === acceptingUserId) return null;
   if (invite.accepted_by_user_id && invite.accepted_by_user_id !== acceptingUserId) return null;
+  // A block on either side of the pair silently kills the redemption -- this
+  // reuses the same "invalid invite" 404 the caller already returns for
+  // expired/guessed tokens, so a blocked user never learns they were blocked.
+  if (await isBlockedPair(invite.inviter_user_id, acceptingUserId)) return null;
 
   const { rows } = await db.query<InviteRow>(
     `UPDATE friend_invites
@@ -119,7 +146,7 @@ export async function acceptFriendInvite(
   return { inviterUserId: invite.inviter_user_id, inviterDisplayName: displayName(invite.inviter_email) };
 }
 
-export async function listFriends(userId: string): Promise<Friend[]> {
+export async function listFriends(userId: string): Promise<FriendWithLabels[]> {
   const db = await getDb();
   const { rows } = await db.query<FriendRow>(
     `SELECT p.*, u.email AS account_email, true AS is_friend_account, f.created_at AS connected_at
@@ -130,13 +157,16 @@ export async function listFriends(userId: string): Promise<Friend[]> {
      ORDER BY u.email`,
     [userId]
   );
-  return rows.map((row) => ({
-    userId: row.user_id,
-    email: row.account_email ?? "",
-    displayName: displayName(row.account_email ?? ""),
-    participant: toParticipant(row),
-    connectedAt: row.connected_at,
-  }));
+  return Promise.all(
+    rows.map(async (row) => ({
+      userId: row.user_id,
+      email: row.account_email ?? "",
+      displayName: displayName(row.account_email ?? ""),
+      participant: toParticipant(row),
+      connectedAt: row.connected_at,
+      labels: await getFriendLabels(userId, row.user_id),
+    }))
+  );
 }
 
 export async function listAuthorizedPlanningParticipants(userId: string): Promise<Participant[]> {
@@ -175,6 +205,166 @@ export async function removeFriend(userId: string, friendUserId: string): Promis
     [userA, userB]
   );
   return rows.length > 0;
+}
+
+async function activeFriendshipExists(userId: string, friendUserId: string): Promise<boolean> {
+  const db = await getDb();
+  const [userA, userB] = canonicalPair(userId, friendUserId);
+  const { rows } = await db.query(
+    `SELECT 1 FROM friendships WHERE user_a_id = $1 AND user_b_id = $2 AND status = 'active'`,
+    [userA, userB]
+  );
+  return rows.length > 0;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Blocking                                                                 */
+/* ---------------------------------------------------------------------- */
+
+export async function isBlockedPair(userId: string, otherUserId: string): Promise<boolean> {
+  const db = await getDb();
+  const { rows } = await db.query(
+    `SELECT 1 FROM friend_blocks
+     WHERE (blocker_user_id = $1 AND blocked_user_id = $2)
+        OR (blocker_user_id = $2 AND blocked_user_id = $1)`,
+    [userId, otherUserId]
+  );
+  return rows.length > 0;
+}
+
+export async function blockUser(userId: string, targetUserId: string): Promise<boolean> {
+  if (userId === targetUserId) return false;
+  const db = await getDb();
+  const target = await db.query(`SELECT 1 FROM users WHERE id = $1`, [targetUserId]);
+  if (!target.rows[0]) return false;
+
+  await db.query(
+    `INSERT INTO friend_blocks (blocker_user_id, blocked_user_id) VALUES ($1, $2)
+     ON CONFLICT (blocker_user_id, blocked_user_id) DO NOTHING`,
+    [userId, targetUserId]
+  );
+
+  // Ends any active friendship, like remove -- block is a superset of remove.
+  const [userA, userB] = canonicalPair(userId, targetUserId);
+  await db.query(
+    `UPDATE friendships SET status = 'removed', ended_at = now()
+     WHERE user_a_id = $1 AND user_b_id = $2 AND status = 'active'`,
+    [userA, userB]
+  );
+  return true;
+}
+
+export async function unblockUser(userId: string, targetUserId: string): Promise<boolean> {
+  const db = await getDb();
+  const { rows } = await db.query(
+    `DELETE FROM friend_blocks WHERE blocker_user_id = $1 AND blocked_user_id = $2 RETURNING blocker_user_id`,
+    [userId, targetUserId]
+  );
+  return rows.length > 0;
+}
+
+export async function listBlocked(userId: string): Promise<BlockedFriend[]> {
+  const db = await getDb();
+  const { rows } = await db.query<{ user_id: string; email: string; blocked_at: string }>(
+    `SELECT u.id AS user_id, u.email, fb.created_at AS blocked_at
+     FROM friend_blocks fb
+     JOIN users u ON u.id = fb.blocked_user_id
+     WHERE fb.blocker_user_id = $1
+     ORDER BY fb.created_at DESC`,
+    [userId]
+  );
+  return rows.map((row) => ({
+    userId: row.user_id,
+    email: row.email,
+    displayName: displayName(row.email),
+    blockedAt: row.blocked_at,
+  }));
+}
+
+/* ---------------------------------------------------------------------- */
+/* Circle labels                                                            */
+/* ---------------------------------------------------------------------- */
+
+export async function getFriendLabels(ownerId: string, friendUserId: string): Promise<FriendLabel[]> {
+  const db = await getDb();
+  const { rows } = await db.query<FriendLabel>(
+    `SELECT l.id, l.name
+     FROM friend_label_assignments a
+     JOIN friend_labels l ON l.id = a.label_id
+     WHERE a.owner_user_id = $1 AND a.friend_user_id = $2
+     ORDER BY l.name`,
+    [ownerId, friendUserId]
+  );
+  return rows;
+}
+
+/**
+ * Replaces the full label set for one friend. Returns null when the target
+ * isn't an active friend of ownerId (the route treats that as 404, matching
+ * the tenant-isolation posture of every other friends endpoint).
+ */
+export async function replaceFriendLabels(
+  ownerId: string,
+  friendUserId: string,
+  rawNames: string[]
+): Promise<FriendLabel[] | null> {
+  if (ownerId === friendUserId) return null;
+  if (!(await activeFriendshipExists(ownerId, friendUserId))) return null;
+
+  const db = await getDb();
+  const names = Array.from(new Set(rawNames.map((name) => name.trim()).filter(Boolean)));
+
+  const labelIds: string[] = [];
+  for (const name of names) {
+    const existing = await db.query<{ id: string }>(
+      `SELECT id FROM friend_labels WHERE owner_user_id = $1 AND name = $2`,
+      [ownerId, name]
+    );
+    if (existing.rows[0]) {
+      labelIds.push(existing.rows[0].id);
+    } else {
+      const id = newId();
+      await db.query(`INSERT INTO friend_labels (id, owner_user_id, name) VALUES ($1, $2, $3)`, [id, ownerId, name]);
+      labelIds.push(id);
+    }
+  }
+
+  await db.query(`DELETE FROM friend_label_assignments WHERE owner_user_id = $1 AND friend_user_id = $2`, [
+    ownerId,
+    friendUserId,
+  ]);
+  for (const labelId of labelIds) {
+    await db.query(
+      `INSERT INTO friend_label_assignments (label_id, owner_user_id, friend_user_id) VALUES ($1, $2, $3)`,
+      [labelId, ownerId, friendUserId]
+    );
+  }
+
+  return getFriendLabels(ownerId, friendUserId);
+}
+
+/** Distinct labels for a user with member counts, shaped for a future one-tap group picker in plan creation. */
+export async function listFriendLabelSummaries(ownerId: string): Promise<FriendLabelSummary[]> {
+  const db = await getDb();
+  const { rows } = await db.query<{ id: string; name: string; friend_user_id: string }>(
+    `SELECT l.id, l.name, a.friend_user_id
+     FROM friend_labels l
+     JOIN friend_label_assignments a ON a.label_id = l.id
+     WHERE l.owner_user_id = $1
+     ORDER BY l.name, a.friend_user_id`,
+    [ownerId]
+  );
+  const byId = new Map<string, FriendLabelSummary>();
+  for (const row of rows) {
+    let entry = byId.get(row.id);
+    if (!entry) {
+      entry = { id: row.id, name: row.name, memberCount: 0, friendUserIds: [] };
+      byId.set(row.id, entry);
+    }
+    entry.friendUserIds.push(row.friend_user_id);
+    entry.memberCount += 1;
+  }
+  return Array.from(byId.values());
 }
 
 export { displayName };

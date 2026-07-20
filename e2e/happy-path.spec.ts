@@ -20,10 +20,25 @@ test("signup -> generate -> Love -> Buddy edit -> share -> dislike -> lock -> fe
   await expect(cityOption).toBeVisible({ timeout: 10000 });
   await cityOption.click();
   await expect(page.getByText("Who's usually along?")).toBeVisible();
-  await page.getByRole("button", { name: "Start planning" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  // Optional taste-quiz step: skip it in the happy path (the quiz has its own coverage).
+  await expect(page.getByText("Build your fun profile")).toBeVisible();
+  await page.getByRole("button", { name: "Skip" }).click();
 
   await expect(page.getByText("One click. One genuinely good plan.")).toBeVisible();
   await page.getByRole("button", { name: "Plan my weekend" }).click();
+
+  // Async plan-generation progress: the stage checklist should render, and switching to another
+  // tab and back must not reset it (generation state lives in GenerationContext, above the routes,
+  // not in PlanPage's own component state).
+  const stageOrLockLocator = page.getByText("Reading your household memory").or(page.getByRole("button", { name: /Lock it/i }));
+  await expect(stageOrLockLocator.first()).toBeVisible({ timeout: 15000 });
+  if (await page.getByText("Reading your household memory").isVisible().catch(() => false)) {
+    await page.getByRole("link", { name: "History" }).click();
+    await page.getByRole("link", { name: "Plan" }).click();
+  }
+
   await expect(page.getByRole("button", { name: /Lock it/i })).toBeVisible({ timeout: 15000 });
 
   await page.getByRole("button", { name: /^Love$/i }).click();

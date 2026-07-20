@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import type { ChatMessage, ChatSession } from "../api/types";
 import { Send } from "lucide-react";
+import { SkeletonList } from "../components/Skeleton";
 
 interface MemoryUpdate {
   kind: "constraint" | "taste" | "hunch";
@@ -18,14 +19,19 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdates, setLastUpdates] = useState<MemoryUpdate[]>([]);
   const [specUpdate, setSpecUpdate] = useState<{ scale: string | null; moodContext: string | null } | null>(null);
+  const [loading, setLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.get<{ session: ChatSession; messages: ChatMessage[] }>("/chat/session").then((d) => {
-      setSession(d.session);
-      setMessages(d.messages);
-    });
+    api
+      .get<{ session: ChatSession; messages: ChatMessage[] }>("/chat/session")
+      .then((d) => {
+        setSession(d.session);
+        setMessages(d.messages);
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't load the chat."))
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -71,7 +77,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="stack" style={{ minHeight: "70vh", display: "flex", flexDirection: "column" }}>
+    <div className="stack chat-page">
       <div>
         <div className="eyebrow">Chat</div>
         <h1>Talk it through</h1>
@@ -89,67 +95,63 @@ export default function ChatPage() {
 
       {error && <div className="error-banner">{error}</div>}
 
-      <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 320 }}>
-        <div className="stack" style={{ flex: 1, overflowY: "auto" }}>
-          {messages.length === 0 && (
-            <p className="muted">
-              Try: "We're allergic to peanuts" or "We love hiking" — PlanBuddy will protect or personalize immediately.
-            </p>
-          )}
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              style={{
-                alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                background: m.role === "user" ? "var(--clay-soft)" : "var(--pine-soft)",
-                borderRadius: 12,
-                padding: "8px 12px",
-                maxWidth: "85%",
-              }}
-            >
-              {m.content}
-            </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-
-        {lastUpdates.length > 0 && (
-          <div className="hint-banner" style={{ marginTop: 12 }}>
-            {lastUpdates.map((u, i) => (
-              <div key={i}>
-                {u.verified
-                  ? `Added to Memory as a${u.kind === "constraint" ? " constraint" : " taste"}: "${u.text}"`
-                  : `Couldn't verify that quote — saved as a soft hunch instead: "${u.text}"`}
+      {loading ? (
+        <SkeletonList rows={1} lines={4} label="Loading chat" />
+      ) : (
+        <div className="card chat-card">
+          <div className="stack chat-messages">
+            {messages.length === 0 && (
+              <div className="empty-state">
+                Try: "We're allergic to peanuts" or "We love hiking" — PlanBuddy will protect or personalize immediately.
+              </div>
+            )}
+            {messages.map((m) => (
+              <div key={m.id} className={`chat-bubble ${m.role === "user" ? "chat-bubble--user" : "chat-bubble--assistant"}`}>
+                {m.content}
               </div>
             ))}
+            <div ref={bottomRef} />
           </div>
-        )}
 
-        {specUpdate?.moodContext && (
-          <button className="btn btn-secondary btn-sm" style={{ marginTop: 8, alignSelf: "flex-start" }} onClick={() => navigate("/plan")}>
-            Use this in Plan
-          </button>
-        )}
+          {lastUpdates.length > 0 && (
+            <div className="hint-banner mt-3">
+              {lastUpdates.map((u, i) => (
+                <div key={i}>
+                  {u.verified
+                    ? `Added to Memory as a${u.kind === "constraint" ? " constraint" : " taste"}: "${u.text}"`
+                    : `Couldn't verify that quote — saved as a soft hunch instead: "${u.text}"`}
+                </div>
+              ))}
+            </div>
+          )}
 
-        <div className="row-gap" style={{ marginTop: 12 }}>
-          <input
-            style={{ flex: 1, border: "1px solid var(--hairline-strong)", borderRadius: 10, padding: "10px 12px" }}
-            value={input}
-            disabled={session?.status === "ended"}
-            placeholder="Say something…"
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-          />
-          <button className="btn btn-primary" onClick={send} disabled={sending || session?.status === "ended"}>
-            <Send size={16} />
-          </button>
+          {specUpdate?.moodContext && (
+            <button className="btn btn-secondary btn-sm mt-2 self-start" onClick={() => navigate("/plan")}>
+              Use this in Plan
+            </button>
+          )}
+
+          <div className="row-gap mt-3">
+            <input
+              className="input grow"
+              aria-label="Message"
+              value={input}
+              disabled={session?.status === "ended"}
+              placeholder="Say something…"
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+            />
+            <button className="btn btn-primary" onClick={send} disabled={sending || session?.status === "ended"}>
+              <Send size={16} />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

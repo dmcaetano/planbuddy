@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { api, ApiError } from "../api/client";
 import type { Participant } from "../api/types";
-import { PawPrint, User, Plus, MapPin } from "lucide-react";
+import { PawPrint, User, Plus, MapPin, Sparkles } from "lucide-react";
+import TasteQuiz from "../components/TasteQuiz";
 
 interface GeocodeResult {
   label: string;
@@ -16,6 +17,7 @@ export default function OnboardingPage() {
   const { user, setUser } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState<0 | 1 | 2>(0);
+  const [showQuiz, setShowQuiz] = useState(false);
 
   // Step 0: home base
   const [query, setQuery] = useState("");
@@ -95,13 +97,15 @@ export default function OnboardingPage() {
               <button
                 key={`${r.label}-${r.lat}`}
                 type="button"
-                className="btn btn-ghost btn-block"
-                style={{ justifyContent: "flex-start" }}
+                className="btn btn-ghost btn-block justify-start"
                 onClick={() => chooseHomeBase(r)}
               >
                 <MapPin size={16} /> {r.label}
               </button>
             ))}
+            {!searching && query.trim().length >= 2 && results.length === 0 && (
+              <div className="empty-state">No places found — try a broader name.</div>
+            )}
           </div>
         </div>
       </div>
@@ -115,28 +119,30 @@ export default function OnboardingPage() {
           <div className="eyebrow">Step 2 of 2</div>
           <h1>Who's usually along?</h1>
           <p>Add the people (and pets) you plan for. You can always edit this later in Memory.</p>
-          <div className="stack" style={{ marginBottom: "var(--space-4)" }}>
+          <div className="stack mb-4">
+            {participants.length === 0 && <div className="empty-state">Nobody added yet — add the people (and pets) you plan for below.</div>}
             {participants.map((p) => (
               <div className="list-item" key={p.id}>
-                <span className="row-gap" style={{ alignItems: "center" }}>
+                <span className="row">
                   {p.kind === "pet" ? <PawPrint size={16} /> : <User size={16} />} {p.name}
                   {p.isOwner && <span className="badge badge-pine">You</span>}
                 </span>
               </div>
             ))}
           </div>
-          <div className="row-gap" style={{ marginBottom: "var(--space-3)" }}>
+          <div className="row-gap mb-3">
             <input
+              className="input grow"
+              aria-label="Name"
               placeholder="Name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              style={{ flex: 1, border: "1px solid var(--hairline-strong)", borderRadius: 10, padding: "10px 12px" }}
             />
             <select
+              className="select"
               aria-label="Participant type"
               value={newKind}
               onChange={(e) => setNewKind(e.target.value as "person" | "pet")}
-              style={{ border: "1px solid var(--hairline-strong)", borderRadius: 10, padding: "10px 12px" }}
             >
               <option value="person">Person</option>
               <option value="pet">Pet</option>
@@ -145,9 +151,42 @@ export default function OnboardingPage() {
               <Plus size={16} />
             </button>
           </div>
-          <button type="button" className="btn btn-primary btn-block" onClick={() => navigate("/plan")}>
-            Start planning
+          <button type="button" className="btn btn-primary btn-block" onClick={() => setStep(2)}>
+            Continue
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 2) {
+    if (showQuiz) {
+      return (
+        <div className="centered-page">
+          <TasteQuiz
+            onSkip={() => navigate("/plan")}
+            primaryActionLabel="See them in Memory"
+            onPrimaryAction={() => navigate("/memory")}
+            secondaryActionLabel="Plan a day"
+            onSecondaryAction={() => navigate("/plan")}
+          />
+        </div>
+      );
+    }
+    return (
+      <div className="centered-page">
+        <div className="auth-card">
+          <div className="eyebrow">Optional</div>
+          <h1>Build your fun profile</h1>
+          <p>10 quick taps, skippable — helps PlanBuddy suggest days you'll actually love.</p>
+          <div className="stack">
+            <button type="button" className="btn btn-primary btn-block" onClick={() => setShowQuiz(true)}>
+              <Sparkles size={16} /> Start the quiz
+            </button>
+            <button type="button" className="btn btn-ghost btn-block" onClick={() => navigate("/plan")}>
+              Skip
+            </button>
+          </div>
         </div>
       </div>
     );

@@ -1,13 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../api/client";
-import type { Friend, Participant, PlanView, PipelineResponse } from "../api/types";
+import { listFriendLabels, listFriendsWithLabels } from "../api/friends";
+import type { Friend, FriendLabelSummary, Participant, PlanView, PipelineResponse } from "../api/types";
 import { SCALE_LABELS, SCALE_RADIUS_KM, type Scale } from "@shared/scale";
 import TicketCard from "../components/TicketCard";
 import ReactionBar from "../components/ReactionBar";
 import ShareButton from "../components/ShareButton";
 import PlanEditChat from "../components/PlanEditChat";
-import { Bot, Lock, PawPrint, RefreshCw, SlidersHorizontal, User, UserPlus, X } from "lucide-react";
+import GenerationProgress from "../components/GenerationProgress";
+import { useGeneration } from "../state/GenerationContext";
+import { useAuth } from "../state/AuthContext";
+import { Bot, Lock, PawPrint, RefreshCw, SlidersHorizontal, User, UserPlus, Users, X } from "lucide-react";
+
+function lastGroupStorageKey(userId: string): string {
+  return `planbuddy.lastGroup.${userId}`;
+}
 
 function nextSaturday(): string {
   const date = new Date();
@@ -18,10 +26,16 @@ function nextSaturday(): string {
   return `${year}-${month}-${day}`;
 }
 
-type ViewState = "spec" | "generating" | "browsing" | "locked" | "deadEnd" | "error";
+type ViewState = "spec" | "browsing" | "locked" | "deadEnd" | "error";
 
 export default function PlanPage() {
+  const generation = useGeneration();
+  const auth = useAuth();
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friendLabels, setFriendLabels] = useState<FriendLabelSummary[]>([]);
+  const [friendLabelsLoaded, setFriendLabelsLoaded] = useState(false);
+  const [lastGroupIds, setLastGroupIds] = useState<string[] | null>(null);
   const [scale, setScale] = useState<Scale>("weekend");
   const [startDate, setStartDate] = useState(nextSaturday());
   const [endDate, setEndDate] = useState(nextSaturday());
@@ -47,10 +61,11 @@ export default function PlanPage() {
   useEffect(() => {
     Promise.all([
       api.get<{ participants: Participant[] }>("/participants"),
-      api.get<{ friends: Friend[] }>("/friends"),
+      listFriendsWithLabels(),
     ]).then(([participantData, friendData]) => {
       const friendParticipants = friendData.friends.map((friend) => friend.participant);
       setParticipants([...participantData.participants, ...friendParticipants]);
+      setFriends(friendData.friends);
       setSelectedIds(participantData.participants.map((participant) => participant.id));
     }).catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't load your group."));
   }, []);
@@ -59,29 +74,168 @@ export default function PlanPage() {
     setEndDate((previous) => (previous < startDate ? startDate : previous));
   }, [startDate]);
 
+  // Lazily loads friend-group labels the first time the spec form is shown, not on every mount.
+  useEffect(() => {
+    if (state !== "spec" || friendLabelsLoaded) return;
+    setFriendLabelsLoaded(true);
+    listFriendLabels()
+      .then((data) => setFriendLabels(data.labels))
+      .catch(() => {
+        // Chips simply don't render — the manual checklist still works.
+      });
+  }, [state, friendLabelsLoaded]);
+
+  // Reads the saved "last group" (a set of friend participant ids) whenever the spec form is shown.
+  useEffect(() => {
+    if (state !== "spec") return;
+    const userId = auth.user?.id;
+    if (!userId) {
+      setLastGroupIds(null);
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(lastGroupStorageKey(userId));
+      if (!raw) {
+        setLastGroupIds(null);
+        return;
+      }
+      const parsed = JSON.parse(raw) as unknown;
+      setLastGroupIds(Array.isArray(parsed) && parsed.every((id) => typeof id === "string") && parsed.length > 0 ? parsed : null);
+    } catch {
+      setLastGroupIds(null);
+    }
+  }, [state, auth.user?.id]);
+
+  const friendUserIdToParticipantId = useMemo(() => {
+    const map = new Map<string, string>();
+    friends.forEach((friend) => map.set(friend.userId, friend.participant.id));
+    return map;
+  }, [friends]);
+
+  const friendParticipantIdSet = useMemo(() => new Set(friends.map((friend) => friend.participant.id)), [friends]);
+
+  const currentFriendSelectedIds = useMemo(
+    () => selectedIds.filter((id) => friendParticipantIdSet.has(id)),
+    [selectedIds, friendParticipantIdSet]
+  );
+
+  const groupLabels = useMemo(() => friendLabels.filter((label) => label.memberCount > 0), [friendLabels]);
+
+  function labelParticipantIds(label: FriendLabelSummary): string[] {
+    return label.friendUserIds
+      .map((userId) => friendUserIdToParticipantId.get(userId))
+      .filter((id): id is string => Boolean(id));
+  }
+
+  function isLabelSelected(label: FriendLabelSummary): boolean {
+    const ids = labelParticipantIds(label);
+    return ids.length > 0 && ids.every((id) => selectedIds.includes(id));
+  }
+
+  function toggleLabel(label: FriendLabelSummary) {
+    const ids = labelParticipantIds(label);
+    if (ids.length === 0) return;
+    setSelectedIds((previous) => {
+      if (ids.every((id) => previous.includes(id))) {
+        return previous.filter((id) => !ids.includes(id));
+      }
+      const merged = new Set(previous);
+      ids.forEach((id) => merged.add(id));
+      return Array.from(merged);
+    });
+  }
+
+  // Valid only when every saved id still resolves to a current friend's participant.
+  const validLastGroupIds = useMemo(() => {
+    if (!lastGroupIds || lastGroupIds.length === 0) return null;
+    return lastGroupIds.every((id) => friendParticipantIdSet.has(id)) ? lastGroupIds : null;
+  }, [lastGroupIds, friendParticipantIdSet]);
+
+  const showLastGroupChip = useMemo(() => {
+    if (!validLastGroupIds) return false;
+    const saved = new Set(validLastGroupIds);
+    const current = new Set(currentFriendSelectedIds);
+    if (saved.size !== current.size) return true;
+    for (const id of saved) if (!current.has(id)) return true;
+    return false;
+  }, [validLastGroupIds, currentFriendSelectedIds]);
+
+  function applyLastGroup() {
+    if (!validLastGroupIds) return;
+    setSelectedIds((previous) => {
+      const nonFriendIds = previous.filter((id) => !friendParticipantIdSet.has(id));
+      return [...nonFriendIds, ...validLastGroupIds];
+    });
+  }
+
+  function saveLastGroup(friendParticipantIds: string[]) {
+    const userId = auth.user?.id;
+    if (!userId || friendParticipantIds.length === 0) return;
+    try {
+      window.localStorage.setItem(lastGroupStorageKey(userId), JSON.stringify(friendParticipantIds));
+    } catch {
+      // Storage can fail (quota, private mode) — not worth surfacing to the user.
+    }
+  }
+
   const displayQueue: PlanView[] = useMemo(() => {
     if (!result?.winner) return [];
     return [result.winner, ...result.alternates];
   }, [result]);
   const current = displayQueue[displayIndex] ?? null;
 
+  // Tracks which terminal job we've already folded into local view state, so re-renders (or a
+  // job that was already terminal when this page mounted) don't reapply it more than once.
+  const appliedJobIdRef = useRef<string | null>(null);
+
+  // Runs synchronously before paint so a just-finished job never flashes the stale spec/browsing
+  // view for a frame before the result (or failure) is folded in. Only "generate"/"regenerate"
+  // jobs exist here — the free-text Tweak/"Edit with Buddy" flow hits chat-action directly
+  // (server keeps that endpoint synchronous), so it's handled inline by submitTweak below.
+  useLayoutEffect(() => {
+    const job = generation.job;
+    if (!job || (job.status !== "succeeded" && job.status !== "failed")) return;
+    if (appliedJobIdRef.current === job.jobId) return;
+    appliedJobIdRef.current = job.jobId;
+
+    // Failures stay visible via GenerationProgress (with Retry) until the user retries or starts
+    // a new plan, so leave the job in place here.
+    if (job.status === "failed") return;
+
+    if (job.result) {
+      const data = job.result;
+      if (data.looseners) {
+        setLooseners(data.looseners);
+        setState("browsing");
+      } else if (data.spec.id === chatThreadSpecId && result && result.spec.id !== data.spec.id) {
+        // This job targeted the spec the Buddy/Tweak thread started from, but a synchronous
+        // tweak already moved local state on to a newer child spec while the job was still in
+        // flight (chatThreadSpecId stays pinned to the thread's origin spec across tweaks —
+        // see applyRevision). The job is now stale relative to that edit; don't clobber it.
+      } else {
+        setResult(data);
+        setChatThreadSpecId(data.spec.id);
+        setOtherVersion(null);
+        setDisplayIndex(0);
+        setState(data.deadEnd ? "deadEnd" : "browsing");
+      }
+    }
+    generation.markSeen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generation.job]);
+
   async function planIt() {
     setError(null);
     setLooseners(null);
-    setState("generating");
+    if (currentFriendSelectedIds.length > 0) saveLastGroup(currentFriendSelectedIds);
     try {
-      const data = await api.post<PipelineResponse>("/plan-specs", {
+      await generation.startSpec({
         scale,
         startDate,
         endDate,
         participantIds: selectedIds,
         moodContext: moodContext.trim() || null,
       });
-      setResult(data);
-      setChatThreadSpecId(data.spec.id);
-      setOtherVersion(null);
-      setDisplayIndex(0);
-      setState(data.deadEnd ? "deadEnd" : "browsing");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't reach PlanBuddy. Please try again.");
       setState("error");
@@ -95,18 +249,8 @@ export default function PlanPage() {
       return;
     }
     setError(null);
-    setState("generating");
     try {
-      const data = await api.post<PipelineResponse>(`/plan-specs/${result.spec.id}/regenerate`);
-      if (data.looseners) {
-        setLooseners(data.looseners);
-        setState("browsing");
-        return;
-      }
-      setResult(data);
-      setOtherVersion(null);
-      setDisplayIndex(0);
-      setState(data.deadEnd ? "deadEnd" : "browsing");
+      await generation.startRegenerate(result.spec.id);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't reach PlanBuddy. Please try again.");
       setState("error");
@@ -142,6 +286,9 @@ export default function PlanPage() {
     }
   }
 
+  // The Tweak panel sends a free-text request through the same synchronous chat-action endpoint
+  // PlanEditChat uses (an AI-interpreted action dispatch, not the async plan-generation pipeline),
+  // so this stays a plain request/response call rather than a tracked job.
   async function submitTweak() {
     if (!result || !current) return;
     setTweakSubmitting(true);
@@ -217,17 +364,11 @@ export default function PlanPage() {
     );
   }
 
-  if (state === "generating") {
-    return (
-      <div className="stack">
-        <div className="card">
-          <div className="eyebrow">Building your route</div>
-          <h2>Finding the plan worth leaving home for…</h2>
-          <p className="muted">Checking memory, forecast, real places, route shape, and recent feedback.</p>
-        </div>
-        <div className="skeleton" style={{ height: 220, borderRadius: 14 }} />
-      </div>
-    );
+  // A fresh generate/regenerate job (queued, running, or failed-with-retry) takes over the whole
+  // page regardless of local `state` — it may have been reattached after a reload or tab switch,
+  // long before this render's local state caught up.
+  if (generation.job && generation.job.status !== "succeeded") {
+    return <GenerationProgress job={generation.job} />;
   }
 
   if (state === "browsing" || state === "deadEnd") {
@@ -319,7 +460,7 @@ export default function PlanPage() {
       <div>
         <div className="row-gap" style={{ alignItems: "center", marginBottom: 4 }}>
           <div className="eyebrow" style={{ marginBottom: 0 }}>Plan</div>
-          <span className="version-pill">v0.1.5 · long memory</span>
+          <span className="version-pill">v1.0.0 · iron man</span>
         </div>
         <h1>One click. One genuinely good plan.</h1>
         <p>PlanBuddy combines what it remembers with live context, then commits to the best fit.</p>
@@ -341,6 +482,29 @@ export default function PlanPage() {
         </div>
         <div className="field">
           <div className="field-label-row"><label>Who's in</label><Link to="/friends"><UserPlus size={14} /> Friends & invites</Link></div>
+          {(groupLabels.length > 0 || showLastGroupChip) && (
+            <div className="chip-row pb-group-chip-row">
+              {showLastGroupChip && validLastGroupIds && (
+                <button type="button" className="chip pb-group-chip" aria-pressed={false} onClick={applyLastGroup}>
+                  <Users size={14} /> Last group ({validLastGroupIds.length})
+                </button>
+              )}
+              {groupLabels.map((label) => {
+                const selected = isLabelSelected(label);
+                return (
+                  <button
+                    key={label.id}
+                    type="button"
+                    className={`chip pb-group-chip ${selected ? "selected" : ""}`}
+                    aria-pressed={selected}
+                    onClick={() => toggleLabel(label)}
+                  >
+                    <Users size={14} /> {label.name} ({label.memberCount})
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div className="chip-row">
             {participants.map((participant) => (
               <button key={participant.id} type="button" className={`chip ${selectedIds.includes(participant.id) ? "selected" : ""}`} onClick={() => toggleParticipant(participant.id)}>

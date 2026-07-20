@@ -52,7 +52,7 @@ export interface Friend {
 }
 
 export type ConstraintStatus = "verified" | "active_unverified";
-export type ConstraintSource = "typed" | "chat";
+export type ConstraintSource = "typed" | "chat" | "onboarding_quiz";
 
 export interface Constraint {
   id: Id;
@@ -68,7 +68,7 @@ export interface Constraint {
 }
 
 export type TastePolarity = "love" | "avoid";
-export type TasteSource = "stated" | "onboarding" | "promoted";
+export type TasteSource = "stated" | "onboarding" | "promoted" | "onboarding_quiz";
 
 export interface Taste {
   id: Id;

@@ -3,8 +3,7 @@ import request from "supertest";
 import { getTestApp } from "../helpers/testApp.js";
 import { getDb } from "../../src/server/db/client.js";
 import { findMealBeatIndex, gatherPlanContext } from "../../src/server/plans/engine/pipeline.js";
-
-const HDR = "X-PlanBuddy-Client";
+import { postAndAwaitGeneration, HDR } from "../helpers/planJobs.js";
 
 async function account(app: unknown, email: string) {
   const agent = request.agent(app as never);
@@ -14,8 +13,9 @@ async function account(app: unknown, email: string) {
   return { agent, userId: signup.body.user.id as string, ownerId: participants.body.participants[0].id as string };
 }
 
+/** Kicks off a generation and waits for it to finish; returns { body: <old sync response shape>, status }. */
 async function generate(agent: request.SuperAgentTest, ownerId: string, date: string) {
-  return agent.post("/api/plan-specs").set(HDR, "1").send({
+  return postAndAwaitGeneration(agent, "/api/plan-specs", {
     scale: "day_off",
     startDate: date,
     endDate: date,
@@ -120,13 +120,14 @@ describe("social learning, sharing, and friends", () => {
     expect((await carol.agent.post(`/api/friends/invites/${token}/accept`).set(HDR, "1")).status).toBe(404);
     expect((await alice.agent.get("/api/friends")).body.friends).toHaveLength(1);
 
-    const groupPlan = await alice.agent.post("/api/plan-specs").set(HDR, "1").send({
+    const groupPlan = await postAndAwaitGeneration(alice.agent, "/api/plan-specs", {
       scale: "day_off",
       startDate: "2026-08-12",
       endDate: "2026-08-12",
       participantIds: [alice.ownerId, bob.ownerId],
     });
-    expect(groupPlan.status).toBe(201);
+    expect(groupPlan.kickoffStatus).toBe(202);
+    expect(groupPlan.job.status).toBe("succeeded");
     expect(groupPlan.body.winner.activeConstraints).toEqual([]);
     const context = await gatherPlanContext(alice.userId, groupPlan.body.spec);
     expect(context.scopedTastes.some((taste) => taste.userId === bob.userId && /grilled fish/i.test(taste.text))).toBe(true);

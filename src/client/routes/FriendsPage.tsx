@@ -1,22 +1,33 @@
 import { useEffect, useState } from "react";
-import { Check, Copy, Share2, UserMinus, UserPlus } from "lucide-react";
-import type { Friend } from "../api/types";
+import { Check, Copy, Share2, UserPlus } from "lucide-react";
+import type { BlockedFriend, FriendLabel, FriendWithLabels } from "../api/types";
 import { api, ApiError } from "../api/client";
+import { listBlockedFriends, listFriendsWithLabels } from "../api/friends";
+import { SkeletonList } from "../components/Skeleton";
+import FriendRowMenu from "../components/FriendRowMenu";
+import BlockedFriendsSection from "../components/BlockedFriendsSection";
 
 export default function FriendsPage() {
-  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friends, setFriends] = useState<FriendWithLabels[]>([]);
+  const [blocked, setBlocked] = useState<BlockedFriend[]>([]);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [inviteExpiresAt, setInviteExpiresAt] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   async function load() {
-    const data = await api.get<{ friends: Friend[] }>("/friends");
-    setFriends(data.friends);
+    const [friendsData, blockedData] = await Promise.all([listFriendsWithLabels(), listBlockedFriends()]);
+    setFriends(friendsData.friends);
+    setBlocked(blockedData.blocked);
   }
 
-  useEffect(() => { void load().catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't load friends.")); }, []);
+  useEffect(() => {
+    void load()
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't load friends."))
+      .finally(() => setLoading(false));
+  }, []);
 
   async function invite() {
     setCreating(true);
@@ -49,13 +60,24 @@ export default function FriendsPage() {
     setCopied(true);
   }
 
-  async function remove(friend: Friend) {
-    try {
-      await api.delete(`/friends/${friend.userId}`);
-      setFriends((current) => current.filter((item) => item.userId !== friend.userId));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't remove that friend.");
+  function handleRemoved(userId: string) {
+    setFriends((current) => current.filter((item) => item.userId !== userId));
+  }
+
+  function handleBlocked(userId: string) {
+    const friend = friends.find((item) => item.userId === userId);
+    setFriends((current) => current.filter((item) => item.userId !== userId));
+    if (friend) {
+      setBlocked((current) => [{ userId: friend.userId, email: friend.email, displayName: friend.displayName, blockedAt: new Date().toISOString() }, ...current]);
     }
+  }
+
+  function handleUnblocked(userId: string) {
+    setBlocked((current) => current.filter((item) => item.userId !== userId));
+  }
+
+  function handleLabelsChanged(userId: string, labels: FriendLabel[]) {
+    setFriends((current) => current.map((item) => (item.userId === userId ? { ...item, labels } : item)));
   }
 
   return (
@@ -74,17 +96,38 @@ export default function FriendsPage() {
           </div>
         )}
       </section>
-      <section className="card">
-        <div className="section-header"><div><div className="eyebrow">Connected</div><h3>{friends.length} {friends.length === 1 ? "friend" : "friends"}</h3></div></div>
-        {friends.length === 0 && <div className="empty-state">No connected friends yet. Your household members and pets still live in Memory.</div>}
-        {friends.map((friend) => (
-          <div className="friend-row" key={friend.userId}>
-            <div className="friend-avatar">{friend.displayName.slice(0, 1).toUpperCase()}</div>
-            <div><strong>{friend.displayName}</strong><span>{friend.email}</span></div>
-            <button className="icon-btn" onClick={() => void remove(friend)} aria-label={`Remove ${friend.displayName}`}><UserMinus size={18} /></button>
-          </div>
-        ))}
-      </section>
+      {loading ? (
+        <SkeletonList rows={2} lines={1} label="Loading friends" />
+      ) : (
+        <section className="card">
+          <div className="section-header"><div><div className="eyebrow">Connected</div><h3>{friends.length} {friends.length === 1 ? "friend" : "friends"}</h3></div></div>
+          {friends.length === 0 && <div className="empty-state">No connected friends yet. Your household members and pets still live in Memory.</div>}
+          {friends.map((friend) => (
+            <div className="friend-row" key={friend.userId}>
+              <div className="friend-avatar">{friend.displayName.slice(0, 1).toUpperCase()}</div>
+              <div>
+                <strong>{friend.displayName}</strong>
+                <span>{friend.email}</span>
+                {friend.labels.length > 0 && (
+                  <div className="pb-friend-labels">
+                    {friend.labels.map((label) => (
+                      <span className="pb-friend-label-chip" key={label.id}>{label.name}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <FriendRowMenu
+                friend={friend}
+                onRemoved={handleRemoved}
+                onBlocked={handleBlocked}
+                onLabelsChanged={handleLabelsChanged}
+                onError={setError}
+              />
+            </div>
+          ))}
+        </section>
+      )}
+      <BlockedFriendsSection blocked={blocked} onUnblocked={handleUnblocked} onError={setError} />
     </div>
   );
 }

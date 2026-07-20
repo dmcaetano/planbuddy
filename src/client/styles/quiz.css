@@ -1,0 +1,146 @@
+/* Styles for the optional tap-first "fun profile" taste quiz.
+   Imported directly by TasteQuiz.tsx; not part of the global stylesheet. */
+
+.quiz-card {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  background: var(--paper-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.quiz-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.quiz-progress {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+
+.quiz-skip {
+  color: var(--ink-soft);
+}
+
+.quiz-intro {
+  margin: 0;
+}
+
+.quiz-prompt {
+  margin: 0;
+}
+
+.quiz-hint {
+  margin: calc(var(--space-2) * -1) 0 0;
+}
+
+.quiz-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+
+.quiz-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 56px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--hairline-strong);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.quiz-chip:hover {
+  border-color: var(--clay);
+}
+
+.quiz-chip:active {
+  transform: scale(0.98);
+}
+
+.quiz-chip:focus-visible {
+  outline: 2px solid var(--clay);
+  outline-offset: 2px;
+}
+
+.quiz-chip--selected {
+  background: var(--clay-soft);
+  border-color: var(--clay);
+  color: var(--clay);
+}
+
+.quiz-chip-check {
+  flex: none;
+}
+
+.quiz-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--hairline);
+  padding-top: var(--space-4);
+}
+
+.quiz-not-sure {
+  margin-right: auto;
+  color: var(--ink-soft);
+}
+
+.quiz-next {
+  min-width: 96px;
+}
+
+.quiz-done {
+  text-align: center;
+  align-items: center;
+}
+
+.quiz-done-actions {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 420px) {
+  .quiz-card {
+    padding: var(--space-4);
+    border-radius: var(--radius-card);
+  }
+
+  .quiz-chip-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+
+  .quiz-footer {
+    justify-content: stretch;
+  }
+
+  .quiz-not-sure {
+    margin-right: 0;
+  }
+
+  .quiz-next {
+    flex: 1;
+  }
+}

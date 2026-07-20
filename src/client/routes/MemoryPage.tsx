@@ -1,19 +1,24 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { Constraint, Hunch, Participant, Taste } from "../api/types";
-import { Check, Plus, ShieldCheck, ShieldQuestion, Trash2, X } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Check, Plus, ShieldCheck, ShieldQuestion, Sparkles, Trash2, X } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { Users } from "lucide-react";
+import { SkeletonList } from "../components/Skeleton";
+import TasteQuiz from "../components/TasteQuiz";
 
 type Tab = "constraints" | "tastes" | "hunches";
 
 export default function MemoryPage() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("constraints");
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [constraints, setConstraints] = useState<Constraint[]>([]);
   const [tastes, setTastes] = useState<Taste[]>([]);
   const [hunches, setHunches] = useState<Hunch[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showQuiz, setShowQuiz] = useState(false);
 
   async function loadAll() {
     const [p, c, t, h] = await Promise.all([
@@ -29,7 +34,9 @@ export default function MemoryPage() {
   }
 
   useEffect(() => {
-    loadAll().catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't load Memory."));
+    loadAll()
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't load Memory."))
+      .finally(() => setLoading(false));
   }, []);
 
   function participantName(id: string | null): string {
@@ -87,12 +94,36 @@ export default function MemoryPage() {
       <div>
         <div className="eyebrow">Memory</div>
         <h1>What PlanBuddy knows</h1>
-        <Link to="/friends" className="btn btn-ghost btn-sm" style={{ marginBottom: 8 }}><Users size={16} /> Friends & invites</Link>
+        <div className="row-gap mb-2">
+          <Link to="/friends" className="btn btn-ghost btn-sm"><Users size={16} /> Friends & invites</Link>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowQuiz(true)}>
+            <Sparkles size={16} /> Fun profile quiz
+          </button>
+        </div>
         <p>Every constraint, taste, and hunch is visible and editable — nothing learns silently.</p>
       </div>
 
       {error && <div className="error-banner">{error}</div>}
 
+      {showQuiz && (
+        <TasteQuiz
+          intro="Retaking replaces your previous fun-profile answers — nothing else is touched."
+          onSkip={() => setShowQuiz(false)}
+          primaryActionLabel="See them below"
+          onPrimaryAction={() => {
+            setShowQuiz(false);
+            setTab("tastes");
+            loadAll().catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't refresh Memory."));
+          }}
+          secondaryActionLabel="Plan a day"
+          onSecondaryAction={() => navigate("/plan")}
+        />
+      )}
+
+      {!showQuiz && loading ? (
+        <SkeletonList rows={3} lines={2} label="Loading memory" />
+      ) : !showQuiz && (
+        <>
       <div className="tab-row" role="tablist">
         <button className={tab === "constraints" ? "active" : ""} onClick={() => setTab("constraints")}>
           Constraints
@@ -113,7 +144,7 @@ export default function MemoryPage() {
               <input placeholder="e.g. No shellfish — allergy" value={cText} onChange={(e) => setCText(e.target.value)} />
             </div>
             <div className="row-gap">
-              <select value={cParticipant} onChange={(e) => setCParticipant(e.target.value)} style={{ flex: 1, border: "1px solid var(--hairline-strong)", borderRadius: 10, padding: "8px 10px" }}>
+              <select className="select grow" value={cParticipant} onChange={(e) => setCParticipant(e.target.value)}>
                 <option value="">Household (everyone)</option>
                 {participants.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -127,12 +158,12 @@ export default function MemoryPage() {
             </div>
           </div>
 
-          {constraints.length === 0 && <div className="empty-state">No constraints yet.</div>}
+          {constraints.length === 0 && <div className="empty-state">No constraints yet — add one above so PlanBuddy always respects it.</div>}
           {constraints.map((c) => (
             <div className="card" key={c.id}>
-              <div className="list-item" style={{ border: "none", padding: 0 }}>
+              <div className="list-item list-item--plain">
                 <div>
-                  <div className="row-gap" style={{ alignItems: "center", marginBottom: 4 }}>
+                  <div className="row mb-1">
                     {c.status === "verified" ? (
                       <span className="badge badge-pine">
                         <ShieldCheck size={12} /> Verified
@@ -171,7 +202,7 @@ export default function MemoryPage() {
               <input placeholder="e.g. loves live music" value={tText} onChange={(e) => setTText(e.target.value)} />
             </div>
             <div className="row-gap">
-              <select value={tParticipant} onChange={(e) => setTParticipant(e.target.value)} style={{ border: "1px solid var(--hairline-strong)", borderRadius: 10, padding: "8px 10px" }}>
+              <select className="select" value={tParticipant} onChange={(e) => setTParticipant(e.target.value)}>
                 <option value="">Household (everyone)</option>
                 {participants.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -179,7 +210,7 @@ export default function MemoryPage() {
                   </option>
                 ))}
               </select>
-              <select value={tPolarity} onChange={(e) => setTPolarity(e.target.value as "love" | "avoid")} style={{ border: "1px solid var(--hairline-strong)", borderRadius: 10, padding: "8px 10px" }}>
+              <select className="select" value={tPolarity} onChange={(e) => setTPolarity(e.target.value as "love" | "avoid")}>
                 <option value="love">Loves</option>
                 <option value="avoid">Avoids</option>
               </select>
@@ -189,12 +220,12 @@ export default function MemoryPage() {
             </div>
           </div>
 
-          {tastes.length === 0 && <div className="empty-state">No tastes yet.</div>}
+          {tastes.length === 0 && <div className="empty-state">No tastes yet — add one above so plans reflect what people actually like.</div>}
           {tastes.map((t) => (
             <div className="card" key={t.id}>
-              <div className="list-item" style={{ border: "none", padding: 0 }}>
+              <div className="list-item list-item--plain">
                 <div>
-                  <div className="row-gap" style={{ marginBottom: 4 }}>
+                  <div className="row mb-1">
                     <span className={`badge ${t.polarity === "love" ? "badge-pine" : "badge-clay"}`}>
                       {t.polarity === "love" ? "Loves" : "Avoids"}
                     </span>
@@ -214,12 +245,12 @@ export default function MemoryPage() {
 
       {tab === "hunches" && (
         <div className="stack">
-          {hunches.length === 0 && <div className="empty-state">No hunches yet. They form from feedback and rejections.</div>}
+          {hunches.length === 0 && <div className="empty-state">No hunches yet — they form quietly from feedback and rejections.</div>}
           {hunches.map((h) => (
             <div className="card" key={h.id}>
-              <div className="list-item" style={{ border: "none", padding: 0 }}>
+              <div className="list-item list-item--plain">
                 <div>
-                  <div className="row-gap" style={{ marginBottom: 4 }}>
+                  <div className="row mb-1">
                     <span className={`badge ${h.polarity === "love" ? "badge-pine" : "badge-clay"}`}>
                       {h.polarity === "love" ? "Maybe loves" : "Maybe avoids"}
                     </span>
@@ -244,6 +275,8 @@ export default function MemoryPage() {
             </div>
           ))}
         </div>
+      )}
+        </>
       )}
     </div>
   );

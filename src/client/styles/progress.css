@@ -1,0 +1,198 @@
+/* Async plan-generation progress UI: stage checklist, progress bar, and the cross-tab banner. */
+
+.generation-card h2 {
+  margin-bottom: var(--space-3);
+}
+
+.generation-progress-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--clay-soft);
+  overflow: hidden;
+  margin-bottom: var(--space-4);
+}
+
+.generation-progress-bar__fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--clay);
+  transition: width 0.4s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-progress-bar__fill {
+    transition: none;
+  }
+}
+
+.generation-stage-list {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.generation-stage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-ui);
+  font-size: 0.92rem;
+  color: var(--ink-faint);
+}
+
+.generation-stage__marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline);
+  flex-shrink: 0;
+  color: var(--ink-faint);
+}
+
+.generation-stage__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.generation-stage--done {
+  color: var(--ink);
+}
+
+.generation-stage--done .generation-stage__marker {
+  background: var(--pine-soft);
+  border-color: var(--pine);
+  color: var(--pine);
+}
+
+.generation-stage--current {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.generation-stage--current .generation-stage__marker {
+  background: var(--clay-soft);
+  border-color: var(--clay);
+  color: var(--clay);
+  animation: generation-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-stage--current .generation-stage__marker {
+    animation: none;
+  }
+}
+
+@keyframes generation-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--clay-soft); }
+  50% { box-shadow: 0 0 0 5px var(--clay-soft); }
+}
+
+.generation-elapsed {
+  margin: 0 0 var(--space-1);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.generation-reassurance {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.generation-connection-warning {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-card);
+  background: var(--honey-soft);
+  color: var(--ink);
+  font-size: 0.85rem;
+}
+
+.generation-card--failed h2 {
+  color: var(--clay);
+}
+
+/* Cross-page banner */
+.generation-banner {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-3));
+  z-index: 40;
+  width: min(calc(100% - var(--space-6)), var(--content-max));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-card);
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.generation-banner:hover {
+  border-color: var(--clay);
+}
+
+.generation-banner__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.generation-banner__text strong {
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generation-banner__hint {
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+}
+
+.generation-banner__right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  color: var(--clay);
+}
+
+.generation-banner__bar {
+  width: 44px;
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--clay-soft);
+  overflow: hidden;
+}
+
+.generation-banner__bar-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--clay);
+  transition: width 0.4s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-banner__bar-fill {
+    transition: none;
+  }
+}

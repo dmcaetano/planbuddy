@@ -127,7 +127,28 @@ button {
 .field input:focus,
 .field textarea:focus,
 .field select:focus {
-  outline: 2px solid var(--sky);
+  outline: 2px solid var(--clay);
+  outline-offset: 1px;
+}
+
+/* Standalone form controls — for inputs/selects/textareas used outside a .field wrapper */
+.input,
+.select,
+.textarea {
+  border: 1px solid var(--hairline-strong);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--paper-raised);
+  color: var(--ink);
+  width: 100%;
+}
+.select {
+  width: auto;
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: 2px solid var(--clay);
   outline-offset: 1px;
 }
 
@@ -664,10 +685,26 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .skeleton {
     animation: none;
+    opacity: 0.6;
   }
   * {
     scroll-behavior: auto !important;
   }
+}
+
+.skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.skeleton-line {
+  height: 14px;
+  width: 100%;
+}
+.skeleton-line--title {
+  height: 18px;
+  width: 55%;
+  margin-bottom: 2px;
 }
 
 .tab-row {
@@ -730,6 +767,89 @@ button {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+/* Lean utility set — small layout/spacing helpers to replace ad-hoc inline styles */
+.stack-1 {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.stack-2 {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.stack-3 {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.stack-4 {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.justify-start {
+  justify-content: flex-start;
+}
+.self-start {
+  align-self: flex-start;
+}
+.mb-0 {
+  margin-bottom: 0;
+}
+.mb-1 {
+  margin-bottom: var(--space-1);
+}
+.mb-2 {
+  margin-bottom: var(--space-2);
+}
+.mb-3 {
+  margin-bottom: var(--space-3);
+}
+.mb-4 {
+  margin-bottom: var(--space-4);
+}
+.mb-5 {
+  margin-bottom: var(--space-5);
+}
+.mt-1 {
+  margin-top: var(--space-1);
+}
+.mt-2 {
+  margin-top: var(--space-2);
+}
+.mt-3 {
+  margin-top: var(--space-3);
+}
+.mt-4 {
+  margin-top: var(--space-4);
+}
+
+/* Card acting as a clickable row (e.g. History plan rows) */
+.card-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--hairline);
+  background: var(--paper-raised);
+}
+
+/* A .list-item without its default border/padding, used inside a .card */
+.list-item--plain {
+  border: none;
+  padding: 0;
 }
 
 .loading-screen {
@@ -865,6 +985,24 @@ button {
   font-size: 0.72rem;
 }
 .inline-error { display: block; color: var(--clay); margin-top: 6px; }
+
+/* Chat page */
+.chat-page { min-height: 70vh; display: flex; flex-direction: column; }
+.chat-card { flex: 1; display: flex; flex-direction: column; min-height: 320px; }
+.chat-messages { flex: 1; overflow-y: auto; }
+.chat-bubble {
+  border-radius: 12px;
+  padding: 8px 12px;
+  max-width: 85%;
+}
+.chat-bubble--assistant {
+  align-self: flex-start;
+  background: var(--pine-soft);
+}
+.chat-bubble--user {
+  align-self: flex-end;
+  background: var(--clay-soft);
+}
 .share-control { display: inline-flex; flex-direction: column; }
 .version-banner {
   display: flex;

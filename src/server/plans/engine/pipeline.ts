@@ -17,6 +17,7 @@ import type { GroundingSource } from "../../ai/deepseek.js";
 import { enrichCandidate } from "./enrich.js";
 import { HttpError } from "../../http.js";
 import type { AiCandidate } from "../../../shared/schemas.js";
+import type { ProgressReporter } from "./stages.js";
 
 export interface PlanContext {
   selectedParticipants: Participant[];
@@ -33,7 +34,8 @@ export interface PlanContext {
   privateMemoryFactIds: Set<string>;
 }
 
-export async function gatherPlanContext(userId: string, spec: PlanSpec): Promise<PlanContext> {
+export async function gatherPlanContext(userId: string, spec: PlanSpec, report?: ProgressReporter): Promise<PlanContext> {
+  await report?.("loading_memory");
   const [authorizedParticipants, user] = await Promise.all([
     listAuthorizedPlanningParticipants(userId),
     getUserById(userId),
@@ -88,6 +90,7 @@ export async function gatherPlanContext(userId: string, spec: PlanSpec): Promise
       .map((fact) => fact.id)
   );
 
+  await report?.("fetching_weather");
   const weather: WeatherSnapshot =
     user?.homeBaseLat != null && user?.homeBaseLng != null
       ? await getForecast(user.homeBaseLat, user.homeBaseLng, spec.startDate, spec.endDate)
@@ -104,6 +107,7 @@ export async function gatherPlanContext(userId: string, spec: PlanSpec): Promise
           unavailable: true,
         };
 
+  await report?.("grounding_places");
   const resolver: PlaceResolverResult =
     user?.homeBaseLat != null && user?.homeBaseLng != null
       ? await resolvePlaces(user.homeBaseLat, user.homeBaseLng, spec.radiusKm)
@@ -358,9 +362,10 @@ export async function runGeneration(
   userId: string,
   spec: PlanSpec,
   batchIndex: number,
-  edit?: PlanEditDirective
+  edit?: PlanEditDirective,
+  report?: ProgressReporter
 ): Promise<PipelineResult> {
-  const context = await gatherPlanContext(userId, spec);
+  const context = await gatherPlanContext(userId, spec, report);
   const { selectedParticipants, scopedConstraints, scopedTastes, scopedHunches, weather, resolver, knownFacts } =
     context;
 
@@ -433,6 +438,7 @@ export async function runGeneration(
       : undefined,
   };
 
+  await report?.("composing_plan");
   const cachedRestaurantSwap = edit?.mode === "restaurant"
     ? buildGroundedRestaurantSwap(edit.originalCandidate)
     : null;
@@ -466,6 +472,7 @@ export async function runGeneration(
     ),
   };
 
+  await report?.("validating_scoring");
   const { kept, rejected } = filterCandidates(privacySafeResponse.candidates, {
     activeConstraints: scopedConstraints.map((c) => ({ id: c.id, text: c.text })),
     knownFacts,
@@ -487,6 +494,7 @@ export async function runGeneration(
     placeNames: p.beats.map((beat) => beat.place?.name).filter((name): name is string => Boolean(name)),
   }));
   const ranked: ScoredCandidate[] = scoreCandidates(kept, memories, weather, spec.radiusKm, recentSummaries);
+  await report?.("enriching_saving");
   const enrichedRanked: ScoredCandidate[] = await Promise.all(
     ranked.map(async (sc) => ({
       ...sc,

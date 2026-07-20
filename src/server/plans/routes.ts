@@ -18,11 +18,21 @@ import { z } from "zod";
 import type { Candidate } from "../../shared/types.js";
 import { planningParticipantIdsAreAuthorized } from "../friends/repo.js";
 import { applyCandidateReaction } from "./reactions.service.js";
+import { enqueueGenerationJob } from "./jobs.js";
 
 export const planSpecsRouter = Router();
 planSpecsRouter.use(requireAuth);
 
 const MAX_GENERATIONS = 2; // initial batch + one regeneration batch
+
+// Server-only extension of the shared client-facing schema — an optional
+// idempotency key so a duplicate/retried POST reattaches to the same job
+// instead of starting a second generation. Kept local rather than added to
+// the shared schema since the client doesn't need to know about it to work.
+const idempotencyKeySchema = z.string().trim().min(1).max(200).optional();
+const planSpecCreateWithIdempotency = planSpecCreateSchema.extend({
+  idempotencyKey: idempotencyKeySchema,
+});
 
 function planView(candidate: Candidate, context: PipelineResult["context"], viewerUserId: string) {
   return {
@@ -61,15 +71,25 @@ function pipelineResponse(spec: Awaited<ReturnType<typeof createPlanSpec>>, resu
 planSpecsRouter.post(
   "/",
   aiRateLimiter,
-  validateBody(planSpecCreateSchema),
+  validateBody(planSpecCreateWithIdempotency),
   asyncHandler(async (req, res) => {
     if (!(await planningParticipantIdsAreAuthorized(req.user!.id, req.body.participantIds))) {
       throw new HttpError(403, "One or more selected participants are not available to this account");
     }
-    const spec = await createPlanSpec(req.user!.id, req.body);
-    const result = await runGeneration(req.user!.id, spec, 0);
-    const count = await incrementGenerationCount(spec.id);
-    res.status(201).json(pipelineResponse({ ...spec, generationCount: count }, result, req.user!.id));
+    const { idempotencyKey, ...specInput } = req.body;
+    const spec = await createPlanSpec(req.user!.id, specInput);
+    const { jobId, existing } = await enqueueGenerationJob({
+      userId: req.user!.id,
+      operation: "create",
+      idempotencyKey,
+      requestPayload: { specId: spec.id },
+      execute: async (report) => {
+        const result = await runGeneration(req.user!.id, spec, 0, undefined, report);
+        const count = await incrementGenerationCount(spec.id);
+        return pipelineResponse({ ...spec, generationCount: count }, result, req.user!.id);
+      },
+    });
+    res.status(202).json({ jobId, existing });
   })
 );
 
@@ -89,27 +109,40 @@ planSpecsRouter.post(
   asyncHandler(async (req, res) => {
     const spec = await getPlanSpec(req.user!.id, req.params.id);
     if (!spec) throw notFound();
-    if (spec.generationCount >= MAX_GENERATIONS) {
-      res.json({
-        spec,
-        aiMode: "demo",
-        deadEnd: false,
-        deadEndReasons: [],
-        winner: null,
-        alternates: [],
-        generationsUsed: spec.generationCount,
-        generationsRemaining: 0,
-        looseners: [
-          "Widen the search radius",
-          "Temporarily relax a soft taste preference",
-          "Try a different date range",
-        ],
-      });
-      return;
-    }
-    const result = await runGeneration(req.user!.id, spec, spec.generationCount);
-    const count = await incrementGenerationCount(spec.id);
-    res.json(pipelineResponse({ ...spec, generationCount: count }, result, req.user!.id));
+    const idempotencyKey = typeof req.body?.idempotencyKey === "string" ? req.body.idempotencyKey : null;
+
+    // No generation to run once the cap is hit — still routed through the
+    // job system (a job that completes synchronously) so the client always
+    // polls the same GET /plan-jobs/:id contract regardless of outcome.
+    const { jobId, existing } = await enqueueGenerationJob({
+      userId: req.user!.id,
+      operation: "regenerate",
+      idempotencyKey,
+      requestPayload: { specId: spec.id },
+      execute: async (report) => {
+        if (spec.generationCount >= MAX_GENERATIONS) {
+          return {
+            spec,
+            aiMode: "demo",
+            deadEnd: false,
+            deadEndReasons: [],
+            winner: null,
+            alternates: [],
+            generationsUsed: spec.generationCount,
+            generationsRemaining: 0,
+            looseners: [
+              "Widen the search radius",
+              "Temporarily relax a soft taste preference",
+              "Try a different date range",
+            ],
+          };
+        }
+        const result = await runGeneration(req.user!.id, spec, spec.generationCount, undefined, report);
+        const count = await incrementGenerationCount(spec.id);
+        return pipelineResponse({ ...spec, generationCount: count }, result, req.user!.id);
+      },
+    });
+    res.status(202).json({ jobId, existing });
   })
 );
 
@@ -197,7 +230,7 @@ planSpecsRouter.post(
   })
 );
 
-const tweakBody = planSpecCreateSchema.partial();
+const tweakBody = planSpecCreateSchema.partial().extend({ idempotencyKey: idempotencyKeySchema });
 
 planSpecsRouter.post(
   "/:id/tweak",
@@ -223,9 +256,18 @@ planSpecsRouter.post(
       version: original.version + 1,
     });
 
-    const result = await runGeneration(req.user!.id, spec, 0);
-    const count = await incrementGenerationCount(spec.id);
-    res.status(201).json(pipelineResponse({ ...spec, generationCount: count }, result, req.user!.id));
+    const { jobId, existing } = await enqueueGenerationJob({
+      userId: req.user!.id,
+      operation: "tweak",
+      idempotencyKey: req.body.idempotencyKey,
+      requestPayload: { specId: spec.id, parentSpecId: original.id },
+      execute: async (report) => {
+        const result = await runGeneration(req.user!.id, spec, 0, undefined, report);
+        const count = await incrementGenerationCount(spec.id);
+        return pipelineResponse({ ...spec, generationCount: count }, result, req.user!.id);
+      },
+    });
+    res.status(202).json({ jobId, existing });
   })
 );
 

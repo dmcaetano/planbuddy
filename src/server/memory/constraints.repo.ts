@@ -116,3 +116,17 @@ export async function deleteConstraint(userId: string, id: string): Promise<bool
   ]);
   return rows.length > 0;
 }
+
+/**
+ * Bulk-removes every constraint with a given source for this user. Mirrors
+ * deleteTastesBySource — used so retaking the taste quiz replaces its own
+ * prior allergy/access answers instead of duplicating them.
+ */
+export async function deleteConstraintsBySource(userId: string, source: ConstraintSource): Promise<number> {
+  const db = await getDb();
+  const { rows } = await db.query(
+    "DELETE FROM constraints WHERE user_id = $1 AND source = $2 RETURNING id",
+    [userId, source]
+  );
+  return rows.length;
+}

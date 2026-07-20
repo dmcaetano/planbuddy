@@ -1,0 +1,24 @@
+/**
+ * Ordered plan-generation stages, mirroring the server's plan-job pipeline exactly.
+ * Keep this list in sync with the server contract (see PlanBuddy plan-jobs API).
+ */
+export interface GenerationStage {
+  id: string;
+  label: string;
+  /** Approximate progress percentage once this stage is reached. */
+  pct: number;
+}
+
+export const GENERATION_STAGES: GenerationStage[] = [
+  { id: "loading_memory", label: "Reading your household memory", pct: 10 },
+  { id: "fetching_weather", label: "Checking the weather", pct: 20 },
+  { id: "grounding_places", label: "Scouting real places nearby", pct: 35 },
+  { id: "composing_plan", label: "Composing your plan", pct: 55 },
+  { id: "validating_scoring", label: "Checking your constraints and scoring", pct: 80 },
+  { id: "enriching_saving", label: "Finishing touches", pct: 92 },
+];
+
+export function stageIndex(stageId?: string | null): number {
+  if (!stageId) return -1;
+  return GENERATION_STAGES.findIndex((stage) => stage.id === stageId);
+}

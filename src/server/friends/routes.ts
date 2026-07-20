@@ -1,16 +1,22 @@
 import { Router } from "express";
 import { requireAuth } from "../auth/middleware.js";
-import { asyncHandler, notFound } from "../http.js";
+import { asyncHandler, notFound, validateBody } from "../http.js";
 import { publicTokenRateLimiter } from "../rateLimit.js";
 import { friendTokenSchema } from "../../shared/schemas.js";
 import {
   acceptFriendInvite,
+  blockUser,
   createFriendInvite,
   displayName,
   getFriendInvite,
+  listBlocked,
+  listFriendLabelSummaries,
   listFriends,
   removeFriend,
+  replaceFriendLabels,
+  unblockUser,
 } from "./repo.js";
+import { friendLabelsReplaceSchema } from "./schemas.js";
 
 export const friendsRouter = Router();
 
@@ -67,6 +73,51 @@ friendsRouter.delete(
   requireAuth,
   asyncHandler(async (req, res) => {
     if (!(await removeFriend(req.user!.id, req.params.userId))) throw notFound();
+    res.status(204).end();
+  })
+);
+
+friendsRouter.get(
+  "/labels",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    res.json({ labels: await listFriendLabelSummaries(req.user!.id) });
+  })
+);
+
+friendsRouter.put(
+  "/:userId/labels",
+  requireAuth,
+  validateBody(friendLabelsReplaceSchema),
+  asyncHandler(async (req, res) => {
+    const labels = await replaceFriendLabels(req.user!.id, req.params.userId, req.body.labels);
+    if (labels === null) throw notFound();
+    res.json({ labels });
+  })
+);
+
+friendsRouter.get(
+  "/blocked",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    res.json({ blocked: await listBlocked(req.user!.id) });
+  })
+);
+
+friendsRouter.post(
+  "/:userId/block",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!(await blockUser(req.user!.id, req.params.userId))) throw notFound();
+    res.status(204).end();
+  })
+);
+
+friendsRouter.delete(
+  "/:userId/block",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!(await unblockUser(req.user!.id, req.params.userId))) throw notFound();
     res.status(204).end();
   })
 );
