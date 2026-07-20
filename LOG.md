@@ -179,3 +179,36 @@ Santa Luzia → Restaurante Lautasco → Sé de Lisboa) to Cacilhas (Farol de Ca
 All 89 Vitest tests across 15 files, the Playwright mobile journey, typecheck,
 lint, build, dependency audit, mobile/desktop visual review, and live health and
 version checks are green.
+
+## 2026-07-20 — v1.0 alpha release ("Iron Man")
+
+### What we did
+Ran the avengers-assemble campaign to take v0.1.5 to an alpha-shareable v1.0:
+async plan-generation jobs with live named-stage progress surviving tab
+switches and reloads; optional 10-question taste-profile quiz; social v1
+(block, circles/labels, one-tap circle chips, "Last group"); visual polish
+(skeletons, form classes, empty states); logout control. Shipped v1.0.0
+(111dc4e) then v1.0.1 (612653a) after adversarial review and live QA.
+
+### What we decided
+Architecture dual-tracked with GPT-5.6 sol (independent convergence on the
+DB-backed job design). Circles shipped lightweight against sol's
+defer-recommendation because Diogo asked explicitly; RSVP/feeds/profiles
+deferred. Provider doctrine: one fast Gemini attempt then DeepSeek, reasoning
+caps + direct-answer retry mandatory for DeepSeek reasoning models.
+
+### What did not work (and was fixed)
+E2E caught fold+dismiss losing a finished plan on remount. Sol's repros caught
+a job-uniqueness race, failed→succeeded resurrection, stale-plan resurrection
+after Buddy edits, post-logout polling, blocked friends leaking into circle
+summaries, and a quiz payload writing 160 rows. Live canary caught production
+generation failing 4/4 during a Gemini 503 storm — root cause was our own
+DeepSeek composition call (6k max_tokens, no reasoning cap → 24.5k reasoning
+tokens, zero content) plus a too-tight abort budget; also a silently vanishing
+failure banner and the complete absence of a logout button. A pre-existing
+1-in-6 e2e flake (fixed banner overlapping bottom controls) was root-caused
+and fixed in passing.
+
+### Next
+Alpha testers on v1.0.1; watch failover behavior in Render logs; then
+place/booking truth and calendar awareness.

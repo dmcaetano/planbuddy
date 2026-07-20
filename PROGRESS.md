@@ -40,9 +40,19 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 - [x] Live grounded recommendation canary via Gemini Search plus DeepSeek chat/feedback
 - [x] DESCRIPTION.md and DESCRIPTION.html
 
+### Phase 6 — v1.0 alpha release (2026-07-20)
+- [x] Async plan generation: job table, 202+jobId, stage-by-stage progress, idempotency, interrupted-job sweep, DB-enforced one-active-job-per-user
+- [x] Client generation state survives tab switches and reloads (GenerationProvider above routes, visibility-aware polling, reattach, cross-tab banner incl. failure state)
+- [x] Optional 10-question taste-profile quiz (onboarding + retakeable from Memory, server-side answer catalog, verified allergy constraints)
+- [x] Social v1: reversible block, friend labels/circles (Family, Close friends, custom), one-tap circle chips + "Last group" in plan creation
+- [x] Visual polish: skeletons, shared form classes, empty states, logout account row
+- [x] Provider resilience: fast Gemini failover, DeepSeek reasoning-starvation fix (28k max_tokens + 8k reasoning cap + direct-answer retry), citation robustness, sanitized errors
+- [x] Adversarial review (GPT-5.6 sol, with executed repros) + live production QA canaries; all confirmed findings fixed
+- [ ] PlanPage circle-chip UX feedback from alpha testers
+
 ## Current state
 
-**Version 0.1.5 is live on Render from `main` and backed by a dedicated Neon project.** A fresh
+**Version 1.0.1 "Iron Man" is live on Render from `main` and backed by the dedicated Neon project.** Shipped 2026-07-20: v1.0.0 (`111dc4e`, features) + v1.0.1 (`612653a`, hardening). 128 Vitest tests + Playwright E2E green; two live production canaries run. Previous baseline (v0.1.5): A fresh
 user can sign up, onboard a home base and participants (including pets),
 generate a plan for any of the four scales, have a typed or chat-quoted hard
 constraint mechanically enforced (peanut-allergy filtering demonstrated in
@@ -90,11 +100,29 @@ covered implicitly by the plan.test.ts lock→history assertion.
 3. **Broader browser coverage** — add separate Playwright scenarios for dead ends, trip modes, friend acceptance, and hunch promotion.
 
 ## Next steps
-1. Collect real household feedback on recommendation quality and response time.
-2. Add a transactional place/booking provider for current operational facts.
-3. Add calendar conflict awareness and broader Playwright coverage.
+1. Hand v1.0.1 to alpha testers; collect feedback on recommendation quality, quiz usefulness, and circle selection.
+2. Watch Render logs for provider-failover behavior under real Gemini outages (reasoning-starvation retry, fallback success rate).
+3. Add a transactional place/booking provider for current operational facts.
+4. Add calendar conflict awareness and broader Playwright coverage (dead ends, trip modes, friend acceptance, hunch promotion).
 
 ## Log
+
+### 2026-07-20 — v1.0.0 "Iron Man" + v1.0.1 hardening (alpha release)
+Avengers-assemble campaign (Fable chair, Sonnet builders, Haiku scouts, GPT-5.6
+sol cross-vendor). v1.0.0: plan generation became an async job with live named
+stages and a progress UI that survives tab switches and reloads (the "user
+stands there thinking it's broken" complaint); optional 10-question taste
+quiz writing visible tastes and verified allergy constraints; social v1
+(reversible block, Family/Close-friends/custom circles, one-tap circle chips,
+"Last group"); visual polish pass. v1.0.1: fixed everything sol's adversarial
+review repro'd (job-uniqueness race, failed→succeeded resurrection, stale-plan
+resurrection after Buddy edits, post-logout polling, blocked friends leaking
+into circles, block/accept race, quiz row amplification) plus live-QA findings
+(silent failure banner, missing logout) and the production provider incident:
+Gemini 503 storms exposed DeepSeek reasoning starvation (24.5k reasoning
+tokens, zero content) — fixed with token headroom, reasoning caps, a
+direct-answer retry, and fast Gemini failover. E2E caught a real state-loss
+bug (fold+dismiss) before ship; live canary caught the rest. 128 tests green.
 
 ### 2026-07-19 — Product contract frozen
 Completed three independent Codex–Fable product rounds. Settled one-pick doctrine, four planning modes, participant-aware least-misery scoring, visible three-tier memory, immediate protection from quoted constraints, venue firewall, deterministic ranking, top-level chat, feedback-driven learning, and the Render/Neon/DeepSeek stack. Created the PlanBuddy workspace and tracking files.

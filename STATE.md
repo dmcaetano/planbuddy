@@ -1,14 +1,17 @@
 # PlanBuddy — State
 
 ## Status
-v0.1.5 “Long Memory” is live at https://planbuddy.onrender.com from
-`main` (`af8377d`, Render deploy `dep-d9ekr5bbc2fs738419r0`), with dedicated
-Neon Postgres persistence. Every surfaced winner is now saved before the user
-acts on it, and recent titles, categories, and venues actively suppress repeat
-recommendations. Local and production QA are green.
+v1.0.1 “Iron Man” is live at https://planbuddy.onrender.com from `main`
+(`612653a`), with dedicated Neon Postgres persistence (project
+`aged-dream-11028120`). Plan generation is an async job with live named-stage
+progress that survives tab switches and reloads; the app has an optional
+taste-profile quiz, friend circles with block, and a logout control. Hardened
+against Gemini outages (DeepSeek reasoning-starvation fix + fast failover).
+128 Vitest tests + Playwright E2E green; adversarially reviewed by GPT-5.6
+sol with executed repros; two live production canaries run on 2026-07-20.
 
 ## Next concrete action
-Use the product with a real household and review recommendation/feedback quality before expanding venue, calendar, or booking integrations.
+Hand the live app to alpha testers; collect feedback on recommendation quality, quiz usefulness, and circle selection before venue/calendar/booking integrations.
 
 ## Decisions made
 
@@ -52,7 +55,28 @@ Use the product with a real household and review recommendation/feedback quality
   search can run the complete grounded planning path; the deployed hybrid route
   remains enabled until an explicit provider switch is requested.
 
+- 2026-07-20 — Plan generation is an async job (DB-backed, stage-reporting,
+  idempotent, one active job per user DB-enforced); clients poll and reattach.
+  Generation state lives in a GenerationProvider above the routes and survives
+  navigation and reloads; failures surface in the cross-tab banner.
+- 2026-07-20 — Optional 10-question taste quiz: answers map to canonical taste
+  texts via a server-side catalog (client sends only answer ids); allergy
+  answers become verified constraints; retake replaces quiz-sourced rows only.
+- 2026-07-20 — Social v1 scope: reversible directional block (neutral errors),
+  friend labels/circles (Family, Close friends, custom; many-to-many), one-tap
+  circle chips and "Last group" in plan creation. Deferred by sol's review +
+  agreement: RSVP, profiles, feeds, comments on shared plans.
+- 2026-07-20 — Provider resilience doctrine: Gemini gets one 30s attempt then
+  DeepSeek failover; DeepSeek reasoning models always get a reasoning cap +
+  generous max_tokens + one direct-answer retry on length-starvation;
+  memory-prefixed citations are stripped, never fatal; user-facing failure
+  text never contains internal ids.
+- 2026-07-20 — Versioning: hero-codename scheme adopted (v1.0.x "Iron Man");
+  version pill hardcoded in PlanPage must be bumped with package.json.
+
 ## Future ideas
+- RSVP (Available / Maybe / Can't) on dated plans for included friends
+- Comments/reactions on shared plans (ownership/privacy design needed first)
 
 - Calendar connection and conflict-aware dates
 - Booking/deep-link integrations
