@@ -1,8 +1,8 @@
 # PlanBuddy — State
 
 ## Status
-v1.0.1 “Iron Man” is live at https://planbuddy.onrender.com from `main`
-(`612653a`), with dedicated Neon Postgres persistence (project
+v1.0.2 “Iron Man” is live at https://planbuddy.onrender.com from `main`
+(`aaba309`), with dedicated Neon Postgres persistence (project
 `aged-dream-11028120`). Plan generation is an async job with live named-stage
 progress that survives tab switches and reloads; the app has an optional
 taste-profile quiz, friend circles with block, and a logout control. Hardened

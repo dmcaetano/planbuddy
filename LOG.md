@@ -212,3 +212,21 @@ and fixed in passing.
 ### Next
 Alpha testers on v1.0.1; watch failover behavior in Render logs; then
 place/booking truth and calendar awareness.
+
+## 2026-07-21 — v1.0.2 hotfix: fallback compose timeout
+
+### What we did
+Diogo hit "Grounded planning is temporarily unavailable" live. Render logs
+showed the Gemini failover working but the DeepSeek web-search fallback
+aborting at exactly its 90s AI_COMPOSE_TIMEOUT_MS with no second attempt.
+Raised the compose budget to 210s (background jobs have no HTTP deadline;
+only the 10-minute sweep bounds it) and added exactly one retry on
+abort-like errors for webSearch/heavy calls. Shipped v1.0.2 (aaba309);
+live canary then produced a real Belém itinerary in under a minute on the
+first attempt.
+
+### Lesson
+When adding provider timeouts, budget for the fallback chain end-to-end,
+not per-call in isolation — a "resilience" cap that is tighter than the
+provider's real latency under load just converts slow successes into
+failures.
