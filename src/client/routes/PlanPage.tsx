@@ -469,7 +469,7 @@ export default function PlanPage() {
       <div>
         <div className="row-gap" style={{ alignItems: "center", marginBottom: 4 }}>
           <div className="eyebrow" style={{ marginBottom: 0 }}>Plan</div>
-          <span className="version-pill">v1.0.1 · iron man</span>
+          <span className="version-pill">v1.0.2 · iron man</span>
         </div>
         <h1>One click. One genuinely good plan.</h1>
         <p>PlanBuddy combines what it remembers with live context, then commits to the best fit.</p>

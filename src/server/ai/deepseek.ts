@@ -32,6 +32,8 @@ interface AiCallOptions {
   heavy?: boolean;
   /** Internal: set on the single retry after a ReasoningStarvedError to force a short, low-reasoning answer. */
   directAnswer?: boolean;
+  /** Internal: set on the single retry after a provider timeout so a slow provider gets exactly one more attempt. */
+  timeoutRetry?: boolean;
 }
 
 interface RawAiReply {
@@ -162,6 +164,10 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
  * explicit "answer directly" instruction instead of failing the whole
  * generation outright.
  */
+function isAbortLike(err: unknown): boolean {
+  return err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError");
+}
+
 async function callWithLengthRetry(systemPrompt: string, userPrompt: string, options: AiCallOptions): Promise<RawAiReply> {
   try {
     return await callOpenRouter(systemPrompt, userPrompt, options);
@@ -173,6 +179,16 @@ async function callWithLengthRetry(systemPrompt: string, userPrompt: string, opt
         heavy: Boolean(options.heavy),
       });
       return callOpenRouter(systemPrompt, userPrompt, { ...options, directAnswer: true });
+    }
+    // A slow provider under load is transient more often than it is broken —
+    // the background-job architecture can afford exactly one more attempt.
+    if (isAbortLike(err) && (options.webSearch || options.heavy) && !options.timeoutRetry) {
+      logger.warn("AI call timed out; retrying once", {
+        model: env.MODEL_ID,
+        webSearch: Boolean(options.webSearch),
+        heavy: Boolean(options.heavy),
+      });
+      return callWithLengthRetry(systemPrompt, userPrompt, { ...options, timeoutRetry: true });
     }
     throw err;
   }

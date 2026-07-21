@@ -23,7 +23,11 @@ const envSchema = z.object({
   // Grounded web-search and full plan-composition DeepSeek calls carry much
   // larger reasoning+content token budgets than chat/feedback JSON and need
   // real wall-clock headroom to finish, especially as a Gemini fallback.
-  AI_COMPOSE_TIMEOUT_MS: z.coerce.number().int().min(15000).max(180000).default(90000),
+  // Generation runs as a background job with no HTTP deadline; the only hard
+  // ceiling is the 10-minute interrupted-job sweep. DeepSeek with live web
+  // search under provider load routinely needs >90s, so give it real room:
+  // worst case (one timeout retry) stays under the sweep at ~2x this value.
+  AI_COMPOSE_TIMEOUT_MS: z.coerce.number().int().min(15000).max(300000).default(210000),
   PLACE_RESOLVER_API_KEY: z.string().optional(),
 });
 
