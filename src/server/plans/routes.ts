@@ -19,11 +19,10 @@ import type { Candidate } from "../../shared/types.js";
 import { planningParticipantIdsAreAuthorized } from "../friends/repo.js";
 import { applyCandidateReaction } from "./reactions.service.js";
 import { enqueueGenerationJob } from "./jobs.js";
+import { MAX_GENERATIONS_PER_SPEC } from "./limits.js";
 
 export const planSpecsRouter = Router();
 planSpecsRouter.use(requireAuth);
-
-const MAX_GENERATIONS = 2; // initial batch + one regeneration batch
 
 // Server-only extension of the shared client-facing schema — an optional
 // idempotency key so a duplicate/retried POST reattaches to the same job
@@ -64,7 +63,7 @@ function pipelineResponse(spec: Awaited<ReturnType<typeof createPlanSpec>>, resu
     winner: result.winner ? planView(result.winner, result.context, viewerUserId) : null,
     alternates: result.alternates.map((c) => planView(c, result.context, viewerUserId)),
     generationsUsed: spec.generationCount,
-    generationsRemaining: Math.max(0, MAX_GENERATIONS - spec.generationCount),
+    generationsRemaining: Math.max(0, MAX_GENERATIONS_PER_SPEC - spec.generationCount),
   };
 }
 
@@ -120,7 +119,7 @@ planSpecsRouter.post(
       idempotencyKey,
       requestPayload: { specId: spec.id },
       execute: async (report) => {
-        if (spec.generationCount >= MAX_GENERATIONS) {
+        if (spec.generationCount >= MAX_GENERATIONS_PER_SPEC) {
           return {
             spec,
             aiMode: "demo",

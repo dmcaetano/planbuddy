@@ -143,7 +143,7 @@ describe("plan generation integration (demo AI)", () => {
     expect(history.body.past.some((p: { candidateId: string; status: string }) => p.candidateId === winnerId && p.status === "rejected")).toBe(true);
   });
 
-  it("caps regeneration at one extra batch, then returns honest looseners", async () => {
+  it("allows at least three fresh suggestions and caps only after twenty", async () => {
     const { agent, ownerId } = await signUpWithHomeBase(app, "plan4@example.com");
     const generate = await postAndAwaitGeneration(agent, "/api/plan-specs", {
       scale: "day_off",
@@ -167,8 +167,16 @@ describe("plan generation integration (demo AI)", () => {
     const regen2Job = await waitForJob(agent, regen2Kickoff.body.jobId);
     expect(regen2Job.status).toBe("succeeded");
     const regen2Body = regen2Job.result as Record<string, unknown>;
-    expect(regen2Body.looseners).toBeTruthy();
-    expect(regen2Body.winner).toBeNull();
+    expect(regen2Body.winner).toBeTruthy();
+    expect(regen2Body.generationsUsed).toBe(3);
+
+    const db = await getDb();
+    await db.query("UPDATE plan_specs SET generation_count = 20 WHERE id = $1", [specId]);
+    const cappedKickoff = await agent.post(`/api/plan-specs/${specId}/regenerate`).set(HDR, "1");
+    const cappedJob = await waitForJob(agent, cappedKickoff.body.jobId);
+    const cappedBody = cappedJob.result as Record<string, unknown>;
+    expect(cappedBody.looseners).toBeTruthy();
+    expect(cappedBody.winner).toBeNull();
   });
 
   it("locking creates a feedback-eligible plan and feedback creates a hunch", async () => {

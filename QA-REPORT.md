@@ -6,7 +6,7 @@
 
 1. Lisbon local discovery: 60 km OpenStreetMap/Overpass catalogue, three-mirror failover, weekly Neon cache, background warm-up, and exact-radius filtering.
 2. Route composition: three real sourced stops, compact walking legs, cuisine/request matching, distance-band exploration, Google Maps enrichment, weather/apparel, and a nearby restaurant fallback.
-3. Novelty: every surfaced plan enters History and the last 100 surfaced plans exclude all previously used stop names before selection.
+3. Novelty: every surfaced plan enters History, the last 100 surfaced plans exclude all previously used stop names, and each setup permits 20 fresh suggestions rather than stopping at two.
 4. One-click setup: scale, dates, participants, free-text context, radius, meal time, walking range, per-person budget, setting, and transport, with useful defaults.
 5. Plan actions: Show another, Lock, Share, Love/Like/Dislike, visible Start over, reversible Buddy editor, and restaurant/time/budget/walking/outdoor tweaks.
 6. Memory: constraints/tastes CRUD plus learned-hunch list, confirm, dismiss, edit text/person/polarity, and permanent delete.

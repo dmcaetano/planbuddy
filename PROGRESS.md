@@ -8,6 +8,7 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 - [x] Persist the catalogue in Neon and refresh it asynchronously with mirror failover
 - [x] Bundle the verified 11,185-place snapshot so Render cold starts are instant
 - [x] Exclude named stops from the last 100 surfaced plans
+- [x] Raise each setup from two suggestions to twenty fresh suggestions
 - [x] Compose compact three-stop routes with real distances and Maps enrichment
 - [x] Add radius, meal, walking, budget, setting, and transport controls
 - [x] Add visible Start over and immediate route-preserving tweak modes

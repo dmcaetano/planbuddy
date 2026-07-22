@@ -9,6 +9,8 @@ failover, request/cuisine scoring, geographic distance bands, compact route
 construction, and strict exclusion of every stop in the last 100 surfaced
 plans. Added advanced one-click controls, a visible Start over action,
 deterministic surgical tweaks, and full learned-hunch edit/delete controls.
+The explicit per-setup generation ceiling was also raised from two to twenty;
+the old cap was a second direct cause of the reported two-result experience.
 
 ### What we tested
 The live-source acceptance harness loaded 11,185 places and generated three

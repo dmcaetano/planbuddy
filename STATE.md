@@ -4,7 +4,7 @@
 v1.1.3 "Wasp" has passed local release gates and is pending Render deployment.
 It replaces the three-route Lisbon shortcut with a bundled and Neon-cached 11k-place, 60 km
 catalogue; excludes stops from the last 100 surfaced plans; adds plan controls,
-Start over, surgical tweak paths, and hunch edit/delete. The real-data matrix
+20 fresh suggestions per setup, Start over, surgical tweak paths, and hunch edit/delete. The real-data matrix
 passed 9 plans with 27 unique stops and all five tweak modes. 159 Vitest tests,
 two mobile Playwright journeys, typecheck, lint, build, and visual inspection
 are green.

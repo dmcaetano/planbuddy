@@ -6,6 +6,7 @@ import { planChatActionCreateSchema } from "../../shared/schemas.js";
 import type { Candidate } from "../../shared/types.js";
 import { getCandidate } from "./candidates.repo.js";
 import { createPlanSpec, getPlanSpec, incrementGenerationCount } from "./specs.repo.js";
+import { MAX_GENERATIONS_PER_SPEC } from "./limits.js";
 import {
   activeConstraintsView,
   gatherPlanContext,
@@ -48,7 +49,7 @@ function revisionResponse(spec: Awaited<ReturnType<typeof createPlanSpec>>, resu
     winner: result.winner ? planView(result.winner, result.context, viewerUserId) : null,
     alternates: [],
     generationsUsed: spec.generationCount,
-    generationsRemaining: Math.max(0, 2 - spec.generationCount),
+    generationsRemaining: Math.max(0, MAX_GENERATIONS_PER_SPEC - spec.generationCount),
   };
 }
 
@@ -133,7 +134,7 @@ planChatRouter.post(
       jobId = activeJob.jobId;
       reply = "I’m already working on your other plan change. I’ll keep it going while you browse.";
     } else if (action.action === "show_another") {
-      if (currentSpec.generationCount >= 2) {
+      if (currentSpec.generationCount >= MAX_GENERATIONS_PER_SPEC) {
         reply = "This version has used its fresh alternatives. Ask me for a specific change and I'll build a reversible revision instead.";
       } else {
         const queued = await enqueueGenerationJob({
