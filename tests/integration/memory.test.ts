@@ -90,6 +90,28 @@ describe("memory integration", () => {
     expect(crossTenantRead.status).toBe(404);
   });
 
+  it("lets the owner edit and permanently delete a learned hunch", async () => {
+    const { agent, userId } = await signUp(app, "hunch-crud@example.com");
+    const hunch = await recordHunchEvidence(userId, {
+      participantId: null,
+      text: "busy restaurants",
+      polarity: "avoid",
+      note: "learned from a dislike",
+    });
+
+    const updated = await agent.patch(`/api/hunches/${hunch.id}`).set(HDR, "1").send({
+      text: "very noisy restaurants",
+      polarity: "avoid",
+    });
+    expect(updated.status).toBe(200);
+    expect(updated.body.hunch.text).toBe("very noisy restaurants");
+
+    const deleted = await agent.delete(`/api/hunches/${hunch.id}`).set(HDR, "1");
+    expect(deleted.status).toBe(204);
+    const list = await agent.get("/api/hunches");
+    expect(list.body.hunches.some((item: { id: string }) => item.id === hunch.id)).toBe(false);
+  });
+
   it("chat quote-or-demote: verified quote becomes an active-unverified constraint", async () => {
     const { agent } = await signUp(app, "chatquote1@example.com");
     const session = await agent.get("/api/chat/session");

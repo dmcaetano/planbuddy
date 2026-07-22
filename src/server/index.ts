@@ -5,6 +5,7 @@ import { sweepExpiredChatMessages } from "./chat/retention.js";
 import { sweepInterruptedJobs } from "./plans/jobs.js";
 import { logger } from "./logger.js";
 import { currentAiMode } from "./ai/index.js";
+import { warmPlaceCatalog } from "./resolver/placeResolver.js";
 
 async function main() {
   await runMigrations();
@@ -15,6 +16,11 @@ async function main() {
       aiMode: currentAiMode(),
       env: env.NODE_ENV,
     });
+    if (env.NODE_ENV === "production") {
+      void warmPlaceCatalog(38.7223, -9.1393, 60).catch((err) =>
+        logger.warn("Lisbon place catalog warm-up failed", { error: String(err) })
+      );
+    }
   });
 
   sweepExpiredChatMessages().catch((err) => logger.warn("Initial chat retention sweep failed", { error: String(err) }));

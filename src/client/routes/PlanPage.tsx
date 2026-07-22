@@ -12,7 +12,7 @@ import GenerationProgress from "../components/GenerationProgress";
 import { useGeneration } from "../state/GenerationContext";
 import { useAuth } from "../state/AuthContext";
 import { usePlanFocus } from "../state/PlanFocusContext";
-import { Bot, Lock, PawPrint, RefreshCw, SlidersHorizontal, Sparkles, User, UserPlus, Users, X } from "lucide-react";
+import { Bot, ChevronDown, ChevronUp, Lock, PawPrint, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, User, UserPlus, Users, X } from "lucide-react";
 
 function lastGroupStorageKey(userId: string): string {
   return `planbuddy.lastGroup.${userId}`;
@@ -43,6 +43,13 @@ export default function PlanPage() {
   const [endDate, setEndDate] = useState(nextSaturday());
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [moodContext, setMoodContext] = useState("");
+  const [radiusKm, setRadiusKm] = useState(SCALE_RADIUS_KM.weekend);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [mealTiming, setMealTiming] = useState<"flexible" | "lunch" | "dinner">("flexible");
+  const [walkingLevel, setWalkingLevel] = useState<"light" | "balanced" | "long">("balanced");
+  const [budget, setBudget] = useState<"flexible" | "25" | "40" | "60">("flexible");
+  const [setting, setSetting] = useState<"mixed" | "outdoors" | "indoors">("mixed");
+  const [transport, setTransport] = useState<"flexible" | "public" | "car">("flexible");
 
   const [state, setState] = useState<ViewState>("spec");
   const [result, setResult] = useState<PipelineResponse | null>(null);
@@ -253,8 +260,16 @@ export default function PlanPage() {
         scale,
         startDate,
         endDate,
+        radiusKm,
         participantIds: selectedIds,
-        moodContext: moodContext.trim() || null,
+        moodContext: [
+          moodContext.trim(),
+          `Meal: ${mealTiming}`,
+          `Walking: ${walkingLevel === "light" ? "20-40 minutes" : walkingLevel === "long" ? "75-120 minutes" : "45-75 minutes"}`,
+          `Budget: ${budget === "flexible" ? "flexible" : `up to €${budget} per person`}`,
+          `Setting: ${setting}`,
+          `Transport: ${transport}`,
+        ].filter(Boolean).join(". ").slice(0, 280),
       });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't reach PlanBuddy. Please try again.");
@@ -369,6 +384,7 @@ export default function PlanPage() {
   }
 
   function startOver() {
+    generation.dismiss();
     setState("spec");
     setResult(null);
     setOtherVersion(null);
@@ -376,6 +392,23 @@ export default function PlanPage() {
     setLooseners(null);
     setError(null);
     setTweakOpen(false);
+    setChatOpen(false);
+    setChatThreadSpecId(null);
+    setMoodContext("");
+    setScale("weekend");
+    setRadiusKm(SCALE_RADIUS_KM.weekend);
+    setStartDate(nextSaturday());
+    setEndDate(nextSaturday());
+    setMealTiming("flexible");
+    setWalkingLevel("balanced");
+    setBudget("flexible");
+    setSetting("mixed");
+    setTransport("flexible");
+  }
+
+  function chooseScale(value: Scale) {
+    setScale(value);
+    setRadiusKm(SCALE_RADIUS_KM[value]);
   }
 
   function toggleParticipant(id: string) {
@@ -453,6 +486,7 @@ export default function PlanPage() {
               <button className={`btn btn-ghost ${tweakOpen ? "active" : ""}`} onClick={() => setTweakOpen((open) => !open)}>
                 <SlidersHorizontal size={16} /> Tweak
               </button>
+              <button className="btn btn-ghost" onClick={startOver}><RotateCcw size={16} /> Start over</button>
             </div>
             <button className={`btn btn-buddy btn-block ${chatOpen ? "active" : ""}`} onClick={() => setChatOpen((open) => !open)}>
               <Bot size={17} /> {chatOpen ? "Close Buddy editor" : "Edit this plan with Buddy"}
@@ -510,7 +544,7 @@ export default function PlanPage() {
       <div>
         <div className="row-gap" style={{ alignItems: "center", marginBottom: 4 }}>
           <div className="eyebrow" style={{ marginBottom: 0 }}>Plan</div>
-          <span className="version-pill">v1.1.2 · wasp</span>
+          <span className="version-pill">v1.1.3 · wasp</span>
         </div>
         <h1>One click. One genuinely good plan.</h1>
         <p>PlanBuddy combines what it remembers with live context, then commits to the best fit.</p>
@@ -521,7 +555,7 @@ export default function PlanPage() {
           <label>Scale</label>
           <div className="chip-row">
             {(Object.keys(SCALE_LABELS) as Scale[]).map((value) => (
-              <button key={value} type="button" className={`chip ${scale === value ? "selected" : ""}`} onClick={() => setScale(value)}>{SCALE_LABELS[value]}</button>
+              <button key={value} type="button" className={`chip ${scale === value ? "selected" : ""}`} onClick={() => chooseScale(value)}>{SCALE_LABELS[value]}</button>
             ))}
           </div>
           <p className="muted" style={{ marginTop: 4 }}>Default radius: {SCALE_RADIUS_KM[scale]} km</p>
@@ -569,6 +603,22 @@ export default function PlanPage() {
           <label htmlFor="mood">Anything different this time? <span className="muted">Optional</span></label>
           <textarea id="mood" rows={2} placeholder="e.g. grilled fish, a soft walk, and our Pom is coming" value={moodContext} onChange={(event) => setMoodContext(event.target.value)} />
         </div>
+        <button type="button" className="btn btn-ghost btn-block" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}>
+          <SlidersHorizontal size={16} /> Plan controls {advancedOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+        {advancedOpen && (
+          <section className="advanced-plan-controls" aria-label="Advanced plan controls">
+            <div className="field advanced-plan-controls__wide">
+              <div className="field-label-row"><label htmlFor="radius">Search radius</label><strong>{radiusKm} km</strong></div>
+              <input id="radius" type="range" min={2} max={SCALE_RADIUS_KM[scale]} step={1} value={radiusKm} onChange={(event) => setRadiusKm(Number(event.target.value))} />
+            </div>
+            <div className="field"><label htmlFor="meal-timing">Meal</label><select id="meal-timing" className="select" value={mealTiming} onChange={(event) => setMealTiming(event.target.value as typeof mealTiming)}><option value="flexible">Flexible</option><option value="lunch">Lunch</option><option value="dinner">Dinner</option></select></div>
+            <div className="field"><label htmlFor="walking-level">Walking</label><select id="walking-level" className="select" value={walkingLevel} onChange={(event) => setWalkingLevel(event.target.value as typeof walkingLevel)}><option value="light">Light · 20–40 min</option><option value="balanced">Balanced · 45–75 min</option><option value="long">Long · 75–120 min</option></select></div>
+            <div className="field"><label htmlFor="budget">Budget</label><select id="budget" className="select" value={budget} onChange={(event) => setBudget(event.target.value as typeof budget)}><option value="flexible">Flexible</option><option value="25">Up to €25 / person</option><option value="40">Up to €40 / person</option><option value="60">Up to €60 / person</option></select></div>
+            <div className="field"><label htmlFor="setting">Setting</label><select id="setting" className="select" value={setting} onChange={(event) => setSetting(event.target.value as typeof setting)}><option value="mixed">Mixed</option><option value="outdoors">Mostly outdoors</option><option value="indoors">Mostly indoors</option></select></div>
+            <div className="field"><label htmlFor="transport">Getting there</label><select id="transport" className="select" value={transport} onChange={(event) => setTransport(event.target.value as typeof transport)}><option value="flexible">Best option</option><option value="public">Public transport</option><option value="car">Car is fine</option></select></div>
+          </section>
+        )}
         <button className="btn btn-primary btn-block" onClick={planIt} disabled={selectedIds.length === 0}>Plan my {SCALE_LABELS[scale].toLowerCase()}</button>
       </div>
     </div>

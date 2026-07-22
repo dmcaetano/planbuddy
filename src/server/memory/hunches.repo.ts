@@ -255,6 +255,39 @@ export async function dismissHunch(userId: string, id: string): Promise<Hunch | 
   return rows[0] ? toDomain(rows[0]) : null;
 }
 
+export async function updateHunch(
+  userId: string,
+  id: string,
+  input: { text?: string; participantId?: string | null; polarity?: TastePolarity }
+): Promise<Hunch | null> {
+  const existing = await getHunch(userId, id);
+  if (!existing) return null;
+  const db = await getDb();
+  const { rows } = await db.query<HunchRow>(
+    `UPDATE hunches
+     SET text = $3, participant_id = $4, polarity = $5, updated_at = now()
+     WHERE user_id = $1 AND id = $2
+     RETURNING *`,
+    [
+      userId,
+      id,
+      input.text ?? existing.text,
+      input.participantId !== undefined ? input.participantId : existing.participantId,
+      input.polarity ?? existing.polarity,
+    ]
+  );
+  return rows[0] ? toDomain(rows[0]) : null;
+}
+
+export async function deleteHunch(userId: string, id: string): Promise<boolean> {
+  const db = await getDb();
+  const { rows } = await db.query(
+    "DELETE FROM hunches WHERE user_id = $1 AND id = $2 RETURNING id",
+    [userId, id]
+  );
+  return rows.length > 0;
+}
+
 /** User-driven confirmation counts as an explicit evidence event. */
 export async function confirmHunch(userId: string, id: string): Promise<Hunch | null> {
   const hunch = await getHunch(userId, id);

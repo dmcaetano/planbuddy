@@ -10,6 +10,7 @@ export interface FilterContext {
   activeConstraints: { id: string; text: string }[];
   knownFacts: Map<string, string>; // factId -> verbatim fact text
   resolverMode: "inspiration" | "resolved";
+  resolvedVenueIds?: string[];
   groundedSourceUrls?: string[];
   radiusKm: number;
   isTripScale: boolean;
@@ -38,6 +39,7 @@ export function filterCandidates(candidates: AiCandidate[], ctx: FilterContext):
   const rejected: RejectedCandidate[] = [];
   const seenTitles = new Set<string>();
   const groundedUrls = new Set((ctx.groundedSourceUrls ?? []).map(normalizeSourceUrl));
+  const resolvedVenueIds = new Set(ctx.resolvedVenueIds ?? []);
 
   for (let candidate of candidates) {
     const text = candidateText(candidate);
@@ -80,6 +82,10 @@ export function filterCandidates(candidates: AiCandidate[], ctx: FilterContext):
 
     if (candidate.resolverVenueIds.length > 0 && ctx.resolverMode === "inspiration") {
       rejected.push({ candidate, reason: "venue-firewall: no live resolver payload backs this venue" });
+      continue;
+    }
+    if (candidate.resolverVenueIds.some((venueId) => !resolvedVenueIds.has(venueId))) {
+      rejected.push({ candidate, reason: "venue-firewall: candidate referenced a place outside the resolver payload" });
       continue;
     }
 

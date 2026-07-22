@@ -1,5 +1,28 @@
 # PlanBuddy — Log
 
+## 2026-07-23 — v1.1.3 catalogue diversity
+
+### What we did
+Removed the hard-coded three-route Lisbon production shortcut. Added a durable
+60 km OpenStreetMap/Overpass catalogue cached in Neon, three-provider mirror
+failover, request/cuisine scoring, geographic distance bands, compact route
+construction, and strict exclusion of every stop in the last 100 surfaced
+plans. Added advanced one-click controls, a visible Start over action,
+deterministic surgical tweaks, and full learned-hunch edit/delete controls.
+
+### What we tested
+The live-source acceptance harness loaded 11,185 places and generated three
+plans for each of three different setups: nine plans, 27 unique stops, no
+repeats. Restaurant, meal-time, budget, walking, and outdoor tweaks all passed
+preservation checks. Typecheck, lint, build, 158 Vitest tests, two Playwright
+mobile journeys, and mobile screenshot inspection passed.
+
+### What failed and changed
+One Overpass endpoint returned HTTP 504 during the acceptance rerun. Catalogue
+refresh now fails over across three independent mirrors and retains the last
+known-good Neon snapshot, so an upstream outage cannot collapse the product
+back to a tiny route set.
+
 ## 2026-07-22 — v1.1.1 one-click planner recovery
 
 ### What we did

@@ -169,8 +169,18 @@ describe("filterCandidates", () => {
 
   it("allows resolver venue IDs when the resolver is actually live", () => {
     const candidate = makeCandidate({ resolverVenueIds: ["venue-123"] });
-    const { kept } = filterCandidates([candidate], baseCtx({ resolverMode: "resolved" }));
+    const { kept } = filterCandidates([candidate], baseCtx({ resolverMode: "resolved", resolvedVenueIds: ["venue-123"] }));
     expect(kept).toHaveLength(1);
+  });
+
+  it("rejects resolver venue IDs that were not in the live payload", () => {
+    const candidate = makeCandidate({ resolverVenueIds: ["invented-venue"] });
+    const { kept, rejected } = filterCandidates(
+      [candidate],
+      baseCtx({ resolverMode: "resolved", resolvedVenueIds: ["real-venue"] })
+    );
+    expect(kept).toHaveLength(0);
+    expect(rejected[0].reason).toContain("outside the resolver payload");
   });
 
   it("rejects a named place whose source URL was not returned by web grounding", () => {

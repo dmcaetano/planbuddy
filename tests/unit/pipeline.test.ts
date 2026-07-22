@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGroundedRestaurantSwap, findMealBeatIndex } from "../../src/server/plans/engine/pipeline.js";
+import { buildDeterministicEdit, buildGroundedRestaurantSwap, findMealBeatIndex } from "../../src/server/plans/engine/pipeline.js";
 import type { Candidate } from "../../src/shared/types.js";
 
 describe("plan edit preservation", () => {
@@ -81,5 +81,53 @@ describe("plan edit preservation", () => {
     expect(revised?.beats[2].place?.name).toBe("Garden");
     expect(revised?.fallback?.place?.name).toBe("First Fish");
     expect(revised?.checkBeforeYouGo[0]).toContain("Second Fish");
+  });
+
+  it("applies timing, walking, budget, and outdoor tweaks without replacing the route", () => {
+    const place = (name: string, kind: string) => ({
+      name, address: "Lisbon", kind, sourceUrl: `https://example.com/${name}`, sourceLabel: name, factualNote: "Grounded.",
+    });
+    const original = {
+      title: "A complete day",
+      rationale: "Compact route.",
+      category: "food",
+      indoor: false,
+      beats: [
+        { title: "Park", description: "Walk.", category: "walk", indoor: false, startTime: "12:00", durationMinutes: 40, place: place("Park", "park") },
+        { title: "Meal", description: "Eat.", category: "food", indoor: true, startTime: "13:00", durationMinutes: 90, place: place("Meal One", "restaurant") },
+        { title: "Garden", description: "Stroll.", category: "stroll", indoor: false, startTime: "15:00", durationMinutes: 30, place: place("Garden", "garden") },
+      ],
+      fallback: { title: "Meal Two", description: "Nearby restaurant.", place: place("Meal Two", "restaurant") },
+      walkingDistanceKm: 3,
+      walkingMinutes: 70,
+      estimatedCost: "€35",
+      checkBeforeYouGo: [],
+      photoSearchTerm: "Park",
+      heroImage: null,
+      routeMapsUrl: null,
+      preparation: null,
+      destinationAnchor: null,
+      travelEstimateKm: 2,
+      resolverVenueIds: [],
+      citations: [],
+      constraintCompliance: [],
+    } as Candidate;
+    const names = (candidate: ReturnType<typeof buildDeterministicEdit>) => candidate?.beats.map((beat) => beat.place?.name);
+
+    const dinner = buildDeterministicEdit({ request: "Make it dinner", mode: "meal_time", originalCandidate: original });
+    expect(names(dinner)).toEqual(["Park", "Meal One", "Garden"]);
+    expect(dinner?.beats[1].startTime).toBe("19:30");
+
+    const walking = buildDeterministicEdit({ request: "Less walking", mode: "walking", originalCandidate: original });
+    expect(names(walking)).toEqual(["Park", "Meal One", "Garden"]);
+    expect(walking!.walkingMinutes).toBeLessThan(original.walkingMinutes!);
+
+    const outdoors = buildDeterministicEdit({ request: "More outdoors", mode: "general", originalCandidate: original });
+    expect(names(outdoors)).toEqual(["Park", "Meal One", "Garden"]);
+    expect(outdoors!.beats[0].durationMinutes).toBeGreaterThan(original.beats[0].durationMinutes!);
+
+    const budget = buildDeterministicEdit({ request: "Lower cost", mode: "budget", originalCandidate: original });
+    expect(names(budget)).toEqual(["Park", "Meal Two", "Garden"]);
+    expect(budget?.estimatedCost).toContain("Lower-cost");
   });
 });

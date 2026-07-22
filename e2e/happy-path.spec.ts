@@ -93,3 +93,47 @@ test("signup -> generate -> Love -> Buddy edit -> share -> dislike -> lock -> fe
   await page.getByRole("button", { name: /Log out/i }).click();
   await expect(page.getByRole("button", { name: "Create account" })).toBeVisible({ timeout: 10000 });
 });
+
+test("plan controls, start over, and learned-hunch editing work on mobile", async ({ page }) => {
+  const email = uniqueEmail();
+  await page.goto("/");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("password123");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.getByLabel("Home city").fill("Lisbon");
+  await page.getByRole("button", { name: /Lisbon/i }).first().click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Skip" }).click();
+
+  await page.getByRole("button", { name: /Plan controls/i }).click();
+  await expect(page.getByLabel("Search radius")).toBeVisible();
+  await page.getByLabel("Search radius").fill("18");
+  await page.getByLabel("Meal").selectOption("dinner");
+  await page.getByLabel("Walking").selectOption("light");
+  await page.getByLabel("Budget").selectOption("25");
+  await page.getByLabel("Setting").selectOption("outdoors");
+  await page.getByLabel("Getting there").selectOption("public");
+  await page.getByLabel("Getting there").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/plan-controls-mobile.png" });
+  await page.getByRole("button", { name: "Plan my weekend" }).click();
+  await expect(page.getByRole("button", { name: /Lock it/i })).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: /^Love$/i }).click();
+  await expect(page.getByText("PlanBuddy learned")).toBeVisible();
+
+  await page.getByRole("button", { name: /Start over/i }).click();
+  await expect(page.getByText("One click. One genuinely good plan.")).toBeVisible();
+  await expect(page.getByLabel("Anything different this time? Optional")).toHaveValue("");
+
+  await page.getByRole("link", { name: "Memory" }).click();
+  await page.getByRole("button", { name: "Hunches" }).click();
+  const hunchCard = page.locator(".card").filter({ has: page.getByText(/confidence/i) }).first();
+  await expect(hunchCard).toBeVisible();
+  await hunchCard.getByTitle("Edit").click();
+  await hunchCard.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/hunch-editor-mobile.png" });
+  await hunchCard.getByLabel("Hunch text").fill("edited preference for quiet green routes");
+  await hunchCard.getByTitle("Save changes").click();
+  await expect(page.getByText("edited preference for quiet green routes")).toBeVisible();
+  await hunchCard.getByTitle("Delete permanently").click();
+  await expect(page.getByText("edited preference for quiet green routes")).toHaveCount(0);
+});

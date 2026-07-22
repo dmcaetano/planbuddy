@@ -56,6 +56,7 @@ interface StartSpecPayload {
   scale: string;
   startDate: string;
   endDate: string;
+  radiusKm?: number;
   participantIds: string[];
   moodContext: string | null;
 }

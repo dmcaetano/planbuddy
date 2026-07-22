@@ -1,5 +1,54 @@
 # PlanBuddy QA report
 
+## v1.1.3 “Wasp” — catalogue diversity release (2026-07-23)
+
+### Phase 1 — Inventory
+
+1. Lisbon local discovery: 60 km OpenStreetMap/Overpass catalogue, three-mirror failover, weekly Neon cache, background warm-up, and exact-radius filtering.
+2. Route composition: three real sourced stops, compact walking legs, cuisine/request matching, distance-band exploration, Google Maps enrichment, weather/apparel, and a nearby restaurant fallback.
+3. Novelty: every surfaced plan enters History and the last 100 surfaced plans exclude all previously used stop names before selection.
+4. One-click setup: scale, dates, participants, free-text context, radius, meal time, walking range, per-person budget, setting, and transport, with useful defaults.
+5. Plan actions: Show another, Lock, Share, Love/Like/Dislike, visible Start over, reversible Buddy editor, and restaurant/time/budget/walking/outdoor tweaks.
+6. Memory: constraints/tastes CRUD plus learned-hunch list, confirm, dismiss, edit text/person/polarity, and permanent delete.
+7. Existing regression surface: auth/onboarding, friends, sharing, History, chat, background jobs, persistence, privacy, error/loading/dead-end states, and mobile navigation.
+
+### Phase 2 — Procedures
+
+1. Run TypeScript, ESLint, all unit/contract/integration tests, production build, and both Playwright mobile journeys.
+2. Fetch the real Lisbon 60 km catalogue. Generate three plans for each of three setups (meal/walk/Pom, outdoor budget lunch, indoor culture/public transport), carrying every surfaced stop into the next run’s History exclusions.
+3. Assert nine winners, exactly three sourced stops each, and zero repeated stop names across all 27 stops.
+4. Apply restaurant, meal-time, budget, walking, and outdoor edits. Assert restaurant/budget change only the meal and all other edits preserve every venue.
+5. On mobile, expand controls, change all six values, generate, Love, Start over, then edit and delete the learned hunch.
+6. Inspect 390×844 screenshots of the expanded controls and hunch editor for clipping, overlap, wrong target, and bottom-navigation clearance.
+7. After deployment, verify the visible version, health, catalogue warm-up, three successive live plans, History persistence, all tweak modes, Start over, and hunch edit/delete.
+
+### Phase 3 — Local execution
+
+- TypeScript: **PASS**
+- ESLint: **PASS**
+- Production build and ten migrations: **PASS**
+- Unit/contract/integration: **PASS — 158/158 across 22 files**
+- Playwright mobile: **PASS — 2/2**
+- Real catalogue matrix: **PASS — 11,185 places; 9 plans; 27/27 unique surfaced stops; 5/5 tweak modes**
+- Visual verification: **PASS — controls and hunch editor at Pixel 7 dimensions**
+
+### Phase 4 — Defects found and fixed
+
+- Removed the three-route Lisbon shortcut that caused the same results.
+- Replaced it with a durable large catalogue and strict recent-stop exclusion.
+- Added resolver-ID membership validation so catalogue-backed claims cannot invent a venue.
+- Added Overpass mirror failover after the acceptance run caught an upstream 504.
+- Reused one 60 km cache for smaller radius settings so moving a slider does not trigger another slow discovery fetch.
+- Skipped local-place discovery for getaway/vacation flows, which do not use the local composer.
+- Added immediate surgical edits so timing/walking/outdoor changes do not wait on a model or replace unrelated stops.
+- Added missing hunch edit/delete and visible Start over controls.
+
+### Phase 5 — Production canary
+
+Pending deployment of v1.1.3. The section below is retained as an older release record.
+
+---
+
 Version **0.1.5 — “Long Memory”**
 Reviewed 2026-07-19 by Codex after GPT-SOL, Claude Fable, and Claude Opus product-output comparisons.
 

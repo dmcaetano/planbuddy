@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { asyncHandler, notFound, validateBody } from "../http.js";
 import { requireAuth } from "../auth/middleware.js";
-import { hunchUpdateSchema } from "../../shared/schemas.js";
-import { confirmHunch, dismissHunch, getHunch, listHunchEvidence, listHunches } from "./hunches.repo.js";
+import { hunchEditSchema, hunchUpdateSchema } from "../../shared/schemas.js";
+import { confirmHunch, deleteHunch, dismissHunch, getHunch, listHunchEvidence, listHunches, updateHunch } from "./hunches.repo.js";
 
 export const hunchesRouter = Router();
 hunchesRouter.use(requireAuth);
@@ -36,5 +36,23 @@ hunchesRouter.post(
         : await dismissHunch(req.user!.id, req.params.id);
     if (!hunch) throw notFound();
     res.json({ hunch });
+  })
+);
+
+hunchesRouter.patch(
+  "/:id",
+  validateBody(hunchEditSchema),
+  asyncHandler(async (req, res) => {
+    const hunch = await updateHunch(req.user!.id, req.params.id, req.body);
+    if (!hunch) throw notFound();
+    res.json({ hunch });
+  })
+);
+
+hunchesRouter.delete(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    if (!(await deleteHunch(req.user!.id, req.params.id))) throw notFound();
+    res.status(204).end();
   })
 );

@@ -62,6 +62,12 @@ export const hunchUpdateSchema = z.object({
   action: z.enum(["confirm", "dismiss"]),
 });
 
+export const hunchEditSchema = z.object({
+  text: z.string().trim().min(1).max(300).optional(),
+  participantId: z.string().uuid().nullable().optional(),
+  polarity: z.enum(["love", "avoid"]).optional(),
+}).refine((value) => Object.keys(value).length > 0, { message: "At least one hunch field is required" });
+
 /* ---------------------------------------------------------------------- */
 /* Memory: taste quiz                                                      */
 /* ---------------------------------------------------------------------- */

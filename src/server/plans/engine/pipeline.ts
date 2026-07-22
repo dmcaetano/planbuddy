@@ -18,6 +18,7 @@ import { enrichCandidate } from "./enrich.js";
 import { HttpError } from "../../http.js";
 import type { AiCandidate } from "../../../shared/schemas.js";
 import type { ProgressReporter } from "./stages.js";
+import { buildCatalogCandidate } from "./catalogPlanner.js";
 
 export interface PlanContext {
   selectedParticipants: Participant[];
@@ -109,7 +110,7 @@ export async function gatherPlanContext(userId: string, spec: PlanSpec, report?:
 
   await report?.("grounding_places");
   const resolver: PlaceResolverResult =
-    user?.homeBaseLat != null && user?.homeBaseLng != null
+    user?.homeBaseLat != null && user?.homeBaseLng != null && !isTripScale(spec.scale)
       ? await resolvePlaces(user.homeBaseLat, user.homeBaseLng, spec.radiusKm)
       : { mode: "inspiration", venues: [] };
 
@@ -292,6 +293,84 @@ export function buildGroundedRestaurantSwap(original: Candidate): AiCandidate | 
   };
 }
 
+function shiftedClock(value: string | null | undefined, minutes: number): string | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value ?? "");
+  if (!match) return value ?? null;
+  const total = (Number(match[1]) * 60 + Number(match[2]) + minutes + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** Immediate, reversible edits for controls that do not require discovering a
+ * new route. This keeps tweaks fast and guarantees untouched venues survive. */
+export function buildDeterministicEdit(edit: PlanEditDirective): AiCandidate | null {
+  const original = edit.originalCandidate;
+  if (edit.mode === "restaurant" || edit.mode === "budget") {
+    const swapped = buildGroundedRestaurantSwap(original);
+    if (!swapped) return null;
+    return edit.mode === "budget"
+      ? {
+          ...swapped,
+          title: `${original.title} — lower-cost meal`.slice(0, 120),
+          rationale: `${swapped.rationale} Use the live menu to keep the order within the requested budget.`.slice(0, 600),
+          estimatedCost: "Lower-cost target: confirm current menu prices before booking",
+        }
+      : swapped;
+  }
+  if (edit.mode === "meal_time") {
+    const wantsDinner = /\bdinner|evening|night\b/i.test(edit.request);
+    const wantsLunch = /\blunch|midday|noon\b/i.test(edit.request);
+    const shift = /\bearlier\b/i.test(edit.request) ? -60 : /\blater\b/i.test(edit.request) ? 60 : 0;
+    const schedule = wantsDinner ? ["17:30", "19:30", "21:15"] : wantsLunch ? ["11:00", "12:30", "14:15"] : null;
+    return {
+      ...original,
+      title: `${original.title} — retimed`.slice(0, 120),
+      rationale: `The same places and route, reorganized around the requested timing. ${original.rationale}`.slice(0, 600),
+      beats: original.beats.map((beat, index) => ({
+        ...beat,
+        startTime: schedule?.[index] ?? shiftedClock(beat.startTime, shift),
+        directionsUrl: null,
+      })),
+      routeMapsUrl: null,
+      resolverVenueIds: [],
+    };
+  }
+  if (edit.mode === "walking") {
+    const wantsMore = /\bmore|longer\b/i.test(edit.request);
+    const factor = wantsMore ? 1.35 : 0.55;
+    return {
+      ...original,
+      title: `${original.title} — ${wantsMore ? "longer" : "lighter"} walking`.slice(0, 120),
+      rationale: `The same anchor places with ${wantsMore ? "more time" : "shorter loops"} on foot; the meal and route remain intact.`.slice(0, 600),
+      beats: original.beats.map((beat) => ({
+        ...beat,
+        durationMinutes: /food|meal|restaurant/i.test(`${beat.category} ${beat.place?.kind ?? ""}`)
+          ? beat.durationMinutes
+          : Math.max(5, Math.round((beat.durationMinutes ?? 20) * factor)),
+        directionsUrl: null,
+      })),
+      walkingMinutes: original.walkingMinutes == null ? null : Math.max(10, Math.round(original.walkingMinutes * factor)),
+      walkingDistanceKm: original.walkingDistanceKm == null ? null : Math.round(original.walkingDistanceKm * factor * 10) / 10,
+      routeMapsUrl: null,
+      resolverVenueIds: [],
+    };
+  }
+  if (edit.mode === "general" && /\bmore outdoors|outdoor|outside\b/i.test(edit.request)) {
+    return {
+      ...original,
+      title: `${original.title} — more time outside`.slice(0, 120),
+      rationale: `The same compact route with more time assigned to its outdoor stops; the meal remains unchanged.`.slice(0, 600),
+      beats: original.beats.map((beat) => ({
+        ...beat,
+        durationMinutes: beat.indoor ? beat.durationMinutes : Math.min(180, Math.round((beat.durationMinutes ?? 20) * 1.35)),
+        directionsUrl: null,
+      })),
+      routeMapsUrl: null,
+      resolverVenueIds: [],
+    };
+  }
+  return null;
+}
+
 function applyEditPreservation(candidate: AiCandidate, edit: PlanEditDirective): AiCandidate | null {
   const original = edit.originalCandidate;
   if (edit.mode === "restaurant" || edit.mode === "budget") {
@@ -369,8 +448,8 @@ export async function runGeneration(
   const { selectedParticipants, scopedConstraints, scopedTastes, scopedHunches, weather, resolver, knownFacts } =
     context;
 
-  const recentPlans = await lastSurfacedPlans(userId, 20);
-  const recentSuggestions = recentPlans.slice(0, 12).map((plan) => ({
+  const recentPlans = await lastSurfacedPlans(userId, 100);
+  const recentSuggestions = recentPlans.map((plan) => ({
     title: plan.title,
     category: plan.category,
     placeNames: Array.from(new Set(plan.beats.map((beat) => beat.place?.name).filter((name): name is string => Boolean(name)))),
@@ -438,8 +517,9 @@ export async function runGeneration(
       : undefined,
   };
 
-  const cachedRestaurantSwap = edit?.mode === "restaurant"
-    ? buildGroundedRestaurantSwap(edit.originalCandidate)
+  const cachedLocalEdit = edit ? buildDeterministicEdit(edit) : null;
+  const catalogCandidate = !edit && !isTripScale(spec.scale) && resolver.mode === "resolved"
+    ? buildCatalogCandidate(genCtx, resolver.venues)
     : null;
   // The cached-swap path never touches grounding_places (already stamped
   // by gatherPlanContext) or generateCandidates, so it must self-report the
@@ -448,11 +528,24 @@ export async function runGeneration(
   // first and progress must stay monotonic (grounding_places=35 <
   // composing_plan=55) — reporting composing_plan here first would make a
   // later grounding_places detail update look like progress went backwards.
-  if (cachedRestaurantSwap) {
-    await report?.("composing_plan", `Swapping in ${cachedRestaurantSwap.beats.find((b) => b.place)?.place?.name ?? "a nearby alternative"}`);
+  if (catalogCandidate) {
+    await report?.("composing_plan", `Choosing a fresh compact route from ${resolver.venues.length.toLocaleString()} nearby places`);
+  } else if (cachedLocalEdit) {
+    await report?.("composing_plan", "Applying the smallest change while preserving the route");
   }
-  const { mode, response, groundingSources } = cachedRestaurantSwap
-    ? { mode: "gemini-grounded" as const, response: { candidates: [cachedRestaurantSwap] }, groundingSources: [] }
+  const { mode, response, groundingSources } = catalogCandidate
+    ? {
+        mode: "demo" as const,
+        response: { candidates: [catalogCandidate] },
+        groundingSources: [
+          ...catalogCandidate.beats.flatMap((beat) => beat.place ? [{ url: beat.place.sourceUrl, title: beat.place.sourceLabel }] : []),
+          ...(catalogCandidate.fallback?.place
+            ? [{ url: catalogCandidate.fallback.place.sourceUrl, title: catalogCandidate.fallback.place.sourceLabel }]
+            : []),
+        ],
+      }
+    : cachedLocalEdit
+    ? { mode: "demo" as const, response: { candidates: [cachedLocalEdit] }, groundingSources: [] }
     : await generateCandidates(genCtx, report);
   const originalSources = edit
     ? [
@@ -489,6 +582,7 @@ export async function runGeneration(
     activeConstraints: scopedConstraints.map((c) => ({ id: c.id, text: c.text })),
     knownFacts,
     resolverMode: resolver.mode,
+    resolvedVenueIds: resolver.venues.map((venue) => venue.id),
     groundedSourceUrls: context.groundingSources.map((source) => source.url),
     radiusKm: spec.radiusKm,
     isTripScale: isTripScale(spec.scale),

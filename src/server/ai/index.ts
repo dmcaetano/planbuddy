@@ -26,7 +26,7 @@ import {
   buildPlanActionSystemPrompt,
   buildPlanActionUserPrompt,
 } from "./prompts.js";
-import { chatRespondDemo, feedbackExtractDemo, generateCandidatesDemo, generateCuratedQuickPlan, generateQuickFallback, type ChatContext, type GenerateContext } from "./demoAi.js";
+import { chatRespondDemo, feedbackExtractDemo, generateCandidatesDemo, generateQuickFallback, type ChatContext, type GenerateContext } from "./demoAi.js";
 import type { Candidate } from "../../shared/types.js";
 import type { ProgressReporter } from "../plans/engine/stages.js";
 
@@ -100,11 +100,6 @@ export async function generateCandidates(
   if (currentAiMode() === "demo") {
     await report?.("composing_plan");
     return { mode: "demo", response: generateCandidatesDemo(ctx), groundingSources: [] };
-  }
-  const curated = generateCuratedQuickPlan(ctx);
-  if (curated) {
-    await report?.("composing_plan", "Matching a trusted local route to your memory");
-    return { mode: "demo", response: curated, groundingSources: [] };
   }
   const composingEvent = (detail: string) => {
     void report?.("composing_plan", detail);

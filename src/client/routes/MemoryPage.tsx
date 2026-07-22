@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { Constraint, Hunch, Participant, Taste } from "../api/types";
-import { Check, LogOut, MapPin, Plus, ShieldCheck, ShieldQuestion, Sparkles, Trash2, X } from "lucide-react";
+import { Check, LogOut, MapPin, Pencil, Plus, Save, ShieldCheck, ShieldQuestion, Sparkles, Trash2, X } from "lucide-react";
 import CitySearch from "../components/CitySearch";
 import { Link, useNavigate } from "react-router-dom";
 import { Users } from "lucide-react";
@@ -23,6 +23,8 @@ export default function MemoryPage() {
   const [loading, setLoading] = useState(true);
   const [showQuiz, setShowQuiz] = useState(false);
   const [editingHomeBase, setEditingHomeBase] = useState(false);
+  const [editingHunchId, setEditingHunchId] = useState<string | null>(null);
+  const [hunchDraft, setHunchDraft] = useState({ text: "", polarity: "love" as "love" | "avoid", participantId: "" });
 
   async function loadAll() {
     const [p, c, t, h] = await Promise.all([
@@ -91,6 +93,28 @@ export default function MemoryPage() {
   async function actOnHunch(id: string, action: "confirm" | "dismiss") {
     const data = await api.post<{ hunch: Hunch }>(`/hunches/${id}`, { action });
     setHunches((prev) => prev.map((h) => (h.id === id ? data.hunch : h)));
+  }
+
+  function beginHunchEdit(hunch: Hunch) {
+    setEditingHunchId(hunch.id);
+    setHunchDraft({ text: hunch.text, polarity: hunch.polarity, participantId: hunch.participantId ?? "" });
+  }
+
+  async function saveHunch(id: string) {
+    if (!hunchDraft.text.trim()) return;
+    const data = await api.patch<{ hunch: Hunch }>(`/hunches/${id}`, {
+      text: hunchDraft.text.trim(),
+      polarity: hunchDraft.polarity,
+      participantId: hunchDraft.participantId || null,
+    });
+    setHunches((previous) => previous.map((hunch) => hunch.id === id ? data.hunch : hunch));
+    setEditingHunchId(null);
+  }
+
+  async function removeHunch(id: string) {
+    await api.delete(`/hunches/${id}`);
+    setHunches((previous) => previous.filter((hunch) => hunch.id !== id));
+    if (editingHunchId === id) setEditingHunchId(null);
   }
 
   // Account / logout
@@ -306,20 +330,45 @@ export default function MemoryPage() {
                     <span className="badge badge-sky">{participantName(h.participantId)}</span>
                     <span className="muted">confidence {Math.round(h.confidence * 100)}% · {h.evidenceCount} evidence event(s)</span>
                   </div>
-                  <strong>{h.text}</strong>
+                  {editingHunchId === h.id ? (
+                    <div className="stack" style={{ gap: 8 }}>
+                      <input aria-label="Hunch text" value={hunchDraft.text} onChange={(event) => setHunchDraft((draft) => ({ ...draft, text: event.target.value }))} />
+                      <div className="row-gap">
+                        <select className="select" aria-label="Hunch polarity" value={hunchDraft.polarity} onChange={(event) => setHunchDraft((draft) => ({ ...draft, polarity: event.target.value as "love" | "avoid" }))}>
+                          <option value="love">Maybe loves</option>
+                          <option value="avoid">Maybe avoids</option>
+                        </select>
+                        <select className="select" aria-label="Hunch person" value={hunchDraft.participantId} onChange={(event) => setHunchDraft((draft) => ({ ...draft, participantId: event.target.value }))}>
+                          <option value="">Household</option>
+                          {participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  ) : <strong>{h.text}</strong>}
                   <p className="muted">Never appears in rationales; contributes at most ±0.15 to fit; decays without reinforcement.</p>
                 </div>
-                {h.status === "active" && (
-                  <div className="row-gap">
+                <div className="row-gap">
+                  {editingHunchId === h.id ? (
+                    <>
+                      <button className="icon-btn" title="Save changes" onClick={() => saveHunch(h.id)}><Save size={18} /></button>
+                      <button className="icon-btn" title="Cancel editing" onClick={() => setEditingHunchId(null)}><X size={18} /></button>
+                    </>
+                  ) : (
+                    <button className="icon-btn" title="Edit" onClick={() => beginHunchEdit(h)}><Pencil size={18} /></button>
+                  )}
+                  {h.status === "active" && editingHunchId !== h.id && (
+                    <>
                     <button className="icon-btn" title="Confirm" onClick={() => actOnHunch(h.id, "confirm")}>
                       <Check size={18} />
                     </button>
                     <button className="icon-btn" title="Dismiss" onClick={() => actOnHunch(h.id, "dismiss")}>
                       <X size={18} />
                     </button>
-                  </div>
-                )}
-                {h.status !== "active" && <span className="badge badge-sky">{h.status}</span>}
+                    </>
+                  )}
+                  {h.status !== "active" && editingHunchId !== h.id && <span className="badge badge-sky">{h.status}</span>}
+                  <button className="icon-btn" title="Delete permanently" onClick={() => removeHunch(h.id)}><Trash2 size={18} /></button>
+                </div>
               </div>
             </div>
           ))}

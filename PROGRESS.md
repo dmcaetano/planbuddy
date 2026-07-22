@@ -3,6 +3,17 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 
 ## Roadmap
 
+### v1.1.3 catalogue diversity release
+- [x] Replace the three-route Lisbon shortcut with a 60 km OpenStreetMap catalogue
+- [x] Persist the catalogue in Neon and refresh it asynchronously with mirror failover
+- [x] Exclude named stops from the last 100 surfaced plans
+- [x] Compose compact three-stop routes with real distances and Maps enrichment
+- [x] Add radius, meal, walking, budget, setting, and transport controls
+- [x] Add visible Start over and immediate route-preserving tweak modes
+- [x] Add learned-hunch edit and permanent delete
+- [x] Pass 9-plan/27-unique-stop real-data acceptance and 158 automated tests
+- [ ] Deploy and complete the live production canary
+
 ### Phase 1 — Foundation
 - [x] Scaffold React/Vite/TypeScript client and Express/TypeScript server
 - [x] Add normalized Neon schema and migrations (+ zero-setup local PGlite fallback)
