@@ -11,6 +11,9 @@ original plan. The visual layer adds soft coral/plum warmth, editorial heading
 scale, scoped real-participant avatars, stronger ticket elevation, and the
 responsive Buddy dock. Verification passed: 141 Vitest tests, mobile
 Playwright E2E, TypeScript, lint, build, audit, and desktop/mobile visual review.
+Committed as `2543f18`, pushed to `main`, and verified live on Render: deploy
+`dep-d9gjnl6rnols73drarkg` is live, `/api/health` reports `{ "ok": true }`,
+and the served production client contains the v1.1.0 + Buddy dock bundle.
 
 ## 2026-07-19 — Project start
 

@@ -1,7 +1,8 @@
 # PlanBuddy — State
 
 ## Status
-v1.1.0 "Wasp" is release-ready locally. It adds a warm place-and-people canvas
+v1.1.0 "Wasp" is live at https://planbuddy.onrender.com from `main`
+(`2543f18`). It adds a warm place-and-people canvas
 and a persistent floating Buddy. Buddy is plan-aware when a plan is in view,
 uses the shared background job lifecycle for edits, and preserves the original
 ticket as a reversible version. 141 Vitest tests plus Playwright E2E are green.
@@ -16,8 +17,8 @@ against Gemini outages (DeepSeek reasoning-starvation fix + fast failover).
 sol with executed repros; two live production canaries run on 2026-07-20.
 
 ## Next concrete action
-Deploy v1.1.0, verify the live health endpoint, then hand the floating-Buddy
-experience to alpha testers for recommendation and edit-flow feedback.
+Hand the floating-Buddy experience to alpha testers for recommendation and
+edit-flow feedback.
 
 Hand the live app to alpha testers; collect feedback on recommendation quality, quiz usefulness, and circle selection before venue/calendar/booking integrations.
 

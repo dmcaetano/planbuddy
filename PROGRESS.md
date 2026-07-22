@@ -52,7 +52,7 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 
 ## Current state
 
-**Version 1.1.0 "Wasp" is release-ready locally.** It adds a persistent
+**Version 1.1.0 "Wasp" is live on Render from `main` (`2543f18`).** It adds a persistent
 floating Buddy assistant, background plan edits that do not replace the active
 ticket, reversible comparison, scoped participant avatars, and the warm
 place-canvas refresh. TypeScript, lint, build, audit, 141 Vitest tests,
