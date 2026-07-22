@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { Constraint, Hunch, Participant, Taste } from "../api/types";
-import { Check, LogOut, Plus, ShieldCheck, ShieldQuestion, Sparkles, Trash2, X } from "lucide-react";
+import { Check, LogOut, MapPin, Plus, ShieldCheck, ShieldQuestion, Sparkles, Trash2, X } from "lucide-react";
+import CitySearch from "../components/CitySearch";
 import { Link, useNavigate } from "react-router-dom";
 import { Users } from "lucide-react";
 import { SkeletonList } from "../components/Skeleton";
@@ -21,6 +22,7 @@ export default function MemoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [editingHomeBase, setEditingHomeBase] = useState(false);
 
   async function loadAll() {
     const [p, c, t, h] = await Promise.all([
@@ -117,6 +119,37 @@ export default function MemoryPage() {
           </button>
         </div>
         <p>Every constraint, taste, and hunch is visible and editable — nothing learns silently.</p>
+      </div>
+
+      <div className="card home-base-card">
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div className="eyebrow">Home base</div>
+            <p className="mb-0">
+              <MapPin size={14} /> {auth.user?.homeBaseLabel ?? "Not set — plans need a home base"}
+            </p>
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditingHomeBase((v) => !v)}>
+            {editingHomeBase ? "Cancel" : auth.user?.homeBaseLabel ? "Change" : "Set it"}
+          </button>
+        </div>
+        {editingHomeBase && (
+          <div className="mt-2">
+            <CitySearch
+              placeholder="Search for your home city"
+              autoFocus
+              onChoose={async (choice) => {
+                try {
+                  const data = await api.put<{ user: NonNullable<typeof auth.user> }>("/auth/home-base", choice);
+                  if (data.user) auth.setUser(data.user);
+                  setEditingHomeBase(false);
+                } catch (err) {
+                  setError(err instanceof ApiError ? err.message : "Could not save your home base.");
+                }
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {error && <div className="error-banner">{error}</div>}

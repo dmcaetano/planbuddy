@@ -5,6 +5,9 @@
   --pine: #2f5d50;
   --honey: #e8a13d;
   --sky: #7fa8c9;
+  --plum: #76506d;
+  --plum-soft: rgba(118, 80, 109, 0.13);
+  --coral-glow: #f8d8ca;
 
   --paper-raised: #ffffff;
   --hairline: rgba(38, 34, 27, 0.14);
@@ -20,7 +23,7 @@
   --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
   --font-ui: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
 
-  --radius-card: 14px;
+  --radius-card: 18px;
   --radius-pill: 999px;
   --shadow-card: 0 1px 2px rgba(38, 34, 27, 0.06), 0 6px 20px rgba(38, 34, 27, 0.08);
 
@@ -50,6 +53,9 @@
     --pine: #5ba58f;
     --honey: #f0b559;
     --sky: #9bc2e3;
+    --plum: #c394b8;
+    --plum-soft: rgba(195, 148, 184, 0.16);
+    --coral-glow: rgba(224, 119, 82, 0.2);
     --clay-soft: rgba(224, 119, 82, 0.18);
     --pine-soft: rgba(91, 165, 143, 0.18);
     --honey-soft: rgba(240, 181, 89, 0.18);
@@ -70,6 +76,9 @@
   --pine: #5ba58f;
   --honey: #f0b559;
   --sky: #9bc2e3;
+  --plum: #c394b8;
+  --plum-soft: rgba(195, 148, 184, 0.16);
+  --coral-glow: rgba(224, 119, 82, 0.2);
 }
 
 :root[data-theme="light"] {
@@ -84,4 +93,7 @@
   --pine: #2f5d50;
   --honey: #e8a13d;
   --sky: #7fa8c9;
+  --plum: #76506d;
+  --plum-soft: rgba(118, 80, 109, 0.13);
+  --coral-glow: #f8d8ca;
 }

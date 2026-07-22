@@ -12,6 +12,8 @@ import GenerationBanner from "./components/GenerationBanner";
 import FriendsPage from "./routes/FriendsPage";
 import InvitePage from "./routes/InvitePage";
 import SharedPlanPage from "./routes/SharedPlanPage";
+import BuddyDock from "./components/BuddyDock";
+import { PlanFocusProvider } from "./state/PlanFocusContext";
 import "./styles/progress.css";
 
 export default function App() {
@@ -41,6 +43,7 @@ export default function App() {
 
   return (
     <GenerationProvider>
+      <PlanFocusProvider>
       <div className="app-shell">
         <main className="app-main">
           <Routes>
@@ -56,7 +59,9 @@ export default function App() {
         </main>
         {user.homeBaseLabel && <NavBar />}
         <GenerationBanner />
+        {user.homeBaseLabel && <BuddyDock />}
       </div>
+      </PlanFocusProvider>
     </GenerationProvider>
   );
 }

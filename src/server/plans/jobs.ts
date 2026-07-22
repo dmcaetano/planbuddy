@@ -4,7 +4,7 @@ import { stringifyJsonForDb } from "../db/json.js";
 import { logger } from "../logger.js";
 import { HttpError } from "../http.js";
 import { AiUnavailableError } from "../ai/deepseek.js";
-import { STAGE_META, type StageKey } from "./engine/stages.js";
+import { STAGE_META, type StageKey, type ProgressReporter } from "./engine/stages.js";
 
 export type JobOperation = "create" | "regenerate" | "tweak";
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";
@@ -16,6 +16,7 @@ interface JobRow {
   request_payload: unknown;
   status: JobStatus;
   stage: StageKey | null;
+  stage_detail: string | null;
   progress_pct: number;
   idempotency_key: string | null;
   attempt: number;
@@ -31,6 +32,7 @@ export interface JobView {
   status: JobStatus;
   stage: StageKey | null;
   stageLabel: string | null;
+  stageDetail: string | null;
   progressPct: number;
   startedAt: string;
   updatedAt: string;
@@ -45,6 +47,7 @@ function toView(row: JobRow): JobView {
     status: row.status,
     stage: row.stage,
     stageLabel: row.stage ? STAGE_META[row.stage].label : null,
+    stageDetail: row.stage_detail ?? null,
     progressPct: row.progress_pct,
     // There is no separate queueing delay in this design (the job is
     // enqueued and detached in the same tick), so "started" is "created".
@@ -135,11 +138,17 @@ async function claimJob(id: string): Promise<boolean> {
   return rows.length > 0;
 }
 
-async function persistStage(id: string, stage: StageKey): Promise<void> {
+/**
+ * Persists both `stage`/`progress_pct` and `stage_detail` together. `stage`
+ * is always re-written with the *current* stage (even on a detail-only
+ * update, where the caller passes the same stage it already reported) so a
+ * detail-only narration update can never reset or clobber the stage.
+ */
+async function persistStage(id: string, stage: StageKey, detail: string | null): Promise<void> {
   const db = await getDb();
   await db.query(
-    `UPDATE plan_generation_jobs SET stage = $2, progress_pct = $3, updated_at = now() WHERE id = $1`,
-    [id, stage, STAGE_META[stage].pct]
+    `UPDATE plan_generation_jobs SET stage = $2, progress_pct = $3, stage_detail = $4, updated_at = now() WHERE id = $1`,
+    [id, stage, STAGE_META[stage].pct, detail]
   );
 }
 
@@ -195,19 +204,25 @@ function sanitizeError(err: unknown): { code: string; message: string } {
   };
 }
 
-async function runDetached(jobId: string, execute: (report: (stage: StageKey) => Promise<void>) => Promise<unknown>) {
+async function runDetached(jobId: string, execute: (report: ProgressReporter) => Promise<unknown>) {
   try {
     const claimed = await claimJob(jobId);
     if (!claimed) return; // already claimed/terminal — shouldn't happen, but never double-run
 
     let lastStage: StageKey | null = null;
-    const report = async (stage: StageKey) => {
-      if (stage === lastStage) return; // only persist stage TRANSITIONS
+    let lastDetail: string | null = null;
+    const report: ProgressReporter = async (stage, detail) => {
+      const normalizedDetail = detail ?? null;
+      // Only persist on a stage TRANSITION or a DETAIL change (never a
+      // no-op repeat) — and never throw into the pipeline; a failed
+      // narration write must not fail plan generation.
+      if (stage === lastStage && normalizedDetail === lastDetail) return;
       lastStage = stage;
+      lastDetail = normalizedDetail;
       try {
-        await persistStage(jobId, stage);
+        await persistStage(jobId, stage, normalizedDetail);
       } catch (err) {
-        logger.warn("Failed to persist plan generation job stage", { jobId, stage, error: String(err) });
+        logger.warn("Failed to persist plan generation job stage", { jobId, stage, detail: normalizedDetail, error: String(err) });
       }
     };
 
@@ -239,7 +254,7 @@ export async function enqueueGenerationJob(params: {
   operation: JobOperation;
   idempotencyKey?: string | null;
   requestPayload: unknown;
-  execute: (report: (stage: StageKey) => Promise<void>) => Promise<unknown>;
+  execute: (report: ProgressReporter) => Promise<unknown>;
 }): Promise<{ jobId: string; existing: boolean }> {
   const idempotencyKey = params.idempotencyKey?.trim() || null;
 

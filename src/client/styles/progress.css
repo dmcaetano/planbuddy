@@ -63,6 +63,42 @@
   background: currentColor;
 }
 
+.generation-stage__row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.generation-stage__detail {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Crossfade for text that updates in place (stage detail line, banner headline): the incoming
+   text remounts under a fresh key each time it changes, and this fade-in animation plays on
+   mount. prefers-reduced-motion disables the animation below, so the swap is an instant cut. */
+.generation-crossfade {
+  display: inline-block;
+  animation: generation-crossfade-in 0.35s ease;
+}
+
+@keyframes generation-crossfade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-crossfade {
+    animation: none;
+  }
+}
+
 .generation-stage--done {
   color: var(--ink);
 }

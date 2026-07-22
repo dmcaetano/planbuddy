@@ -3,7 +3,7 @@ import request from "supertest";
 import { getTestApp } from "../helpers/testApp.js";
 import { getDb } from "../../src/server/db/client.js";
 import { findMealBeatIndex, gatherPlanContext } from "../../src/server/plans/engine/pipeline.js";
-import { postAndAwaitGeneration, HDR } from "../helpers/planJobs.js";
+import { postAndAwaitGeneration, waitForJob, HDR } from "../helpers/planJobs.js";
 
 async function account(app: unknown, email: string) {
   const agent = request.agent(app as never);
@@ -158,10 +158,12 @@ describe("social learning, sharing, and friends", () => {
       candidateId: original.id,
       message: "Change only the restaurant and keep the two walks",
     });
-    expect(edit.status).toBe(201);
+    expect(edit.status).toBe(202);
     expect(edit.body.action.editMode).toBe("restaurant");
-    expect(edit.body.revision.winner).toBeTruthy();
-    const changed = edit.body.revision.winner.candidate;
+    expect(edit.body.jobId).toBeTruthy();
+    const editJob = await waitForJob(alice.agent, edit.body.jobId);
+    expect(editJob.status).toBe("succeeded");
+    const changed = (editJob.result as { winner: { candidate: typeof original } }).winner.candidate;
     for (let index = 0; index < original.beats.length; index += 1) {
       if (index === originalMealIndex) continue;
       expect(changed.beats[index].place?.name ?? null).toBe(original.beats[index].place?.name ?? null);
@@ -172,9 +174,11 @@ describe("social learning, sharing, and friends", () => {
       candidateId: changed.id,
       message: "Make it dinner instead and reorganize the timing",
     });
-    expect(dinner.status).toBe(201);
+    expect(dinner.status).toBe(202);
     expect(dinner.body.action.editMode).toBe("meal_time");
-    const dinnerCandidate = dinner.body.revision.winner.candidate;
+    const dinnerJob = await waitForJob(alice.agent, dinner.body.jobId);
+    expect(dinnerJob.status).toBe("succeeded");
+    const dinnerCandidate = (dinnerJob.result as { winner: { candidate: typeof original } }).winner.candidate;
     expect(dinnerCandidate.beats[originalMealIndex].startTime).toBe("19:30");
 
     const love = await alice.agent.post(`/api/plan-specs/${threadSpecId}/chat-action`).set(HDR, "1").send({

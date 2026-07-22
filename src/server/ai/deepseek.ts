@@ -34,6 +34,27 @@ interface AiCallOptions {
   directAnswer?: boolean;
   /** Internal: set on the single retry after a provider timeout so a slow provider gets exactly one more attempt. */
   timeoutRetry?: boolean;
+  /**
+   * Optional short-sentence narration hook for the async job's sub-status
+   * (see plans/jobs.ts persistStage). Deliberately just `(detail: string) =>
+   * void` — this module has no idea what a "stage" or a "job" is; the
+   * caller (ai/index.ts) decides which stage a given detail belongs to.
+   * Never throws into the AI call path.
+   */
+  onEvent?: (detail: string) => void;
+}
+
+/** Human-facing narration strings for the recoverable retry paths below. */
+const EVENT_REASONING_RETRY = "Almost had it — asking for a cleaner draft";
+const EVENT_TIMEOUT_RETRY = "The kitchen is busy — giving it another minute";
+export const EVENT_VALIDATION_REPAIR = "Polishing the draft";
+
+function emit(options: AiCallOptions, detail: string): void {
+  try {
+    options.onEvent?.(detail);
+  } catch (err) {
+    logger.warn("AI progress onEvent callback threw; ignoring", { error: String(err) });
+  }
 }
 
 interface RawAiReply {
@@ -178,6 +199,7 @@ async function callWithLengthRetry(systemPrompt: string, userPrompt: string, opt
         webSearch: Boolean(options.webSearch),
         heavy: Boolean(options.heavy),
       });
+      emit(options, EVENT_REASONING_RETRY);
       return callOpenRouter(systemPrompt, userPrompt, { ...options, directAnswer: true });
     }
     // A slow provider under load is transient more often than it is broken —
@@ -188,6 +210,7 @@ async function callWithLengthRetry(systemPrompt: string, userPrompt: string, opt
         webSearch: Boolean(options.webSearch),
         heavy: Boolean(options.heavy),
       });
+      emit(options, EVENT_TIMEOUT_RETRY);
       return callWithLengthRetry(systemPrompt, userPrompt, { ...options, timeoutRetry: true });
     }
     throw err;
@@ -204,7 +227,7 @@ export async function callAiJson<T>(
   systemPrompt: string,
   userPrompt: string,
   schema: ZodType<T, ZodTypeDef, unknown>,
-  options: { heavy?: boolean } = {}
+  options: { heavy?: boolean; onEvent?: (detail: string) => void } = {}
 ): Promise<T> {
   let raw = await callWithLengthRetry(systemPrompt, userPrompt, options);
   let parsed = safeJsonParse(raw.content);
@@ -213,6 +236,7 @@ export async function callAiJson<T>(
   if (!result || !result.success) {
     const issue = result ? JSON.stringify(result.error.flatten()).slice(0, 400) : "not valid JSON";
     logger.warn("AI response failed validation, attempting one repair", { model: env.MODEL_ID, issue });
+    emit(options, EVENT_VALIDATION_REPAIR);
     raw = await callWithLengthRetry(systemPrompt, userPrompt, { ...options, repairNote: issue });
     parsed = safeJsonParse(raw.content);
     result = parsed ? schema.safeParse(parsed) : null;
@@ -235,16 +259,18 @@ export async function callAiJson<T>(
 export async function callAiJsonGrounded<T>(
   systemPrompt: string,
   userPrompt: string,
-  schema: ZodType<T, ZodTypeDef, unknown>
+  schema: ZodType<T, ZodTypeDef, unknown>,
+  options: { onEvent?: (detail: string) => void } = {}
 ): Promise<{ data: T; groundingSources: GroundingSource[] }> {
-  let raw = await callWithLengthRetry(systemPrompt, userPrompt, { webSearch: true });
+  let raw = await callWithLengthRetry(systemPrompt, userPrompt, { webSearch: true, onEvent: options.onEvent });
   let parsed = safeJsonParse(raw.content);
   let result = parsed ? schema.safeParse(parsed) : null;
 
   if (!result || !result.success) {
     const issue = result ? JSON.stringify(result.error.flatten()).slice(0, 500) : "not valid JSON";
     logger.warn("Grounded AI response failed validation, attempting one repair", { model: env.MODEL_ID, issue });
-    raw = await callWithLengthRetry(systemPrompt, userPrompt, { webSearch: true, repairNote: issue });
+    emit(options, EVENT_VALIDATION_REPAIR);
+    raw = await callWithLengthRetry(systemPrompt, userPrompt, { webSearch: true, repairNote: issue, onEvent: options.onEvent });
     parsed = safeJsonParse(raw.content);
     result = parsed ? schema.safeParse(parsed) : null;
   }

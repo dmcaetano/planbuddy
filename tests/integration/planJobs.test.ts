@@ -312,7 +312,94 @@ describe("async plan generation jobs", () => {
     expect(job.stageLabel).not.toBeNull();
     expect(job.progressPct).toBeGreaterThan(0);
   });
+
+  it("never reports a stageDetail when the executor never calls report() with one (null-safe when unset)", async () => {
+    const { userId } = await signUpWithHomeBase(app, "jobs-detail-unset@example.com");
+    const execute = async (report: (stage: StageKey) => Promise<void>) => {
+      await report("loading_memory");
+      await report("enriching_saving");
+      return { done: true };
+    };
+
+    const { jobId } = await enqueueGenerationJob({ userId, operation: "create", requestPayload: {}, execute });
+    const db = await getDb();
+    let row: { stage: string | null; stage_detail: string | null; status: string } | undefined;
+    for (let i = 0; i < 100 && (!row || row.status !== "succeeded"); i += 1) {
+      const { rows } = await db.query<{ stage: string | null; stage_detail: string | null; status: string }>(
+        `SELECT stage, stage_detail, status FROM plan_generation_jobs WHERE id = $1`,
+        [jobId]
+      );
+      row = rows[0];
+      if (row.status !== "succeeded") await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(row?.status).toBe("succeeded");
+    expect(row?.stage).toBe("enriching_saving");
+    expect(row?.stage_detail).toBeNull();
+  });
+
+  it("flows a rich stageDetail from the executor's report() call through to the API", async () => {
+    const { userId } = await signUpWithHomeBase(app, "jobs-detail-flow@example.com");
+    const execute = async (report: (stage: StageKey, detail?: string) => Promise<void>) => {
+      await report("grounding_places", "Scouting cafés, restaurants and sights near Lisbon");
+      return { done: true };
+    };
+
+    const { jobId } = await enqueueGenerationJob({ userId, operation: "create", requestPayload: {}, execute });
+    // Poll until the detail we just reported has landed (the executor above
+    // resolves almost immediately, racing the detached runDetached tick).
+    const job = await pollJobUntil(userId, jobId, (row) => row.stage_detail !== null);
+    expect(job.stage).toBe("grounding_places");
+    expect(job.stage_detail).toBe("Scouting cafés, restaurants and sights near Lisbon");
+  });
+
+  it("a detail-only report() call (same stage, new detail) updates stageDetail without resetting stage/progressPct", async () => {
+    const { userId } = await signUpWithHomeBase(app, "jobs-detail-preserve@example.com");
+    let releaseGate: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    const execute = async (report: (stage: StageKey, detail?: string) => Promise<void>) => {
+      await report("composing_plan", "Composing around Saldanha Mar, Jardim da Estrela + 2 more");
+      await report("composing_plan", "Drafting your route"); // detail-only: same stage, new detail
+      await gate;
+      return { done: true };
+    };
+
+    const { jobId } = await enqueueGenerationJob({ userId, operation: "create", requestPayload: {}, execute });
+    const job = await pollJobUntil(userId, jobId, (row) => row.stage_detail === "Drafting your route");
+    expect(job.stage).toBe("composing_plan"); // NOT reset by the detail-only update
+    expect(job.progress_pct).toBe(STAGE_META.composing_plan.pct); // progress unchanged too
+    expect(job.stage_detail).toBe("Drafting your route");
+    releaseGate();
+  });
 });
+
+/**
+ * Polls the raw job row (bypassing the HTTP layer, since these executor-shape
+ * tests seed a hand-written `execute` rather than going through a real
+ * plan-spec kickoff) until `predicate` is true or the timeout elapses.
+ */
+async function pollJobUntil(
+  userId: string,
+  jobId: string,
+  predicate: (row: { stage: string | null; stage_detail: string | null; progress_pct: number }) => boolean,
+  timeoutMs = 5000
+): Promise<{ stage: string | null; stage_detail: string | null; progress_pct: number }> {
+  const db = await getDb();
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const { rows } = await db.query<{ stage: string | null; stage_detail: string | null; progress_pct: number }>(
+      `SELECT stage, stage_detail, progress_pct FROM plan_generation_jobs WHERE user_id = $1 AND id = $2`,
+      [userId, jobId]
+    );
+    const row = rows[0];
+    if (row && predicate(row)) return row;
+    if (Date.now() > deadline) {
+      throw new Error(`Timed out waiting for job ${jobId} to satisfy predicate; last row: ${JSON.stringify(row)}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
 
 // Exercise postAndAwaitGeneration itself once here too, since every other
 // integration test file relies on it as the shared helper for the new

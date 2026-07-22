@@ -97,3 +97,63 @@ describe("OpenRouter reasoning-starvation recovery", () => {
     expect(calls).toBe(2);
   });
 });
+
+describe("onEvent progress narration", () => {
+  const originalKey = env.OPENROUTER_API_KEY;
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    env.OPENROUTER_API_KEY = "test-key";
+  });
+
+  afterEach(() => {
+    env.OPENROUTER_API_KEY = originalKey;
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("fires onEvent with a reasoning-retry narration on the length-starved retry path", async () => {
+    let calls = 0;
+    global.fetch = vi.fn(async () => {
+      calls += 1;
+      return calls === 1 ? openRouterResponse(lengthStarvedBody()) : openRouterResponse(okBody({ ok: true }));
+    }) as unknown as typeof fetch;
+
+    const events: string[] = [];
+    const result = await callAiJson("system prompt", "user prompt", testSchema, {
+      heavy: true,
+      onEvent: (detail) => events.push(detail),
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(events).toEqual(["Almost had it — asking for a cleaner draft"]);
+  });
+
+  it("fires onEvent with a validation-repair narration when the first reply fails schema validation", async () => {
+    let calls = 0;
+    global.fetch = vi.fn(async () => {
+      calls += 1;
+      return calls === 1 ? openRouterResponse(okBody({ nope: true })) : openRouterResponse(okBody({ ok: true }));
+    }) as unknown as typeof fetch;
+
+    const events: string[] = [];
+    const result = await callAiJson("system prompt", "user prompt", testSchema, {
+      onEvent: (detail) => events.push(detail),
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(events).toEqual(["Polishing the draft"]);
+  });
+
+  it("never lets a throwing onEvent callback break the AI call", async () => {
+    global.fetch = vi.fn(async () => openRouterResponse(okBody({ ok: true }))) as unknown as typeof fetch;
+
+    const result = await callAiJson("system prompt", "user prompt", testSchema, {
+      onEvent: () => {
+        throw new Error("boom");
+      },
+    });
+
+    expect(result).toEqual({ ok: true });
+  });
+});

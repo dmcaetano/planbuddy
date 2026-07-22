@@ -4,6 +4,13 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useGeneration } from "../state/GenerationContext";
 import { GENERATION_STAGES, stageIndex } from "../state/generationStages";
 
+const STAGE_DETAIL_TRUNCATE_LENGTH = 60;
+
+function truncateDetail(text: string): string {
+  if (text.length <= STAGE_DETAIL_TRUNCATE_LENGTH) return text;
+  return `${text.slice(0, STAGE_DETAIL_TRUNCATE_LENGTH - 1)}…`;
+}
+
 /**
  * Compact fixed banner shown whenever a plan-generation job is active, just finished, or has
  * failed, and the user isn't currently on /plan. Tapping the main area jumps to /plan, where
@@ -44,11 +51,23 @@ export default function GenerationBanner() {
         ? GENERATION_STAGES[currentIndex].pct
         : 4;
 
+  const mainText = failed
+    ? "Plan hit a snag"
+    : ready
+      ? "Your plan is ready"
+      : job.stageDetail
+        ? truncateDetail(job.stageDetail)
+        : job.stageLabel || "Building your plan…";
+
   return (
     <div className={`generation-banner ${failed ? "generation-banner--failed" : ""}`} aria-live="polite">
       <button type="button" className="generation-banner__main" onClick={() => navigate("/plan")}>
         <div className="generation-banner__text">
-          <strong>{failed ? "Plan hit a snag" : ready ? "Your plan is ready" : job.stageLabel || "Building your plan…"}</strong>
+          <strong>
+            <span key={mainText} className="generation-crossfade">
+              {mainText}
+            </span>
+          </strong>
           <span className="generation-banner__hint">
             {failed
               ? "Tap to see what happened"

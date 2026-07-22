@@ -1,5 +1,17 @@
 # PlanBuddy — Log
 
+## 2026-07-22 — v1.1.0 "Wasp" release candidate
+
+Implemented the approved warm place canvas and persistent Buddy directly,
+using the Opus review only as an architectural critique. Buddy is mounted
+above routes, understands the visible plan, and uses the same background job
+lifecycle as generation. A scoped edit keeps the current ticket visible,
+survives tab changes, and resolves into a reversible comparison with the
+original plan. The visual layer adds soft coral/plum warmth, editorial heading
+scale, scoped real-participant avatars, stronger ticket elevation, and the
+responsive Buddy dock. Verification passed: 141 Vitest tests, mobile
+Playwright E2E, TypeScript, lint, build, audit, and desktop/mobile visual review.
+
 ## 2026-07-19 — Project start
 
 ### What we did

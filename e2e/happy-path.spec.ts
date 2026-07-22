@@ -45,7 +45,9 @@ test("signup -> generate -> Love -> Buddy edit -> share -> dislike -> lock -> fe
   await expect(page.getByText("PlanBuddy learned")).toBeVisible();
 
   const originalTitle = await page.locator(".ticket-card h2").first().textContent();
-  await page.getByRole("button", { name: "Edit this plan with Buddy" }).click();
+  // The persistent Buddy bubble uses the same edit path, so an in-flight edit can survive
+  // navigation without replacing the ticket that is currently on screen.
+  await page.getByRole("button", { name: "Open Buddy" }).click();
   await page.getByLabel("Edit this plan with Buddy").fill("Change only the restaurant and keep the walks");
   await page.route("**/api/plan-specs/*/chat-action", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 700));
@@ -58,6 +60,7 @@ test("signup -> generate -> Love -> Buddy edit -> share -> dislike -> lock -> fe
   await expect(page.getByText(/changed the meal stop/i)).toBeVisible();
   await page.getByRole("button", { name: "Back to original" }).click();
   await expect(page.locator(".ticket-card h2").first()).toHaveText(originalTitle ?? "");
+  await page.getByRole("button", { name: "Close Buddy" }).first().click();
 
   await page.getByRole("button", { name: /^Share$/i }).click();
   await expect(page.getByRole("button", { name: "Shared" })).toBeVisible();

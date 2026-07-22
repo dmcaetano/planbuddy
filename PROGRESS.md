@@ -52,6 +52,12 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 
 ## Current state
 
+**Version 1.1.0 "Wasp" is release-ready locally.** It adds a persistent
+floating Buddy assistant, background plan edits that do not replace the active
+ticket, reversible comparison, scoped participant avatars, and the warm
+place-canvas refresh. TypeScript, lint, build, audit, 141 Vitest tests,
+mobile Playwright E2E, and desktop/mobile visual inspection are green.
+
 **Version 1.0.1 "Iron Man" is live on Render from `main` and backed by the dedicated Neon project.** Shipped 2026-07-20: v1.0.0 (`111dc4e`, features) + v1.0.1 (`612653a`, hardening). 128 Vitest tests + Playwright E2E green; two live production canaries run. Previous baseline (v0.1.5): A fresh
 user can sign up, onboard a home base and participants (including pets),
 generate a plan for any of the four scales, have a typed or chat-quoted hard
@@ -100,6 +106,9 @@ covered implicitly by the plan.test.ts lock→history assertion.
 3. **Broader browser coverage** — add separate Playwright scenarios for dead ends, trip modes, friend acceptance, and hunch promotion.
 
 ## Next steps
+1. Deploy v1.1.0 "Wasp" to Render and verify its health endpoint.
+2. Hand the floating Buddy and reversible-edit flow to alpha testers.
+
 1. Hand v1.0.1 to alpha testers; collect feedback on recommendation quality, quiz usefulness, and circle selection.
 2. Watch Render logs for provider-failover behavior under real Gemini outages (reasoning-starvation retry, fallback success rate).
 3. Add a transactional place/booking provider for current operational facts.

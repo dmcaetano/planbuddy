@@ -23,5 +23,12 @@ export const STAGE_META: Record<StageKey, { label: string; pct: number }> = {
   enriching_saving: { label: "Finishing touches", pct: 92 },
 };
 
-/** Invoked by the pipeline as it enters a new stage. May be async (persists to the job row). */
-export type ProgressReporter = (stage: StageKey) => Promise<void> | void;
+/**
+ * Invoked by the pipeline as it enters a new stage, and optionally again
+ * within the same stage to narrate a sub-status (e.g. "Found 6 real places
+ * worth considering" while still inside grounding_places). `detail` is a
+ * short, human, jargon-free sentence — never an internal id or provider
+ * name. Omitting `detail` clears any previous detail for the new stage. May
+ * be async (persists to the job row).
+ */
+export type ProgressReporter = (stage: StageKey, detail?: string) => Promise<void> | void;

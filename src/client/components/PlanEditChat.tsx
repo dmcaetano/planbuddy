@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Bot, Check, Copy, Send, Sparkles, User } from "lucide-react";
 import type { Candidate, FeatureSummary, PipelineResponse, PlanChatMessage } from "../api/types";
 import { api, ApiError } from "../api/client";
+import { useGeneration } from "../state/GenerationContext";
 
 interface ActionResponse {
   userMessage: PlanChatMessage;
@@ -25,12 +26,15 @@ export default function PlanEditChat({
   candidate,
   onRevision,
   onLocked,
+  compact = false,
 }: {
   threadSpecId: string;
   candidate: Candidate;
   onRevision: (revision: PipelineResponse) => void;
   onLocked: (planId: string) => void;
+  compact?: boolean;
 }) {
+  const generation = useGeneration();
   const [messages, setMessages] = useState<PlanChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [working, setWorking] = useState(false);
@@ -44,6 +48,16 @@ export default function PlanEditChat({
       .catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't open the plan chat."));
   }, [threadSpecId]);
 
+  // The completion message is written by the detached job, not the kickoff
+  // request. Refresh the durable thread once the shared job settles so the
+  // dock tells the same story as the now-updated ticket.
+  useEffect(() => {
+    if (generation.job?.status !== "succeeded") return;
+    api.get<{ messages: PlanChatMessage[] }>(`/plan-specs/${threadSpecId}/chat`)
+      .then((data) => setMessages(data.messages))
+      .catch(() => undefined);
+  }, [generation.job?.jobId, generation.job?.status, threadSpecId]);
+
   async function send(message = input) {
     const content = message.trim();
     if (!content || working) return;
@@ -51,11 +65,14 @@ export default function PlanEditChat({
     setError(null);
     if (message === input) setInput("");
     try {
-      const data = await api.post<ActionResponse>(`/plan-specs/${threadSpecId}/chat-action`, {
+      const data = await api.post<ActionResponse & { jobId?: string | null; jobSpecId?: string | null; jobKind?: "edit" | "regenerate" | null }>(`/plan-specs/${threadSpecId}/chat-action`, {
         candidateId: candidate.id,
         message: content,
       });
       setMessages((current) => [...current, data.userMessage, data.assistantMessage]);
+      if (data.jobId && generation.job?.jobId !== data.jobId) {
+        generation.trackJob(data.jobId, data.jobKind === "regenerate" ? "regenerate" : "edit", data.jobSpecId ?? threadSpecId);
+      }
       if (data.revision?.winner) onRevision(data.revision);
       if (data.plan?.id) onLocked(data.plan.id);
       const actionUrl = data.share?.token
@@ -77,7 +94,7 @@ export default function PlanEditChat({
   }
 
   return (
-    <section className="plan-chat-card">
+    <section className={`plan-chat-card ${compact ? "plan-chat-card--compact" : ""}`}>
       <header className="plan-chat-card__header">
         <div className="buddy-orb"><Bot size={20} /></div>
         <div><div className="eyebrow">Edit with Buddy</div><strong>Ask for one change—or run any plan action.</strong><span>I preserve what you didn't ask me to change.</span></div>

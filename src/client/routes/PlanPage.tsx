@@ -11,7 +11,8 @@ import PlanEditChat from "../components/PlanEditChat";
 import GenerationProgress from "../components/GenerationProgress";
 import { useGeneration } from "../state/GenerationContext";
 import { useAuth } from "../state/AuthContext";
-import { Bot, Lock, PawPrint, RefreshCw, SlidersHorizontal, User, UserPlus, Users, X } from "lucide-react";
+import { usePlanFocus } from "../state/PlanFocusContext";
+import { Bot, Lock, PawPrint, RefreshCw, SlidersHorizontal, Sparkles, User, UserPlus, Users, X } from "lucide-react";
 
 function lastGroupStorageKey(userId: string): string {
   return `planbuddy.lastGroup.${userId}`;
@@ -31,6 +32,7 @@ type ViewState = "spec" | "browsing" | "locked" | "deadEnd" | "error";
 export default function PlanPage() {
   const generation = useGeneration();
   const auth = useAuth();
+  const { setFocusedPlan } = usePlanFocus();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendLabels, setFriendLabels] = useState<FriendLabelSummary[]>([]);
@@ -184,14 +186,32 @@ export default function PlanPage() {
   }, [result]);
   const current = displayQueue[displayIndex] ?? null;
 
+  useEffect(() => {
+    if (state === "browsing" && result && current) {
+      setFocusedPlan({ specId: chatThreadSpecId ?? result.spec.id, candidate: current.candidate });
+    } else {
+      setFocusedPlan(null);
+    }
+  }, [chatThreadSpecId, current, result, setFocusedPlan, state]);
+
+  useEffect(() => {
+    function onLocked(event: Event) {
+      const detail = (event as CustomEvent<{ planId?: string }>).detail;
+      if (!detail?.planId) return;
+      setLockedPlanId(detail.planId);
+      setState("locked");
+    }
+    window.addEventListener("planbuddy:locked", onLocked);
+    return () => window.removeEventListener("planbuddy:locked", onLocked);
+  }, []);
+
   // Tracks which terminal job we've already folded into local view state, so re-renders (or a
   // job that was already terminal when this page mounted) don't reapply it more than once.
   const appliedJobIdRef = useRef<string | null>(null);
 
   // Runs synchronously before paint so a just-finished job never flashes the stale spec/browsing
-  // view for a frame before the result (or failure) is folded in. Only "generate"/"regenerate"
-  // jobs exist here — the free-text Tweak/"Edit with Buddy" flow hits chat-action directly
-  // (server keeps that endpoint synchronous), so it's handled inline by submitTweak below.
+  // view for a frame before the result (or failure) is folded in. Buddy edits use the same job
+  // lifecycle as a fresh plan, but retain the exact prior plan as a reversible comparison.
   useLayoutEffect(() => {
     const job = generation.job;
     if (!job || (job.status !== "succeeded" && job.status !== "failed")) return;
@@ -207,11 +227,11 @@ export default function PlanPage() {
       if (data.looseners) {
         setLooseners(data.looseners);
         setState("browsing");
-      } else if (data.spec.id === chatThreadSpecId && result && result.spec.id !== data.spec.id) {
-        // This job targeted the spec the Buddy/Tweak thread started from, but a synchronous
-        // tweak already moved local state on to a newer child spec while the job was still in
-        // flight (chatThreadSpecId stays pinned to the thread's origin spec across tweaks —
-        // see applyRevision). The job is now stale relative to that edit; don't clobber it.
+      } else if (job.kind === "edit" && result) {
+        setOtherVersion(result);
+        setResult(data);
+        setDisplayIndex(0);
+        setState(data.deadEnd ? "deadEnd" : "browsing");
       } else {
         setResult(data);
         setChatThreadSpecId(data.spec.id);
@@ -294,10 +314,16 @@ export default function PlanPage() {
     setTweakSubmitting(true);
     setTweakError(null);
     try {
-      const data = await api.post<{ revision: PipelineResponse | null; assistantMessage: { content: string } }>(`/plan-specs/${chatThreadSpecId ?? result.spec.id}/chat-action`, {
+      const data = await api.post<{ jobId?: string | null; jobSpecId?: string | null; jobKind?: "edit" | "regenerate" | null; revision: PipelineResponse | null; assistantMessage: { content: string } }>(`/plan-specs/${chatThreadSpecId ?? result.spec.id}/chat-action`, {
         candidateId: current.candidate.id,
         message: tweakRequest.trim(),
       });
+      if (data.jobId) {
+        generation.trackJob(data.jobId, data.jobKind === "regenerate" ? "regenerate" : "edit", data.jobSpecId ?? result.spec.id);
+        setTweakOpen(false);
+        setTweakRequest("");
+        return;
+      }
       if (!data.revision?.winner) {
         setTweakError(data.assistantMessage.content || "I couldn't find a safe revision. Your current plan is still right here.");
         return;
@@ -376,7 +402,7 @@ export default function PlanPage() {
   // A fresh generate/regenerate job (queued, running, or failed-with-retry) takes over the whole
   // page regardless of local `state` — it may have been reattached after a reload or tab switch,
   // long before this render's local state caught up.
-  if (generation.job && generation.job.status !== "succeeded") {
+  if (generation.job && generation.job.status !== "succeeded" && generation.job.kind !== "edit") {
     return <GenerationProgress job={generation.job} />;
   }
 
@@ -403,6 +429,21 @@ export default function PlanPage() {
                 </button>
               </div>
             )}
+            {generation.job?.kind === "edit" && generation.job.status !== "succeeded" && (
+              <div className="plan-edit-in-flight" role="status">
+                <Sparkles size={16} />
+                <span><strong>Buddy is shaping your revision</strong>{generation.job.stageDetail || generation.job.stageLabel || "Your current plan stays visible while it works."}</span>
+                <em>{Math.round(generation.job.progressPct)}%</em>
+              </div>
+            )}
+            <div className="plan-companions" aria-label="People included in this plan">
+              <div className="plan-companions__avatars">
+                {participants.filter((participant) => result!.spec.participantIds.includes(participant.id)).slice(0, 5).map((participant) => (
+                  <span className={`plan-companions__avatar plan-companions__avatar--${participant.kind}`} title={participant.name} key={participant.id}>{participant.name.slice(0, 1).toUpperCase()}</span>
+                ))}
+              </div>
+              <span>{participants.filter((participant) => result!.spec.participantIds.includes(participant.id)).length > 1 ? "Made for your circle" : "Made for you"}</span>
+            </div>
             <TicketCard view={current} eventStartDate={result?.spec.startDate} eventEndDate={result?.spec.endDate} />
             <ReactionBar key={current.candidate.id} specId={result!.spec.id} candidateId={current.candidate.id} onDislike={() => setNotThisOpen(true)} />
             <div className="plan-action-bar">
@@ -469,7 +510,7 @@ export default function PlanPage() {
       <div>
         <div className="row-gap" style={{ alignItems: "center", marginBottom: 4 }}>
           <div className="eyebrow" style={{ marginBottom: 0 }}>Plan</div>
-          <span className="version-pill">v1.0.2 · iron man</span>
+          <span className="version-pill">v1.1.0 · wasp</span>
         </div>
         <h1>One click. One genuinely good plan.</h1>
         <p>PlanBuddy combines what it remembers with live context, then commits to the best fit.</p>

@@ -8,6 +8,7 @@ interface JobBody {
   status: "queued" | "running" | "succeeded" | "failed";
   stage: string | null;
   stageLabel: string | null;
+  stageDetail: string | null;
   progressPct: number;
   startedAt: string;
   updatedAt: string;

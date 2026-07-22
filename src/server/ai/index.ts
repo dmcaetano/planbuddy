@@ -32,6 +32,7 @@ import {
 import { chatRespondDemo, feedbackExtractDemo, generateCandidatesDemo, type ChatContext, type GenerateContext } from "./demoAi.js";
 import { composePlanWithGemini, researchPlacesWithGemini } from "../grounding/geminiPlaces.js";
 import type { Candidate } from "../../shared/types.js";
+import type { ProgressReporter } from "../plans/engine/stages.js";
 
 export type AiMode = "deepseek" | "gemini-grounded" | "demo";
 
@@ -39,13 +40,48 @@ export function currentAiMode(): AiMode {
   return !isTest && env.OPENROUTER_API_KEY ? "deepseek" : "demo";
 }
 
+const MAX_VENUE_NAME_LENGTH = 30;
+
+function truncateVenueName(name: string): string {
+  if (name.length <= MAX_VENUE_NAME_LENGTH) return name;
+  return `${name.slice(0, MAX_VENUE_NAME_LENGTH - 1).trimEnd()}…`;
+}
+
+/**
+ * Builds the "Composing around <place 1>, <place 2> + K more" sub-status
+ * shown while the composer is drafting, so the long static "Composing your
+ * plan" stage narrates real venues from the grounded dossier instead of
+ * sitting silent. Caps at 2 names (+ a count of the rest); each name is
+ * truncated past 30 characters. Falls back to a generic message when there
+ * are no named places yet (e.g. demo mode, or edit flows with no dossier).
+ */
+export function formatVenueDetail(placeNames: string[]): string {
+  const names = placeNames.map((name) => name.trim()).filter((name) => name.length > 0);
+  if (names.length === 0) return "Composing your plan";
+  const shown = names.slice(0, 2).map(truncateVenueName);
+  const remaining = names.length - shown.length;
+  return remaining > 0
+    ? `Composing around ${shown.join(", ")} + ${remaining} more`
+    : `Composing around ${shown.join(", ")}`;
+}
+
 export async function generateCandidates(
-  ctx: GenerateContext
+  ctx: GenerateContext,
+  report?: ProgressReporter
 ): Promise<{ mode: AiMode; response: AiGenerateResponse; groundingSources: GroundingSource[] }> {
   if (currentAiMode() === "demo") {
+    await report?.("composing_plan");
     return { mode: "demo", response: generateCandidatesDemo(ctx), groundingSources: [] };
   }
   try {
+    const groundingEvent = (detail: string) => {
+      void report?.("grounding_places", detail);
+    };
+    const composingEvent = (detail: string) => {
+      void report?.("composing_plan", detail);
+    };
+
+    groundingEvent(`Scouting cafés, restaurants and sights near ${ctx.homeBaseLabel ?? "your area"}`);
     let research;
     if (env.GEMINI_API_KEY) {
       try {
@@ -54,17 +90,20 @@ export async function generateCandidates(
         logger.warn("Gemini place grounding failed; retrying with DeepSeek web search", {
           error: String(geminiGroundingError),
         });
+        groundingEvent("Taking a different scouting route…");
         research = await callAiJsonGrounded(
           buildPlaceResearchSystemPrompt(ctx),
           buildPlaceResearchUserPrompt(ctx),
-          aiPlaceResearchResponseSchema
+          aiPlaceResearchResponseSchema,
+          { onEvent: groundingEvent }
         );
       }
     } else {
       research = await callAiJsonGrounded(
         buildPlaceResearchSystemPrompt(ctx),
         buildPlaceResearchUserPrompt(ctx),
-        aiPlaceResearchResponseSchema
+        aiPlaceResearchResponseSchema,
+        { onEvent: groundingEvent }
       );
     }
     const allowedUrls = new Set(research.groundingSources.map((source) => normalizeSourceUrl(source.url)));
@@ -72,7 +111,10 @@ export async function generateCandidates(
     if (groundedPlaces.length < 4) {
       throw new Error("Place research did not return enough citation-backed places");
     }
+    groundingEvent(`Found ${groundedPlaces.length} real places worth considering`);
+
     const generationContext: GenerateContext = { ...ctx, groundedPlaces };
+    composingEvent(formatVenueDetail(groundedPlaces.map((place) => place.name)));
     let response: AiGenerateResponse;
     if (env.GEMINI_API_KEY) {
       try {
@@ -81,19 +123,21 @@ export async function generateCandidates(
         logger.warn("Gemini composition failed; retrying the grounded dossier with DeepSeek", {
           error: String(geminiError),
         });
+        composingEvent("Drafting your route");
         response = await callAiJson(
           buildGenerateSystemPrompt(generationContext),
           buildGenerateUserPrompt(generationContext),
           aiGenerateResponseSchema,
-          { heavy: true }
+          { heavy: true, onEvent: composingEvent }
         );
       }
     } else {
+      composingEvent("Drafting your route");
       response = await callAiJson(
         buildGenerateSystemPrompt(generationContext),
         buildGenerateUserPrompt(generationContext),
         aiGenerateResponseSchema,
-        { heavy: true }
+        { heavy: true, onEvent: composingEvent }
       );
     }
     return {

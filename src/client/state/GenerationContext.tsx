@@ -8,7 +8,7 @@ import { useAuth } from "./AuthContext";
 // through POST /plan-specs/:id/chat-action, which the server intentionally kept synchronous (it's
 // an AI-interpreted action dispatch, not a plan-generation pipeline run) — so it is NOT modeled as
 // a job kind here. If a future async NL-tweak lands, extend JobKind then.
-export type JobKind = "generate" | "regenerate";
+export type JobKind = "generate" | "regenerate" | "edit";
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";
 
 export type JobResult = PipelineResponse;
@@ -19,6 +19,10 @@ interface PlanJobPollResponse {
   status: JobStatus;
   stage?: string | null;
   stageLabel?: string | null;
+  /** Short, human sentence that updates several times within a stage (e.g. "Composing around
+   *  Mosteiro dos Jerónimos, O Frade + 2 more"). Null when the server has nothing more specific
+   *  to say than the stage label itself. */
+  stageDetail?: string | null;
   progressPct?: number | null;
   startedAt?: string;
   updatedAt?: string;
@@ -35,6 +39,7 @@ export interface GenerationJob {
   status: JobStatus;
   stage?: string | null;
   stageLabel?: string | null;
+  stageDetail?: string | null;
   progressPct: number;
   startedAt?: string;
   updatedAt?: string;
@@ -73,6 +78,7 @@ interface GenerationContextValue {
   connectionWarning: boolean;
   startSpec: (payload: StartSpecPayload) => Promise<void>;
   startRegenerate: (specId: string) => Promise<void>;
+  trackJob: (jobId: string, kind: JobKind, specId: string | null) => void;
   retry: () => Promise<void>;
   dismiss: () => void;
   markSeen: () => void;
@@ -187,6 +193,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
             status: data.status,
             stage: data.stage,
             stageLabel: data.stageLabel,
+            stageDetail: data.stageDetail ?? null,
             progressPct: typeof data.progressPct === "number" ? data.progressPct : prev.progressPct,
             startedAt: data.startedAt ?? prev.startedAt,
             updatedAt: data.updatedAt,
@@ -255,6 +262,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
         status: data.status,
         stage: data.stage,
         stageLabel: data.stageLabel,
+        stageDetail: data.stageDetail ?? null,
         progressPct: typeof data.progressPct === "number" ? data.progressPct : 0,
         startedAt: data.startedAt,
         updatedAt: data.updatedAt,
@@ -343,34 +351,39 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     [stopPolling]
   );
 
+  const trackJob = useCallback((jobId: string, kind: JobKind, specId: string | null) => {
+    const now = new Date().toISOString();
+    const next: GenerationJob = {
+      jobId,
+      kind,
+      specId,
+      status: "queued",
+      stage: null,
+      stageLabel: null,
+      stageDetail: null,
+      progressPct: 0,
+      startedAt: now,
+      updatedAt: now,
+      seen: false,
+    };
+    jobRef.current = next;
+    setJob(next);
+    failureStartRef.current = null;
+    failureCountRef.current = 0;
+    setConnectionWarning(false);
+    const uid = userIdRef.current;
+    if (uid) writeHint(uid, { jobId, kind, specId });
+    startPollingLoop(jobId);
+  }, [startPollingLoop]);
+
   const startAction = useCallback(
     async (kind: JobKind, specId: string | null, path: string, body: Record<string, unknown>) => {
       const idempotencyKey = crypto.randomUUID();
       lastActionRef.current = { kind, specId, path, body };
       const res = await api.post<{ jobId: string; existing?: boolean }>(path, { ...body, idempotencyKey });
-      const now = new Date().toISOString();
-      const next: GenerationJob = {
-        jobId: res.jobId,
-        kind,
-        specId,
-        status: "queued",
-        stage: null,
-        stageLabel: null,
-        progressPct: 0,
-        startedAt: now,
-        updatedAt: now,
-        seen: false,
-      };
-      jobRef.current = next;
-      setJob(next);
-      failureStartRef.current = null;
-      failureCountRef.current = 0;
-      setConnectionWarning(false);
-      const uid = userIdRef.current;
-      if (uid) writeHint(uid, { jobId: res.jobId, kind, specId });
-      startPollingLoop(res.jobId);
+      trackJob(res.jobId, kind, specId);
     },
-    [startPollingLoop]
+    [trackJob]
   );
 
   const startSpec = useCallback(
@@ -414,6 +427,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     connectionWarning,
     startSpec,
     startRegenerate,
+    trackJob,
     retry,
     dismiss,
     markSeen,

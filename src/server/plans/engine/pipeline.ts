@@ -438,13 +438,22 @@ export async function runGeneration(
       : undefined,
   };
 
-  await report?.("composing_plan");
   const cachedRestaurantSwap = edit?.mode === "restaurant"
     ? buildGroundedRestaurantSwap(edit.originalCandidate)
     : null;
+  // The cached-swap path never touches grounding_places (already stamped
+  // by gatherPlanContext) or generateCandidates, so it must self-report the
+  // composing_plan transition. The real path leaves this stage transition to
+  // generateCandidates itself, since it narrates grounding_places sub-events
+  // first and progress must stay monotonic (grounding_places=35 <
+  // composing_plan=55) — reporting composing_plan here first would make a
+  // later grounding_places detail update look like progress went backwards.
+  if (cachedRestaurantSwap) {
+    await report?.("composing_plan", `Swapping in ${cachedRestaurantSwap.beats.find((b) => b.place)?.place?.name ?? "a nearby alternative"}`);
+  }
   const { mode, response, groundingSources } = cachedRestaurantSwap
     ? { mode: "gemini-grounded" as const, response: { candidates: [cachedRestaurantSwap] }, groundingSources: [] }
-    : await generateCandidates(genCtx);
+    : await generateCandidates(genCtx, report);
   const originalSources = edit
     ? [
         ...edit.originalCandidate.beats.flatMap((beat) => beat.place ? [{ url: beat.place.sourceUrl, title: beat.place.sourceLabel }] : []),
@@ -472,7 +481,10 @@ export async function runGeneration(
     ),
   };
 
-  await report?.("validating_scoring");
+  await report?.(
+    "validating_scoring",
+    `Checking ${privacySafeResponse.candidates.length} idea${privacySafeResponse.candidates.length === 1 ? "" : "s"} against your constraints`
+  );
   const { kept, rejected } = filterCandidates(privacySafeResponse.candidates, {
     activeConstraints: scopedConstraints.map((c) => ({ id: c.id, text: c.text })),
     knownFacts,
@@ -493,8 +505,9 @@ export async function runGeneration(
     category: p.category,
     placeNames: p.beats.map((beat) => beat.place?.name).filter((name): name is string => Boolean(name)),
   }));
+  await report?.("validating_scoring", "Scoring for the whole group");
   const ranked: ScoredCandidate[] = scoreCandidates(kept, memories, weather, spec.radiusKm, recentSummaries);
-  await report?.("enriching_saving");
+  await report?.("enriching_saving", "Mapping walking legs on Google Maps");
   const enrichedRanked: ScoredCandidate[] = await Promise.all(
     ranked.map(async (sc) => ({
       ...sc,
@@ -509,6 +522,7 @@ export async function runGeneration(
       }),
     }))
   );
+  await report?.("enriching_saving", "Adding weather, wardrobe and checklists");
 
   const inserts: CandidateInsert[] = [
     ...enrichedRanked.map((sc, idx) => ({
@@ -533,6 +547,7 @@ export async function runGeneration(
     })),
   ];
 
+  await report?.("enriching_saving", "Saving your plan");
   const savedCandidates = await insertCandidates(spec.id, inserts);
   const savedRanked = savedCandidates.slice(0, enrichedRanked.length);
 

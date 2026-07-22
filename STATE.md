@@ -1,6 +1,11 @@
 # PlanBuddy — State
 
 ## Status
+v1.1.0 "Wasp" is release-ready locally. It adds a warm place-and-people canvas
+and a persistent floating Buddy. Buddy is plan-aware when a plan is in view,
+uses the shared background job lifecycle for edits, and preserves the original
+ticket as a reversible version. 141 Vitest tests plus Playwright E2E are green.
+
 v1.0.2 “Iron Man” is live at https://planbuddy.onrender.com from `main`
 (`aaba309`), with dedicated Neon Postgres persistence (project
 `aged-dream-11028120`). Plan generation is an async job with live named-stage
@@ -11,6 +16,9 @@ against Gemini outages (DeepSeek reasoning-starvation fix + fast failover).
 sol with executed repros; two live production canaries run on 2026-07-20.
 
 ## Next concrete action
+Deploy v1.1.0, verify the live health endpoint, then hand the floating-Buddy
+experience to alpha testers for recommendation and edit-flow feedback.
+
 Hand the live app to alpha testers; collect feedback on recommendation quality, quiz usefulness, and circle selection before venue/calendar/booking integrations.
 
 ## Decisions made
@@ -73,6 +81,10 @@ Hand the live app to alpha testers; collect feedback on recommendation quality, 
   text never contains internal ids.
 - 2026-07-20 — Versioning: hero-codename scheme adopted (v1.0.x "Iron Man");
   version pill hardcoded in PlanPage must be bumped with package.json.
+- 2026-07-22 — v1.1.0 "Wasp": warm Airbnb-like place canvas plus a focused
+  Intercom-like Buddy. The dock is plan-aware only when a plan is visible,
+  otherwise it is normal memory chat. Detached edits are background jobs and
+  keep the original ticket as a reversible version.
 
 ## Future ideas
 - RSVP (Available / Maybe / Can't) on dated plans for included friends
