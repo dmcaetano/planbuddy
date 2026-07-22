@@ -82,6 +82,7 @@ function mapsSource(name: string, city: string): string {
 const LISBON_QUICK_ROUTES = [
   {
     title: "Estrela garden, grilled fish, and a soft square stroll",
+    tags: ["fish", "grilled", "garden", "quiet", "soft", "pom"],
     pre: ["Jardim da Estrela", "Praça da Estrela, Lisboa", "garden", "A relaxed loop under mature trees before dinner."],
     meal: ["Peixaria da Esquina", "Rua Correia Teles 56, Lisboa", "fish restaurant", "A well-known Campo de Ourique fish restaurant; confirm today's grilled options on the live menu."],
     post: ["Jardim Teófilo de Braga", "Praça de São João Bosco, Lisboa", "garden square", "A compact neighborhood square for an easy post-meal loop."],
@@ -89,6 +90,7 @@ const LISBON_QUICK_ROUTES = [
   },
   {
     title: "Necessidades greenery, charcoal grill, and the Alcântara waterfront",
+    tags: ["fish", "meat", "grilled", "park", "waterfront", "pom"],
     pre: ["Tapada das Necessidades", "Calçada das Necessidades, Lisboa", "park", "A gentle park walk with room to shorten the loop whenever you like."],
     meal: ["Último Porto", "Estação Marítima da Rocha Conde de Óbidos, Lisboa", "grill restaurant", "An established charcoal-grill stop; confirm today's fish or meat, terrace, and access before leaving."],
     post: ["Doca de Santo Amaro", "Doca de Santo Amaro, Lisboa", "waterfront promenade", "A flat Tagus-side stroll to finish without turning the evening into a hike."],
@@ -96,6 +98,7 @@ const LISBON_QUICK_ROUTES = [
   },
   {
     title: "Torel viewpoint, classic grilled chicken, and an evening miradouro",
+    tags: ["meat", "chicken", "grilled", "viewpoint", "classic", "central"],
     pre: ["Jardim do Torel", "Rua Júlio de Andrade, Lisboa", "garden viewpoint", "A short viewpoint loop before the meal, with benches if you want to pause."],
     meal: ["Bonjardim", "Travessa de Santo Antão 11, Lisboa", "Portuguese grill", "A long-running central grill known for chicken; verify the current menu and table setup."],
     post: ["Miradouro de São Pedro de Alcântara", "Rua de São Pedro de Alcântara, Lisboa", "viewpoint", "A flexible post-meal viewpoint stroll with an easy turn-back option."],
@@ -108,9 +111,29 @@ function lisbonQuickCandidate(ctx: GenerateContext): AiGenerateResponse | null {
   const recentNames = new Set(
     (ctx.recentSuggestions ?? []).flatMap((suggestion) => suggestion.placeNames.map((name) => name.toLowerCase()))
   );
-  const route = LISBON_QUICK_ROUTES.find((item) =>
+  const unusedRoutes = LISBON_QUICK_ROUTES.filter((item) =>
     [item.pre[0], item.meal[0], item.post[0]].every((name) => !recentNames.has(name.toLowerCase()))
-  ) ?? LISBON_QUICK_ROUTES[hashSeed(ctx.seed) % LISBON_QUICK_ROUTES.length];
+  );
+  const positiveText = [
+    ctx.moodContext,
+    ...ctx.loveTastes.map((taste) => taste.text),
+    ...(ctx.preferenceHunches ?? []).filter((hunch) => hunch.polarity === "love").map((hunch) => hunch.text),
+  ].filter(Boolean).join(" ").toLowerCase();
+  const negativeText = [
+    ...(ctx.avoidTastes ?? []).map((taste) => taste.text),
+    ...(ctx.preferenceHunches ?? []).filter((hunch) => hunch.polarity === "avoid").map((hunch) => hunch.text),
+  ].join(" ").toLowerCase();
+  const routePool = unusedRoutes.length > 0 ? unusedRoutes : [...LISBON_QUICK_ROUTES];
+  const route = routePool
+    .map((item, index) => ({
+      item,
+      index,
+      score: item.tags.reduce(
+        (score, tag) => score + (positiveText.includes(tag) ? 2 : 0) - (negativeText.includes(tag) ? 3 : 0),
+        0
+      ),
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)[0].item;
   const place = (data: readonly [string, string, string, string]) => ({
     name: data[0],
     address: data[1],
@@ -325,6 +348,11 @@ const TASTE_AVOID_PHRASES = [/\b(?:i|we)\s+(?:hate|dislike|don'?t like)\s+([a-z 
  * a concrete Maps-ready Lisbon route when available, while the broader demo
  * generator remains intact for tests, edits, trips, and other cities.
  */
+export function generateCuratedQuickPlan(ctx: GenerateContext): AiGenerateResponse | null {
+  if (ctx.edit) return null;
+  return lisbonQuickCandidate(ctx);
+}
+
 export function generateQuickFallback(ctx: GenerateContext): AiGenerateResponse {
   if (!ctx.edit) {
     const quickLisbon = lisbonQuickCandidate(ctx);

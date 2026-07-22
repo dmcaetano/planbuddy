@@ -30,6 +30,14 @@ Cais do Sodré stop and generic food-hall meal; the new deterministic quality
 gate rejected it and returned the stronger Estrela → Peixaria da Esquina →
 Jardim Teófilo de Braga route in 7.7 seconds.
 
+The first v1.1.1 production canary completed in 9.6 seconds with Maps, clothing,
+Pom kit, cost, and History persistence, but it still chose Time Out Market.
+That was not good enough. v1.1.2 bypasses the network model for Lisbon's home
+flow and selects from a trusted route pack using explicit tastes, feedback
+hunches, dislikes, the current request, and recent History. The planner step is
+1 ms locally; other cities retain the bounded model plus the stricter market,
+duplicate-stop, and lake quality gates. Full suite: 148 Vitest + mobile E2E.
+
 ## 2026-07-22 — v1.1.0 "Wasp" release candidate
 
 Implemented the approved warm place canvas and persistent Buddy directly,

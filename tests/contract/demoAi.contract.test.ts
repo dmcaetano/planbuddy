@@ -4,7 +4,7 @@ import {
   aiFeedbackResponseSchema,
   aiGenerateResponseSchema,
 } from "../../src/shared/schemas.js";
-import { chatRespondDemo, feedbackExtractDemo, generateCandidatesDemo, generateQuickFallback, type GenerateContext } from "../../src/server/ai/demoAi.js";
+import { chatRespondDemo, feedbackExtractDemo, generateCandidatesDemo, generateCuratedQuickPlan, generateQuickFallback, type GenerateContext } from "../../src/server/ai/demoAi.js";
 import { SCALES } from "../../src/shared/scale.js";
 
 function baseCtx(overrides: Partial<GenerateContext> = {}): GenerateContext {
@@ -81,6 +81,14 @@ describe("demo AI generate contract", () => {
       }],
     })).candidates[0];
     expect(second.beats.map((beat) => beat.place?.name)).not.toEqual(first.beats.map((beat) => beat.place?.name));
+  });
+
+  it("uses remembered tastes to choose among unused trusted Lisbon routes", () => {
+    const result = generateCuratedQuickPlan(baseCtx({
+      homeBaseLabel: "Lisbon",
+      loveTastes: [{ id: "water", text: "Tagus waterfront strolls", source: "taste", tags: ["waterfront"] }],
+    }));
+    expect(result?.candidates[0].beats.map((beat) => beat.place?.name)).toContain("Doca de Santo Amaro");
   });
 
   it("keeps restaurant and budget edits inside dining alternatives", () => {

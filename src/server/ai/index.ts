@@ -26,7 +26,7 @@ import {
   buildPlanActionSystemPrompt,
   buildPlanActionUserPrompt,
 } from "./prompts.js";
-import { chatRespondDemo, feedbackExtractDemo, generateCandidatesDemo, generateQuickFallback, type ChatContext, type GenerateContext } from "./demoAi.js";
+import { chatRespondDemo, feedbackExtractDemo, generateCandidatesDemo, generateCuratedQuickPlan, generateQuickFallback, type ChatContext, type GenerateContext } from "./demoAi.js";
 import type { Candidate } from "../../shared/types.js";
 import type { ProgressReporter } from "../plans/engine/stages.js";
 
@@ -83,6 +83,10 @@ export function quickPlanQualityIssue(response: AiGenerateResponse, ctx: Generat
   }
   const wantsMeal = /\b(meal|lunch|dinner|restaurant|fish|meat|grill(?:ed)?)\b/i.test(ctx.moodContext ?? "");
   const mealIdentity = candidate.beats[1].place?.kind ?? "";
+  const mealName = candidate.beats[1].place?.name ?? "";
+  if (wantsMeal && /market|mercado|food\s*(?:hall|court)/i.test(`${mealName} ${mealIdentity}`)) {
+    return "meal stop is a generic market rather than a restaurant";
+  }
   if (wantsMeal && !/restaurant|grill|seafood|fish|steak|churrasc|tavern|bistro|tasca/i.test(mealIdentity)) {
     return "meal stop is not a specific restaurant";
   }
@@ -96,6 +100,11 @@ export async function generateCandidates(
   if (currentAiMode() === "demo") {
     await report?.("composing_plan");
     return { mode: "demo", response: generateCandidatesDemo(ctx), groundingSources: [] };
+  }
+  const curated = generateCuratedQuickPlan(ctx);
+  if (curated) {
+    await report?.("composing_plan", "Matching a trusted local route to your memory");
+    return { mode: "demo", response: curated, groundingSources: [] };
   }
   const composingEvent = (detail: string) => {
     void report?.("composing_plan", detail);

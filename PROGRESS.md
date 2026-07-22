@@ -52,11 +52,13 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 
 ## Current state
 
-**Version 1.1.1 "Wasp" is ready for Render deployment.** One-click planning now
+**Version 1.1.2 "Wasp" is ready for Render deployment.** One-click planning now
 uses one bounded structured-model call instead of sequential place research and
 composition. A 12-second provider deadline falls back to a concrete, rotating,
 Maps-ready Lisbon plan; optional memory citations can be stripped but can never
-veto an otherwise safe plan. TypeScript, lint, production build, and 147 Vitest
+veto an otherwise safe plan. Lisbon home plans use a trusted local route pack
+matched to memory and History before any network model. TypeScript, lint,
+production build, mobile Playwright, and 148 Vitest
 tests are green; the live deployment and production canary are next.
 
 **Version 1.0.1 "Iron Man" is live on Render from `main` and backed by the dedicated Neon project.** Shipped 2026-07-20: v1.0.0 (`111dc4e`, features) + v1.0.1 (`612653a`, hardening). 128 Vitest tests + Playwright E2E green; two live production canaries run. Previous baseline (v0.1.5): A fresh
@@ -107,7 +109,7 @@ covered implicitly by the plan.test.ts lock→history assertion.
 3. **Broader browser coverage** — add separate Playwright scenarios for dead ends, trip modes, friend acceptance, and hunch promotion.
 
 ## Next steps
-1. Deploy v1.1.1 "Wasp" to Render.
+1. Deploy v1.1.2 "Wasp" to Render.
 2. Run the exact Lisbon/Pom one-click canary and confirm a useful plan appears
    inside the bounded latency window with no dead-end card.
 3. Hand the fast one-click planner to alpha testers.
@@ -131,6 +133,10 @@ photo enrichment have short best-effort timeouts. Live model canary: 8.8 seconds
 for a personalized plan. A deterministic quality gate rejects repeated stops,
 Lisbon lake framing, and generic food halls when a restaurant was requested.
 Full suite: 147/147 Vitest tests, mobile Playwright, and production build.
+The first v1.1.1 production canary was fast (9.6 seconds) but still chose Time
+Out Market. v1.1.2 therefore routes Lisbon directly through the trusted,
+memory-aware local pack; its planner step benchmarks at 1 ms and still rotates
+away from History.
 
 ### 2026-07-20 — v1.0.0 "Iron Man" + v1.0.1 hardening (alpha release)
 Avengers-assemble campaign (Fable chair, Sonnet builders, Haiku scouts, GPT-5.6

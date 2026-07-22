@@ -126,7 +126,7 @@ describe("fast-plan product quality gate", () => {
     const lake = fastResponse(["Lakeside walk", "Peixaria B", "Miradouro C"]);
     lake.candidates[0].title = "Lisbon lakeside evening";
     expect(quickPlanQualityIssue(lake, context)).toMatch(/lake/i);
-    expect(quickPlanQualityIssue(fastResponse(["Jardim A", "Time Out Market", "Miradouro C"], "food hall"), context)).toMatch(/restaurant/i);
+    expect(quickPlanQualityIssue(fastResponse(["Jardim A", "Time Out Market", "Miradouro C"], "restaurant"), context)).toMatch(/market/i);
   });
 });
 
