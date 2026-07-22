@@ -4,7 +4,7 @@ import {
   aiFeedbackResponseSchema,
   aiGenerateResponseSchema,
 } from "../../src/shared/schemas.js";
-import { chatRespondDemo, feedbackExtractDemo, generateCandidatesDemo, type GenerateContext } from "../../src/server/ai/demoAi.js";
+import { chatRespondDemo, feedbackExtractDemo, generateCandidatesDemo, generateQuickFallback, type GenerateContext } from "../../src/server/ai/demoAi.js";
 import { SCALES } from "../../src/shared/scale.js";
 
 function baseCtx(overrides: Partial<GenerateContext> = {}): GenerateContext {
@@ -53,6 +53,34 @@ describe("demo AI generate contract", () => {
       expect(candidate.beats).toHaveLength(3);
       expect(candidate.destinationAnchor).toBeNull();
     }
+  });
+
+  it("returns a specific Maps-ready Lisbon fallback instead of a generic dead end", () => {
+    const result = generateQuickFallback(baseCtx({
+      homeBaseLabel: "Lisbon, Lisbon District, Portugal",
+      moodContext: "A little walk, grilled fish or meat, and a soft stroll with my Pom",
+      participants: [{ name: "Pom", kind: "pet", relationship: "dog" }],
+    }));
+    const candidate = result.candidates[0];
+    expect(candidate.beats).toHaveLength(3);
+    expect(candidate.beats.every((beat) => beat.place?.name)).toBe(true);
+    expect(candidate.beats.every((beat) => beat.place?.sourceUrl.includes("google.com/maps/search"))).toBe(true);
+    expect(candidate.estimatedCost).toMatch(/€.+per person/);
+    expect(candidate.checkBeforeYouGo.join(" ")).toMatch(/Pom/i);
+    expect(candidate.citations).toEqual([]);
+  });
+
+  it("rotates the Lisbon instant fallback away from recently shown places", () => {
+    const first = generateQuickFallback(baseCtx({ homeBaseLabel: "Lisbon" })).candidates[0];
+    const second = generateQuickFallback(baseCtx({
+      homeBaseLabel: "Lisbon",
+      recentSuggestions: [{
+        title: first.title,
+        category: first.category,
+        placeNames: first.beats.flatMap((beat) => beat.place?.name ? [beat.place.name] : []),
+      }],
+    })).candidates[0];
+    expect(second.beats.map((beat) => beat.place?.name)).not.toEqual(first.beats.map((beat) => beat.place?.name));
   });
 
   it("keeps restaurant and budget edits inside dining alternatives", () => {

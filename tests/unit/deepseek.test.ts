@@ -85,6 +85,28 @@ describe("OpenRouter reasoning-starvation recovery", () => {
     expect(requestBody.reasoning.max_tokens).toBeLessThan(requestBody.max_tokens);
   });
 
+  it("makes fast planning a single direct low-reasoning call", async () => {
+    global.fetch = vi.fn(async () => openRouterResponse(okBody({ ok: true }))) as unknown as typeof fetch;
+
+    await callAiJson("system prompt", "user prompt", testSchema, { fast: true });
+
+    expect((global.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls).toHaveLength(1);
+    const [, init] = (global.fetch as unknown as { mock: { calls: [unknown, RequestInit][] } }).mock.calls[0];
+    const requestBody = JSON.parse(init.body as string);
+    expect(requestBody.model).toBe(env.FAST_MODEL_ID);
+    expect(requestBody.max_tokens).toBe(9000);
+    expect(requestBody.reasoning).toEqual({ effort: "low", exclude: true });
+    expect(requestBody.plugins).toBeUndefined();
+    expect(requestBody.provider).toBeUndefined();
+  });
+
+  it("does not double fast-path latency with a validation repair call", async () => {
+    global.fetch = vi.fn(async () => openRouterResponse(okBody({ nope: true }))) as unknown as typeof fetch;
+
+    await expect(callAiJson("system prompt", "user prompt", testSchema, { fast: true })).rejects.toThrow(/expected contract/i);
+    expect((global.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls).toHaveLength(1);
+  });
+
   it("applies the reasoning-starvation recovery to grounded (web-search) calls too", async () => {
     let calls = 0;
     global.fetch = vi.fn(async () => {

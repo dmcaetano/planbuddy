@@ -1,6 +1,13 @@
 # PlanBuddy — State
 
 ## Status
+v1.1.1 "Wasp" is ready to deploy. The core one-click path is now one bounded
+OpenRouter call using `openai/gpt-4o-mini`; DeepSeek V4 Flash remains the chat,
+feedback, and memory model. If the plan call is slow or malformed, a concrete
+Maps-ready Lisbon route takes over after 12 seconds. Optional citations are
+supporting metadata and no longer cause dead ends. 147 Vitest tests, typecheck,
+lint, and production build are green.
+
 v1.1.0 "Wasp" is live at https://planbuddy.onrender.com from `main`
 (`2543f18`). It adds a warm place-and-people canvas
 and a persistent floating Buddy. Buddy is plan-aware when a plan is in view,
@@ -17,8 +24,8 @@ against Gemini outages (DeepSeek reasoning-starvation fix + fast failover).
 sol with executed repros; two live production canaries run on 2026-07-20.
 
 ## Next concrete action
-Hand the floating-Buddy experience to alpha testers for recommendation and
-edit-flow feedback.
+Deploy v1.1.1, then run the exact Lisbon/Pom request against Render and verify
+latency, Maps-ready places, and absence of the former citation dead end.
 
 Hand the live app to alpha testers; collect feedback on recommendation quality, quiz usefulness, and circle selection before venue/calendar/booking integrations.
 
@@ -86,6 +93,11 @@ Hand the live app to alpha testers; collect feedback on recommendation quality, 
   Intercom-like Buddy. The dock is plan-aware only when a plan is visible,
   otherwise it is normal memory chat. Detached edits are background jobs and
   keep the original ticket as a reversible version.
+- 2026-07-22 — One-click doctrine restored: normal generation gets one bounded
+  fast-model call; live web research is not on the critical path. Provider or
+  schema or product-quality failure produces a useful deterministic plan, never a generic dead
+  end. DeepSeek remains the conversational/memory model; `openai/gpt-4o-mini`
+  handles only latency-sensitive structured plan drafting.
 
 ## Future ideas
 - RSVP (Available / Maybe / Can't) on dated plans for included friends

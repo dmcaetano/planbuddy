@@ -1,5 +1,35 @@
 # PlanBuddy — Log
 
+## 2026-07-22 — v1.1.1 one-click planner recovery
+
+### What we did
+Traced the reported production failure through Render logs. A single request
+spent about 90 seconds on DeepSeek web research and 54 seconds composing after
+Gemini rejected Lisbon location use twice, then the deterministic filter threw
+away the plan solely because of an unverifiable optional memory citation.
+Rebuilt the hot path as one structured call to `openai/gpt-4o-mini` with a
+12-second ceiling, while keeping DeepSeek V4 Flash for chat, feedback, and
+memory. Added a concrete rotating Lisbon/Pom fallback with real places, Maps
+links, timing, distance, per-person cost, clothing/pet preparation, and current-
+facts checks. Invalid citations are stripped rather than fatal; weather and
+photo calls are short best-effort enrichment.
+
+### What we decided
+The product invariant is useful plan first. Web research and citation metadata
+may improve a plan but may never block the one-click answer. Hard constraints
+remain deterministic vetoes; optional explanatory citations do not.
+
+### What did not work
+DeepSeek V4 Flash still missed the 12-second plan deadline. GPT-4.1 Mini returned
+valid output in 14.5 seconds; GPT-4o Mini returned valid structured output in
+8.8 seconds and was selected for the narrow planner role. The first fallback
+implementation changed the normal test/demo pool and broke two integration
+assumptions; it was isolated to the production failure path and the complete
+147-test suite returned green. A final live-model canary exposed a repeated
+Cais do Sodré stop and generic food-hall meal; the new deterministic quality
+gate rejected it and returned the stronger Estrela → Peixaria da Esquina →
+Jardim Teófilo de Braga route in 7.7 seconds.
+
 ## 2026-07-22 — v1.1.0 "Wasp" release candidate
 
 Implemented the approved warm place canvas and persistent Buddy directly,

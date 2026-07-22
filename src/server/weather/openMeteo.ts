@@ -38,7 +38,7 @@ export async function geocodeCity(query: string): Promise<GeocodeResult[]> {
     url.searchParams.set("count", "5");
     url.searchParams.set("language", "en");
     url.searchParams.set("format", "json");
-    const res = await fetch(url, { signal: withTimeout(5000) });
+    const res = await fetch(url, { signal: withTimeout(2500) });
     if (!res.ok) throw new Error(`Geocoding failed: ${res.status}`);
     const data = (await res.json()) as {
       results?: { name: string; latitude: number; longitude: number; country?: string; admin1?: string }[];
@@ -92,7 +92,7 @@ export async function getForecast(
     url.searchParams.set("timezone", "auto");
     url.searchParams.set("start_date", startDate);
     url.searchParams.set("end_date", endDate);
-    const res = await fetch(url, { signal: withTimeout(6000) });
+    const res = await fetch(url, { signal: withTimeout(2500) });
     if (!res.ok) throw new Error(`Forecast failed: ${res.status}`);
     const data = (await res.json()) as {
       daily?: {

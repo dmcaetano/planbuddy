@@ -101,19 +101,21 @@ describe("filterCandidates", () => {
     expect(rejected[0].reason).toBe("duplicate candidate");
   });
 
-  it("rejects a candidate citing an unknown fact id", () => {
+  it("drops an unknown memory citation without rejecting the plan", () => {
     const candidate = makeCandidate({ citations: [{ factId: "missing", quote: "loves parks", source: "taste" }] });
     const { kept, rejected } = filterCandidates([candidate], baseCtx());
-    expect(kept).toHaveLength(0);
-    expect(rejected[0].reason).toContain("invalid citation");
+    expect(kept).toHaveLength(1);
+    expect(kept[0].citations).toEqual([]);
+    expect(rejected).toHaveLength(0);
   });
 
-  it("rejects a candidate whose citation quote is not actually in the cited fact", () => {
+  it("drops a citation whose quote is not actually in the cited fact", () => {
     const knownFacts = new Map([["t1", "loves museums"]]);
     const candidate = makeCandidate({ citations: [{ factId: "t1", quote: "loves hiking", source: "taste" }] });
     const { kept, rejected } = filterCandidates([candidate], baseCtx({ knownFacts }));
-    expect(kept).toHaveLength(0);
-    expect(rejected[0].reason).toContain("invalid citation");
+    expect(kept).toHaveLength(1);
+    expect(kept[0].citations).toEqual([]);
+    expect(rejected).toHaveLength(0);
   });
 
   it("accepts a candidate with a valid citation matching a known fact", () => {
@@ -137,17 +139,12 @@ describe("filterCandidates", () => {
     expect(kept[0].citations).toEqual([{ factId: "t1", quote: "loves parks", source: "taste" }]);
   });
 
-  it("still rejects a genuinely fabricated citation id that is not memory-prefixed", () => {
+  it("also drops a fabricated non-memory citation id instead of blocking the plan", () => {
     const candidate = makeCandidate({ citations: [{ factId: "invented-fact", quote: "loves museums", source: "taste" }] });
     const { kept, rejected } = filterCandidates([candidate], baseCtx());
-    expect(kept).toHaveLength(0);
-    expect(rejected[0].reason).toContain("invalid citation");
-  });
-
-  it("never includes the raw internal fact id in the rejection reason", () => {
-    const candidate = makeCandidate({ citations: [{ factId: "missing-secret-id-abc123", quote: "loves parks", source: "taste" }] });
-    const { rejected } = filterCandidates([candidate], baseCtx());
-    expect(rejected[0].reason).not.toContain("missing-secret-id-abc123");
+    expect(kept).toHaveLength(1);
+    expect(kept[0].citations).toEqual([]);
+    expect(rejected).toHaveLength(0);
   });
 
   it("rejects candidates with an impossible travel radius for non-trip scales", () => {
@@ -201,6 +198,30 @@ describe("filterCandidates", () => {
     );
     expect(kept).toHaveLength(0);
     expect(rejected[0].reason).toContain("place-source firewall");
+  });
+
+  it("keeps a Maps-ready named place when fast mode has no optional web dossier", () => {
+    const candidate = makeCandidate({
+      beats: [
+        {
+          title: "Dinner",
+          description: "A specific dinner stop to verify in Maps.",
+          category: "food",
+          indoor: false,
+          place: {
+            name: "Real Place",
+            address: "Lisbon",
+            kind: "restaurant",
+            sourceUrl: "https://www.google.com/maps/search/?api=1&query=Real+Place+Lisbon",
+            sourceLabel: "Google Maps",
+            factualNote: "Open the live listing to confirm current details.",
+          },
+        },
+      ],
+    });
+    const { kept, rejected } = filterCandidates([candidate], baseCtx({ groundedSourceUrls: [] }));
+    expect(kept).toHaveLength(1);
+    expect(rejected).toHaveLength(0);
   });
 
   it("accepts a named place when its source URL matches web-search evidence", () => {

@@ -1,10 +1,12 @@
 import type { GenerateContext } from "./demoAi.js";
 import { beatCountForScale, isTripScale } from "../../shared/scale.js";
 
-export function buildGenerateSystemPrompt(ctx?: GenerateContext): string {
+export function buildGenerateSystemPrompt(ctx?: GenerateContext, fast = false): string {
   const lines = [
-    "You are PlanBuddy's grounded local planner. Produce a decision-ready itinerary, not generic inspiration.",
-    "A citation-validated place dossier is supplied in the user prompt. Use only named places in that dossier and copy their name, address, sourceUrl, sourceLabel, and factualNote exactly.",
+    "You are PlanBuddy's local planner. Produce a decision-ready itinerary, not generic inspiration.",
+    fast
+      ? "Answer from reliable general knowledge in one pass. Name real, established places. For every named place, set sourceUrl to a Google Maps search URL for that exact place and city, sourceLabel to Google Maps, and factualNote to a short instruction to confirm the current listing."
+      : "A citation-validated place dossier is supplied in the user prompt. Use only named places in that dossier and copy their name, address, sourceUrl, sourceLabel, and factualNote exactly.",
     "Reply with JSON only, matching this shape exactly:",
     '{"candidates": [{"title": string, "rationale": string, "category": string, "indoor": boolean,',
     '"beats": [{"title": string, "description": string, "category": string, "indoor": boolean, "startTime": string|null, "durationMinutes": number|null, "travelMode": "walking"|"driving"|"transit"|"ferry"|null, "distanceFromPreviousKm": number|null, "travelMinutes": number|null, "place": {"name": string, "address": string|null, "kind": string, "sourceUrl": string, "sourceLabel": string, "factualNote": string}|null}],',
@@ -15,22 +17,34 @@ export function buildGenerateSystemPrompt(ctx?: GenerateContext): string {
     '"constraintCompliance": [{"constraintId": string, "satisfied": boolean}], "travelEstimateKm": number|null}]}',
     "Return exactly 1 best candidate with exactly 3 chronological beats. Commit to the strongest fit instead of offering a menu of ideas.",
     "For Day off/Weekend, each candidate must name a real, current meal/activity venue plus permanent walkable geography. For Getaway/Vacation, set a real destinationAnchor and three useful trip beats.",
-    "Never add a named venue, landmark, neighborhood, park, route stop, or source URL that is absent from the supplied dossier.",
-    "Do not claim current opening hours, price, booking availability, dog acceptance, accessibility, or weather unless the cited source explicitly supports it. Put uncertain operational facts in checkBeforeYouGo as actions to verify.",
-    "Distances and travel times are estimates: make them geographically plausible and conservative. Do not output Google Maps URLs; the server creates them.",
+    fast
+      ? "Prefer famous permanent geography and established venues you are confident exist. If uncertain about a venue, use a precise venue category in that neighborhood rather than inventing a business."
+      : "Never add a named venue, landmark, neighborhood, park, route stop, or source URL that is absent from the supplied dossier.",
+    "Do not claim current opening hours, price, booking availability, dog acceptance, or accessibility unless supplied evidence supports it. The supplied live forecast may be used directly. Put uncertain operational facts in checkBeforeYouGo as actions to verify.",
+    fast
+      ? "Distances and travel times are estimates: make them geographically plausible and conservative. Use Google Maps only as each place's sourceUrl; the server creates separate Maps place and route links."
+      : "Distances and travel times are estimates: make them geographically plausible and conservative. Do not output new Google Maps URLs; the server creates them.",
     "Every beat must include travelMode, distanceFromPreviousKm, and travelMinutes. For beat 1, estimate the leg from the supplied home base; for later beats, estimate from the previous stop.",
     "Make start times coherent with the request, sunset, heat, meals, and companions. Rationale must explain why this specific route fits the remembered household.",
     "For a local request that asks for walking plus a meal, use this exact sequence: a gentle pre-meal walk, the meal, then a soft after-meal stroll. Schedule the requested meal time exactly when one is given.",
-    "For that local walk-meal-walk sequence, use the dossier's two distinct outdoor places for beats 1 and 3; never repeat the same park or landmark on both sides of the meal.",
+    fast
+      ? "For that local walk-meal-walk sequence, use two distinct outdoor places for beats 1 and 3; never repeat the same park or landmark on both sides of the meal."
+      : "For that local walk-meal-walk sequence, use the dossier's two distinct outdoor places for beats 1 and 3; never repeat the same park or landmark on both sides of the meal.",
     "walkingMinutes must include both walking between stops and time spent walking inside a park/promenade. walkingDistanceKm must cover that same total. Respect any explicit walking-time range.",
     "estimatedCost must be formatted per person and stay inside any explicit budget (for example, €35–50 per person). Never silently total multiple people.",
     "checkBeforeYouGo must cover current hours, reservation/terrace availability, pet acceptance when a pet is present, and any price/menu fact not established by the dossier.",
     "photoSearchTerm must be a permanent landmark, park, waterfront, or neighborhood actually on the route—not a restaurant and never an invented feature.",
     "In Lisbon, never create lakeside framing or call a small ornamental park pond a lake; prefer the Tagus waterfront, gardens, parks, viewpoints, or correctly call it a pond.",
-    "Only cite memory facts given verbatim in the prompt. Never invent a memory citation.",
+    fast
+      ? "Set citations to an empty array. The server already applies memory and constraints; optional explanatory citations are not needed on the one-click path."
+      : "Only cite memory facts given verbatim in the prompt. Never invent a memory citation.",
     "When a friend participates, use their constraints and tastes silently for group fit. Never repeat or attribute a person's private preference, constraint, or name in the generated prose.",
-    "Self-report constraintCompliance for every hard constraint honestly. If a source cannot establish a constraint such as pet acceptance or gluten safety, mark it unsatisfied so the server rejects the candidate.",
-    "resolverVenueIds must always be an empty array; web source validation is the venue firewall for this version.",
+    fast
+      ? "Respect every hard constraint conservatively. Never claim unverified allergen, accessibility, or pet acceptance; add a direct confirmation action to checkBeforeYouGo instead."
+      : "Self-report constraintCompliance for every hard constraint honestly. If a source cannot establish a constraint such as pet acceptance or gluten safety, mark it unsatisfied so the server rejects the candidate.",
+    fast
+      ? "resolverVenueIds must always be an empty array; operational uncertainty belongs in checkBeforeYouGo."
+      : "resolverVenueIds must always be an empty array; web source validation is the venue firewall for this version.",
   ];
   if (ctx?.edit) {
     lines.push(
@@ -58,7 +72,7 @@ function weatherLine(ctx: GenerateContext): string {
     .join("; ");
 }
 
-export function buildGenerateUserPrompt(ctx: GenerateContext): string {
+export function buildGenerateUserPrompt(ctx: GenerateContext, fast = false): string {
   const lines: string[] = [];
   lines.push(
     `Scale: ${ctx.scale} (radius ${ctx.radiusKm}km, ${beatCountForScale(ctx.scale)} beats per candidate, trip=${isTripScale(ctx.scale)})`
@@ -106,9 +120,11 @@ export function buildGenerateUserPrompt(ctx: GenerateContext): string {
   }
 
   lines.push(
-    "Return exactly 1 grounded, detailed candidate using only the validated dossier below. Prefer one compact route over disconnected stops. JSON only."
+    fast
+      ? "Return exactly 1 detailed candidate now. Prefer one compact route over disconnected stops. Include specific Maps-ready place names, distances, timings, clothing, and practical checks. JSON only."
+      : "Return exactly 1 grounded, detailed candidate using only the validated dossier below. Prefer one compact route over disconnected stops. JSON only."
   );
-  lines.push(`Validated place dossier: ${JSON.stringify(ctx.groundedPlaces ?? [])}`);
+  if (!fast) lines.push(`Validated place dossier: ${JSON.stringify(ctx.groundedPlaces ?? [])}`);
   if (ctx.edit) {
     lines.push(`EDIT REQUEST: ${ctx.edit.request}`);
     lines.push(`EDIT MODE: ${ctx.edit.mode}`);

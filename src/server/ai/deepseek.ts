@@ -28,6 +28,8 @@ export interface GroundingSource {
 interface AiCallOptions {
   webSearch?: boolean;
   repairNote?: string;
+  /** One-click planning: direct answer, short deadline, no latency-multiplying retries. */
+  fast?: boolean;
   /** Full plan composition runs a materially larger schema than chat/feedback/etc. and needs more token + time headroom. */
   heavy?: boolean;
   /** Internal: set on the single retry after a ReasoningStarvedError to force a short, low-reasoning answer. */
@@ -66,7 +68,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
   if (!env.OPENROUTER_API_KEY) {
     throw new AiUnavailableError("OPENROUTER_API_KEY not configured");
   }
-  const directAnswerNote = options.directAnswer
+  const directAnswerNote = options.directAnswer || options.fast
     ? "\n\nAnswer directly now. Do not use extended step-by-step reasoning -- respond immediately with the final JSON only."
     : "";
   const messages = options.webSearch
@@ -84,14 +86,19 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
   // reasoning+content budgets than chat/feedback JSON and need real
   // wall-clock headroom, especially when running as the DeepSeek fallback
   // for a degraded Gemini. Lightweight calls keep the shorter timeout.
-  const timeoutMs = options.webSearch || options.heavy ? env.AI_COMPOSE_TIMEOUT_MS : env.AI_TIMEOUT_MS;
+  const timeoutMs = options.fast
+    ? env.AI_FAST_TIMEOUT_MS
+    : options.webSearch || options.heavy
+      ? env.AI_COMPOSE_TIMEOUT_MS
+      : env.AI_TIMEOUT_MS;
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    const model = options.fast ? env.FAST_MODEL_ID : env.MODEL_ID;
     // Candidate generation (composition) is materially larger than
     // chat/feedback JSON. Give the fast model enough room for a cold
     // provider start while retaining a hard upper bound so the deterministic
     // fallback can still take over.
-    const maxTokens = options.webSearch ? 12000 : options.heavy ? 28000 : 6000;
+    const maxTokens = options.webSearch ? 12000 : options.fast ? 9000 : options.heavy ? 28000 : 6000;
     // Reasoning models can silently spend the *entire* completion-token
     // budget on hidden reasoning and emit zero visible content (see
     // ReasoningStarvedError above -- this is exactly what happened in
@@ -99,7 +106,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
     // cap). Always cap reasoning tokens well under max_tokens so real
     // content headroom survives even a "high demand" degraded run.
     const reasoning =
-      options.webSearch || options.directAnswer
+      options.webSearch || options.directAnswer || options.fast
         ? { effort: "low" as const, exclude: true }
         : { max_tokens: options.heavy ? 8000 : Math.min(2500, Math.floor(maxTokens / 2)) };
     const res = await fetch(OPENROUTER_URL, {
@@ -109,10 +116,10 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: env.MODEL_ID,
+        model,
         messages,
         response_format: { type: "json_object" },
-        temperature: options.webSearch ? 0.45 : 0.7,
+        temperature: options.webSearch ? 0.45 : options.fast ? 0.5 : 0.7,
         max_tokens: maxTokens,
         reasoning,
         ...(options.webSearch
@@ -127,7 +134,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
         // Baidu's FP8 endpoint is the current low-latency, structured-output
         // path for this exact model. OpenRouter may still fall through to its
         // other providers if that endpoint is unavailable.
-        ...(options.webSearch
+        ...(options.webSearch || !model.toLowerCase().includes("deepseek")
           ? {}
           : {
               provider: {
@@ -164,7 +171,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
         annotationCount: message?.annotations?.length ?? 0,
         hasToolCalls: Boolean((message as { tool_calls?: unknown[] } | undefined)?.tool_calls?.length),
       });
-      if (finishReason === "length" && !options.directAnswer) {
+      if (finishReason === "length" && !options.directAnswer && !options.fast) {
         throw new ReasoningStarvedError();
       }
       throw new Error("OpenRouter returned no content");
@@ -204,7 +211,7 @@ async function callWithLengthRetry(systemPrompt: string, userPrompt: string, opt
     }
     // A slow provider under load is transient more often than it is broken —
     // the background-job architecture can afford exactly one more attempt.
-    if (isAbortLike(err) && (options.webSearch || options.heavy) && !options.timeoutRetry) {
+    if (isAbortLike(err) && !options.fast && (options.webSearch || options.heavy) && !options.timeoutRetry) {
       logger.warn("AI call timed out; retrying once", {
         model: env.MODEL_ID,
         webSearch: Boolean(options.webSearch),
@@ -227,15 +234,16 @@ export async function callAiJson<T>(
   systemPrompt: string,
   userPrompt: string,
   schema: ZodType<T, ZodTypeDef, unknown>,
-  options: { heavy?: boolean; onEvent?: (detail: string) => void } = {}
+  options: { heavy?: boolean; fast?: boolean; onEvent?: (detail: string) => void } = {}
 ): Promise<T> {
+  const model = options.fast ? env.FAST_MODEL_ID : env.MODEL_ID;
   let raw = await callWithLengthRetry(systemPrompt, userPrompt, options);
   let parsed = safeJsonParse(raw.content);
   let result = parsed ? schema.safeParse(parsed) : null;
 
-  if (!result || !result.success) {
+  if ((!result || !result.success) && !options.fast) {
     const issue = result ? JSON.stringify(result.error.flatten()).slice(0, 400) : "not valid JSON";
-    logger.warn("AI response failed validation, attempting one repair", { model: env.MODEL_ID, issue });
+    logger.warn("AI response failed validation, attempting one repair", { model, issue });
     emit(options, EVENT_VALIDATION_REPAIR);
     raw = await callWithLengthRetry(systemPrompt, userPrompt, { ...options, repairNote: issue });
     parsed = safeJsonParse(raw.content);
@@ -243,11 +251,11 @@ export async function callAiJson<T>(
   }
 
   if (!result || !result.success) {
-    logger.error("AI response failed validation after repair attempt", { model: env.MODEL_ID });
+    logger.error("AI response failed validation after repair attempt", { model });
     throw new Error("AI response did not match the expected contract after repair");
   }
 
-  logger.info("AI call succeeded", { model: env.MODEL_ID });
+  logger.info("AI call succeeded", { model });
   return result.data;
 }
 

@@ -15,8 +15,12 @@ services:
         value: planbuddy
       - key: MODEL_ID
         value: deepseek/deepseek-v4-flash
+      - key: FAST_MODEL_ID
+        value: openai/gpt-4o-mini
       - key: AI_TIMEOUT_MS
         value: "90000"
+      - key: AI_FAST_TIMEOUT_MS
+        value: "12000"
       - key: DATABASE_URL
         sync: false
       - key: OPENROUTER_API_KEY

@@ -51,7 +51,8 @@ export async function resolveWikimediaImage(searchTerm: string | null | undefine
     searchUrl.searchParams.set("origin", "*");
 
     const response = await fetch(searchUrl, {
-      signal: AbortSignal.timeout(6000),
+      // Photography is optional polish and must never hold the plan hostage.
+      signal: AbortSignal.timeout(1800),
       headers: { "User-Agent": "PlanBuddy/0.1.1 (https://planbuddy.onrender.com)" },
     });
     if (!response.ok) throw new Error(`Wikimedia Commons search failed: ${response.status}`);

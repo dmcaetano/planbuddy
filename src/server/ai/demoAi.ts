@@ -72,6 +72,117 @@ function selfReportCompliance(
   });
 }
 
+function mapsSource(name: string, city: string): string {
+  const url = new URL("https://www.google.com/maps/search/");
+  url.searchParams.set("api", "1");
+  url.searchParams.set("query", `${name}, ${city}`);
+  return url.toString();
+}
+
+const LISBON_QUICK_ROUTES = [
+  {
+    title: "Estrela garden, grilled fish, and a soft square stroll",
+    pre: ["Jardim da Estrela", "Praça da Estrela, Lisboa", "garden", "A relaxed loop under mature trees before dinner."],
+    meal: ["Peixaria da Esquina", "Rua Correia Teles 56, Lisboa", "fish restaurant", "A well-known Campo de Ourique fish restaurant; confirm today's grilled options on the live menu."],
+    post: ["Jardim Teófilo de Braga", "Praça de São João Bosco, Lisboa", "garden square", "A compact neighborhood square for an easy post-meal loop."],
+    cost: "€30–45 per person",
+  },
+  {
+    title: "Necessidades greenery, charcoal grill, and the Alcântara waterfront",
+    pre: ["Tapada das Necessidades", "Calçada das Necessidades, Lisboa", "park", "A gentle park walk with room to shorten the loop whenever you like."],
+    meal: ["Último Porto", "Estação Marítima da Rocha Conde de Óbidos, Lisboa", "grill restaurant", "An established charcoal-grill stop; confirm today's fish or meat, terrace, and access before leaving."],
+    post: ["Doca de Santo Amaro", "Doca de Santo Amaro, Lisboa", "waterfront promenade", "A flat Tagus-side stroll to finish without turning the evening into a hike."],
+    cost: "€25–40 per person",
+  },
+  {
+    title: "Torel viewpoint, classic grilled chicken, and an evening miradouro",
+    pre: ["Jardim do Torel", "Rua Júlio de Andrade, Lisboa", "garden viewpoint", "A short viewpoint loop before the meal, with benches if you want to pause."],
+    meal: ["Bonjardim", "Travessa de Santo Antão 11, Lisboa", "Portuguese grill", "A long-running central grill known for chicken; verify the current menu and table setup."],
+    post: ["Miradouro de São Pedro de Alcântara", "Rua de São Pedro de Alcântara, Lisboa", "viewpoint", "A flexible post-meal viewpoint stroll with an easy turn-back option."],
+    cost: "€20–35 per person",
+  },
+] as const;
+
+function lisbonQuickCandidate(ctx: GenerateContext): AiGenerateResponse | null {
+  if (isTripScale(ctx.scale) || !/lisbo[an]|lisbon/i.test(ctx.homeBaseLabel ?? "")) return null;
+  const recentNames = new Set(
+    (ctx.recentSuggestions ?? []).flatMap((suggestion) => suggestion.placeNames.map((name) => name.toLowerCase()))
+  );
+  const route = LISBON_QUICK_ROUTES.find((item) =>
+    [item.pre[0], item.meal[0], item.post[0]].every((name) => !recentNames.has(name.toLowerCase()))
+  ) ?? LISBON_QUICK_ROUTES[hashSeed(ctx.seed) % LISBON_QUICK_ROUTES.length];
+  const place = (data: readonly [string, string, string, string]) => ({
+    name: data[0],
+    address: data[1],
+    kind: data[2],
+    sourceUrl: mapsSource(data[0], "Lisbon"),
+    sourceLabel: "Google Maps",
+    factualNote: data[3],
+  });
+  const hasPet = (ctx.participants ?? []).some((participant) => participant.kind === "pet");
+  const beats: AiCandidate["beats"] = [
+    {
+      title: `Gentle loop at ${route.pre[0]}`,
+      description: route.pre[3],
+      category: "walk",
+      indoor: false,
+      startTime: "17:30",
+      durationMinutes: 30,
+      travelMode: "walking",
+      distanceFromPreviousKm: 1.2,
+      travelMinutes: 18,
+      place: place(route.pre),
+    },
+    {
+      title: `Grilled dinner at ${route.meal[0]}`,
+      description: `${route.meal[3]} Ask the kitchen directly about any dietary constraint rather than relying on a listing.`,
+      category: "food",
+      indoor: true,
+      startTime: "19:00",
+      durationMinutes: 90,
+      travelMode: "walking",
+      distanceFromPreviousKm: 1.1,
+      travelMinutes: 17,
+      place: place(route.meal),
+    },
+    {
+      title: `Soft finish at ${route.post[0]}`,
+      description: route.post[3],
+      category: "stroll",
+      indoor: false,
+      startTime: "20:50",
+      durationMinutes: 25,
+      travelMode: "walking",
+      distanceFromPreviousKm: 0.9,
+      travelMinutes: 14,
+      place: place(route.post),
+    },
+  ];
+  const candidate: AiCandidate = {
+    title: route.title,
+    rationale: "A compact Lisbon evening with a real pre-meal walk, a proper grilled meal, and a deliberately soft finish.",
+    category: "food",
+    indoor: false,
+    beats,
+    walkingDistanceKm: 3.2,
+    walkingMinutes: 74,
+    estimatedCost: route.cost,
+    checkBeforeYouGo: [
+      `Open ${route.meal[0]} in Maps and confirm Saturday hours and reserve a table.`,
+      "Ask the restaurant directly about the current menu and every dietary constraint.",
+      ...(hasPet ? ["Confirm that the restaurant can seat your Pom; bring a carrier or sling as a tiredness backup."] : []),
+    ],
+    fallback: null,
+    photoSearchTerm: `${route.pre[0]} Lisbon`,
+    destinationAnchor: null,
+    resolverVenueIds: [],
+    citations: [],
+    constraintCompliance: selfReportCompliance(candidateText({ title: route.title, rationale: route.pre[3], category: "food", beats }), ctx.activeConstraints),
+    travelEstimateKm: 6,
+  };
+  return { candidates: [candidate] };
+}
+
 export function generateCandidatesDemo(ctx: GenerateContext): AiGenerateResponse {
   const seed = hashSeed(ctx.seed);
   const rand = mulberry32(seed);
@@ -208,6 +319,19 @@ const CONSTRAINT_PHRASES = [
 ];
 const TASTE_LOVE_PHRASES = [/\bwe love\s+([a-z ]{2,30})/i, /\b(?:i|we)\s+really\s+like\s+([a-z ]{2,30})/i];
 const TASTE_AVOID_PHRASES = [/\b(?:i|we)\s+(?:hate|dislike|don'?t like)\s+([a-z ]{2,30})/i];
+
+/**
+ * Production escape hatch for the latency-sensitive one-click path. It uses
+ * a concrete Maps-ready Lisbon route when available, while the broader demo
+ * generator remains intact for tests, edits, trips, and other cities.
+ */
+export function generateQuickFallback(ctx: GenerateContext): AiGenerateResponse {
+  if (!ctx.edit) {
+    const quickLisbon = lisbonQuickCandidate(ctx);
+    if (quickLisbon) return quickLisbon;
+  }
+  return generateCandidatesDemo(ctx);
+}
 
 export function chatRespondDemo(ctx: ChatContext): AiChatResponse {
   const msg = ctx.message;

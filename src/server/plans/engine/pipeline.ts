@@ -177,7 +177,7 @@ export function placeProvenanceView(
       ? { mode: "resolved", note: "Named places are backed by a live place-resolver lookup." }
     : {
         mode: "inspiration",
-        note: "Inspiration mode: names permanent geography and categories, but no live venue payload backs specific facts.",
+        note: "Quick-plan mode: named places have live Google Maps links. Confirm current hours, menu, prices, and pet policy before leaving.",
       };
 }
 

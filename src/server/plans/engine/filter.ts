@@ -55,27 +55,15 @@ export function filterCandidates(candidates: AiCandidate[], ctx: FilterContext):
       continue;
     }
 
-    // Models occasionally cite an id shaped like a user-memory reference
-    // (e.g. "memory-234cf483") that doesn't match any known fact id given in
-    // the prompt, rather than an actual dossier source. That's a legitimate
-    // (if slightly hallucinated) reference to conversational memory context,
-    // not a fabricated dossier fact -- drop it instead of failing the whole
-    // candidate. Anything else unmatched is still treated as fabricated.
+    // Memory citations explain why the plan fits; they are not safety or
+    // venue evidence. A bad optional citation must never erase an otherwise
+    // useful plan. Keep only citations that match a real fact verbatim.
     const sanitizedCitations = candidate.citations.filter(
-      (cite) => ctx.knownFacts.has(cite.factId) || !/^memory-/i.test(cite.factId)
+      (cite) => {
+        const factText = ctx.knownFacts.get(cite.factId);
+        return Boolean(factText?.toLowerCase().includes(cite.quote.toLowerCase()));
+      }
     );
-    const invalidCitation = sanitizedCitations.find((cite) => {
-      const factText = ctx.knownFacts.get(cite.factId);
-      if (!factText) return true;
-      return !factText.toLowerCase().includes(cite.quote.toLowerCase());
-    });
-    if (invalidCitation) {
-      // Never surface the raw internal fact id to the user -- this reason
-      // string can end up in a user-visible "every candidate was rejected"
-      // message.
-      rejected.push({ candidate, reason: "invalid citation: source could not be verified" });
-      continue;
-    }
     candidate = { ...candidate, citations: sanitizedCitations };
 
     if (!ctx.isTripScale && candidate.travelEstimateKm != null) {
@@ -99,7 +87,13 @@ export function filterCandidates(candidates: AiCandidate[], ctx: FilterContext):
       ...candidate.beats.flatMap((beat) => (beat.place?.sourceUrl ? [beat.place.sourceUrl] : [])),
       ...(candidate.fallback?.place?.sourceUrl ? [candidate.fallback.place.sourceUrl] : []),
     ];
-    const unsupportedSource = placeSourceUrls.find((url) => !groundedUrls.has(normalizeSourceUrl(url)));
+    // When the fast planner has a current web dossier, retain the strict
+    // source firewall. When it deliberately runs without research, Maps
+    // links and explicit verification checks are still useful; do not turn
+    // the absence of optional research into a dead end.
+    const unsupportedSource = groundedUrls.size > 0
+      ? placeSourceUrls.find((url) => !groundedUrls.has(normalizeSourceUrl(url)))
+      : undefined;
     if (unsupportedSource) {
       rejected.push({ candidate, reason: "place-source firewall: named place is not backed by web-search evidence" });
       continue;

@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { canonicalizeCandidatePlaces } from "../../src/server/ai/index.js";
+import { canonicalizeCandidatePlaces, quickPlanQualityIssue } from "../../src/server/ai/index.js";
 import { buildGenerateUserPrompt, buildPlaceResearchUserPrompt } from "../../src/server/ai/prompts.js";
 import { composePlanWithGemini, researchPlacesWithGemini } from "../../src/server/grounding/geminiPlaces.js";
 import { env } from "../../src/server/env.js";
@@ -86,6 +86,47 @@ describe("grounded novelty prompts", () => {
     };
     expect(buildPlaceResearchUserPrompt(context)).toContain("Jardim Central");
     expect(buildGenerateUserPrompt(context)).toContain("Jardim Central");
+  });
+});
+
+describe("fast-plan product quality gate", () => {
+  const context: GenerateContext = {
+    scale: "day_off",
+    homeBaseLabel: "Lisbon, Portugal",
+    moodContext: "A walk, grilled fish, and a soft stroll",
+    radiusKm: 60,
+    activeConstraints: [],
+    loveTastes: [],
+    seed: "quality-gate",
+  };
+
+  function fastResponse(names: string[], mealKind = "fish restaurant"): AiGenerateResponse {
+    const candidate = structuredClone(response.candidates[0]);
+    candidate.beats = names.map((name, index) => ({
+      title: index === 1 ? `Grilled dinner at ${name}` : `Walk at ${name}`,
+      description: index === 1 ? "Choose grilled fish." : "Take a gentle walk.",
+      category: index === 1 ? "food" : "walk",
+      indoor: index === 1,
+      place: {
+        ...canonical,
+        name,
+        kind: index === 1 ? mealKind : "garden",
+        sourceUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`,
+      },
+    }));
+    return { candidates: [candidate] };
+  }
+
+  it("accepts a specific three-stop restaurant route", () => {
+    expect(quickPlanQualityIssue(fastResponse(["Jardim A", "Peixaria B", "Miradouro C"]), context)).toBeNull();
+  });
+
+  it("rejects repeated stops, Lisbon lakes, and a generic food hall meal", () => {
+    expect(quickPlanQualityIssue(fastResponse(["Cais do Sodré", "Peixaria B", "Cais do Sodré"]), context)).toMatch(/repeated/i);
+    const lake = fastResponse(["Lakeside walk", "Peixaria B", "Miradouro C"]);
+    lake.candidates[0].title = "Lisbon lakeside evening";
+    expect(quickPlanQualityIssue(lake, context)).toMatch(/lake/i);
+    expect(quickPlanQualityIssue(fastResponse(["Jardim A", "Time Out Market", "Miradouro C"], "food hall"), context)).toMatch(/restaurant/i);
   });
 });
 

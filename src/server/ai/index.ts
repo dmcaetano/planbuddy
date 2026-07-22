@@ -5,7 +5,6 @@ import {
   aiFeedbackResponseSchema,
   aiGenerateResponseSchema,
   aiEventFeatureResponseSchema,
-  aiPlaceResearchResponseSchema,
   aiPlanActionResponseSchema,
   type AiChatResponse,
   type AiFeedbackResponse,
@@ -14,7 +13,7 @@ import {
   type AiPlaceResearchResponse,
   type AiPlanActionResponse,
 } from "../../shared/schemas.js";
-import { callAiJson, callAiJsonGrounded, AiUnavailableError, type GroundingSource } from "./deepseek.js";
+import { callAiJson, AiUnavailableError, type GroundingSource } from "./deepseek.js";
 import {
   buildChatSystemPrompt,
   buildChatUserPrompt,
@@ -24,13 +23,10 @@ import {
   buildEventFeatureUserPrompt,
   buildGenerateSystemPrompt,
   buildGenerateUserPrompt,
-  buildPlaceResearchSystemPrompt,
-  buildPlaceResearchUserPrompt,
   buildPlanActionSystemPrompt,
   buildPlanActionUserPrompt,
 } from "./prompts.js";
-import { chatRespondDemo, feedbackExtractDemo, generateCandidatesDemo, type ChatContext, type GenerateContext } from "./demoAi.js";
-import { composePlanWithGemini, researchPlacesWithGemini } from "../grounding/geminiPlaces.js";
+import { chatRespondDemo, feedbackExtractDemo, generateCandidatesDemo, generateQuickFallback, type ChatContext, type GenerateContext } from "./demoAi.js";
 import type { Candidate } from "../../shared/types.js";
 import type { ProgressReporter } from "../plans/engine/stages.js";
 
@@ -65,6 +61,34 @@ export function formatVenueDetail(placeNames: string[]): string {
     : `Composing around ${shown.join(", ")}`;
 }
 
+/** Fast JSON can be schema-valid and still be a bad plan. Keep a tiny,
+ * deterministic product-quality gate on the one-click path so repeated stops,
+ * missing venues, Lisbon "lakes", or a generic food hall for a restaurant
+ * request fall through to the concrete route instead of reaching the user. */
+export function quickPlanQualityIssue(response: AiGenerateResponse, ctx: GenerateContext): string | null {
+  const candidate = response.candidates[0];
+  if (!candidate || candidate.beats.length !== 3) return "missing three-beat candidate";
+  const places = candidate.beats.map((beat) => beat.place);
+  if (places.some((place) => !place?.name || !place.sourceUrl)) return "missing named Maps-ready place";
+  const placeNames = places.map((place) => normalizedPlaceName(place!.name));
+  if (new Set(placeNames).size !== placeNames.length) return "repeated route stop";
+
+  const planText = [
+    candidate.title,
+    candidate.rationale,
+    ...candidate.beats.flatMap((beat) => [beat.title, beat.description, beat.place?.kind ?? ""]),
+  ].join(" ");
+  if (/lisbo[an]|lisbon/i.test(ctx.homeBaseLabel ?? "") && /\blake(?:side)?\b/i.test(planText)) {
+    return "invalid Lisbon lake framing";
+  }
+  const wantsMeal = /\b(meal|lunch|dinner|restaurant|fish|meat|grill(?:ed)?)\b/i.test(ctx.moodContext ?? "");
+  const mealIdentity = candidate.beats[1].place?.kind ?? "";
+  if (wantsMeal && !/restaurant|grill|seafood|fish|steak|churrasc|tavern|bistro|tasca/i.test(mealIdentity)) {
+    return "meal stop is not a specific restaurant";
+  }
+  return null;
+}
+
 export async function generateCandidates(
   ctx: GenerateContext,
   report?: ProgressReporter
@@ -73,7 +97,30 @@ export async function generateCandidates(
     await report?.("composing_plan");
     return { mode: "demo", response: generateCandidatesDemo(ctx), groundingSources: [] };
   }
+  const composingEvent = (detail: string) => {
+    void report?.("composing_plan", detail);
+  };
+  composingEvent("Making your best plan now");
   try {
+    const response = await callAiJson(
+      buildGenerateSystemPrompt(ctx, true),
+      buildGenerateUserPrompt(ctx, true),
+      aiGenerateResponseSchema,
+      { fast: true, onEvent: composingEvent }
+    );
+    const qualityIssue = quickPlanQualityIssue(response, ctx);
+    if (qualityIssue) throw new Error(`Fast plan quality gate: ${qualityIssue}`);
+    return { mode: "deepseek", response, groundingSources: [] };
+  } catch (err) {
+    logger.warn("Fast plan call unavailable; using immediate deterministic fallback", { error: String(err) });
+    composingEvent("Using your saved preferences to finish instantly");
+    return { mode: "demo", response: generateQuickFallback(ctx), groundingSources: [] };
+  }
+
+  /* Legacy two-call grounding/composition pipeline retained here only as
+     migration context; the one-click product path above intentionally does
+     not execute it.
+
     const groundingEvent = (detail: string) => {
       void report?.("grounding_places", detail);
     };
@@ -150,6 +197,7 @@ export async function generateCandidates(
     if (err instanceof AiUnavailableError) throw err;
     throw new AiUnavailableError("Grounded plan generation unavailable");
   }
+  */
 }
 
 function normalizedPlaceName(value: string): string {
@@ -190,15 +238,6 @@ export function canonicalizeCandidatePlaces(
         : candidate.fallback,
     })),
   };
-}
-
-function normalizeSourceUrl(raw: string): string {
-  try {
-    const url = new URL(raw);
-    return `${url.hostname.toLowerCase()}${url.pathname.replace(/\/+$/, "") || "/"}`;
-  } catch {
-    return raw.trim().toLowerCase().replace(/\/+$/, "");
-  }
 }
 
 export async function chatRespond(ctx: ChatContext): Promise<{ mode: AiMode; response: AiChatResponse }> {
