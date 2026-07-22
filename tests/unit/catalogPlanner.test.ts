@@ -67,6 +67,8 @@ describe("catalog planner", () => {
     expect(candidate?.beats[1].place?.kind).toBe("restaurant");
     expect(candidate?.checkBeforeYouGo.join(" ")).toContain("Pom");
     expect(candidate?.rationale).toContain("mapped places");
+    expect(candidate!.walkingMinutes).toBeGreaterThanOrEqual(45);
+    expect(candidate!.walkingMinutes).toBeLessThanOrEqual(75);
   });
 
   it("does not reuse any place from recent surfaced suggestions", () => {

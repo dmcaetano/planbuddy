@@ -30,6 +30,12 @@ the production network. The verified 11,185-place snapshot now ships with the
 server and seeds Neon at boot; external refresh is maintenance, never a cold-
 start dependency.
 
+The live tweak canary exposed that outdoor `tourism=attraction` stops were
+classified like indoor activities, so their loop time disappeared from the
+displayed walking total. Only museums and galleries are now treated as indoor
+visits; monuments, viewpoints, gardens, and similar stops count toward the
+selected walking range.
+
 ## 2026-07-22 — v1.1.1 one-click planner recovery
 
 ### What we did

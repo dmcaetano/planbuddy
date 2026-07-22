@@ -124,6 +124,10 @@ function venuePlace(venue: ResolvedVenue) {
   };
 }
 
+function isIndoorVisit(venue: ResolvedVenue): boolean {
+  return venue.category === "activity" && /^(museum|gallery)$/.test(venue.subcategory);
+}
+
 function findRouteChoices(ctx: GenerateContext, venues: ResolvedVenue[]): RouteChoice[] {
   if (ctx.homeBaseLat == null || ctx.homeBaseLng == null) return [];
   const home = { lat: ctx.homeBaseLat, lng: ctx.homeBaseLng };
@@ -139,7 +143,7 @@ function findRouteChoices(ctx: GenerateContext, venues: ResolvedVenue[]): RouteC
   const setting = (ctx.moodContext ?? "").match(/Setting:\s*(mixed|outdoors|indoors)/i)?.[1]?.toLowerCase();
   let nonMealPlaces = usable.filter((venue) => venue.category !== "food");
   if (setting === "outdoors") nonMealPlaces = nonMealPlaces.filter((venue) => venue.category === "outdoor");
-  if (setting === "indoors") nonMealPlaces = nonMealPlaces.filter((venue) => venue.category === "activity");
+  if (setting === "indoors") nonMealPlaces = nonMealPlaces.filter(isIndoorVisit);
   let meals = usable.filter((venue) => venue.category === "food" && venue.subcategory === "restaurant");
   const foodTerms = requestedFoodTerms(ctx);
   const foodMatches = foodTerms.length ? meals.filter((meal) => foodTerms.some((term) => venueText(meal).includes(term))) : [];
@@ -204,8 +208,8 @@ export function buildCatalogCandidate(ctx: GenerateContext, venues: ResolvedVenu
     {
       title: `Start gently at ${choice.pre.name}`,
       description: "Take an easy, flexible loop before the meal; turn back early if the group has had enough.",
-      category: choice.pre.category === "activity" ? "activity" : "walk",
-      indoor: choice.pre.category === "activity",
+      category: isIndoorVisit(choice.pre) ? "activity" : "walk",
+      indoor: isIndoorVisit(choice.pre),
       startTime: times[0],
       durationMinutes: 35,
       ...firstLeg,
@@ -224,12 +228,12 @@ export function buildCatalogCandidate(ctx: GenerateContext, venues: ResolvedVenu
       place: venuePlace(choice.meal),
     },
     {
-      title: `${choice.post.category === "activity" ? "Easy finish" : "Soft finish"} at ${choice.post.name}`,
-      description: choice.post.category === "activity"
+      title: `${isIndoorVisit(choice.post) ? "Easy finish" : "Soft finish"} at ${choice.post.name}`,
+      description: isIndoorVisit(choice.post)
         ? "Finish with an unhurried nearby visit, leaving whenever the group is ready."
         : "Finish with a low-pressure stroll or pause nearby, with an easy turn-back whenever you are ready.",
-      category: choice.post.category === "activity" ? "activity" : "stroll",
-      indoor: choice.post.category === "activity",
+      category: isIndoorVisit(choice.post) ? "activity" : "stroll",
+      indoor: isIndoorVisit(choice.post),
       startTime: times[2],
       durationMinutes: 25,
       ...postLeg,
