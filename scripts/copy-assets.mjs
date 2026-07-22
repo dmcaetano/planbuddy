@@ -16,3 +16,12 @@ for (const file of fs.readdirSync(src)) {
   fs.copyFileSync(path.join(src, file), path.join(dest, file));
 }
 console.log(`Copied ${fs.readdirSync(dest).length} migration file(s) to dist-server`);
+
+const resolverDataSrc = path.join(root, "src/server/resolver/data");
+const resolverDataDest = path.join(root, "dist-server/server/resolver/data");
+if (fs.existsSync(resolverDataSrc)) {
+  fs.rmSync(resolverDataDest, { recursive: true, force: true });
+  fs.mkdirSync(resolverDataDest, { recursive: true });
+  fs.cpSync(resolverDataSrc, resolverDataDest, { recursive: true });
+  console.log(`Copied ${fs.readdirSync(resolverDataDest).length} resolver data file(s) to dist-server`);
+}

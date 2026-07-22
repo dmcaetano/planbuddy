@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import path from "node:path";
 import type { Candidate } from "../src/shared/types.js";
 import type { GenerateContext } from "../src/server/ai/demoAi.js";
 import { buildCatalogCandidate } from "../src/server/plans/engine/catalogPlanner.js";
@@ -7,6 +9,12 @@ import { fetchOverpassCatalog } from "../src/server/resolver/placeResolver.js";
 
 const venues = await fetchOverpassCatalog(38.7223, -9.1393, 60);
 assert(venues.length >= 1000, `Expected a broad Lisbon catalogue, received ${venues.length}`);
+if (process.argv.includes("--write-bootstrap")) {
+  const destination = path.resolve("src/server/resolver/data/lisbon-catalog.json");
+  await fs.mkdir(path.dirname(destination), { recursive: true });
+  await fs.writeFile(destination, JSON.stringify(venues));
+  process.stdout.write(`Wrote ${venues.length} venues to ${destination}\n`);
+}
 
 const scenarios = [
   "Walk a little, grilled fish or meat, and a soft stroll with my Pom. Meal: dinner. Walking: 45-75 minutes. Budget: flexible. Setting: mixed. Transport: flexible",

@@ -27,7 +27,7 @@
 - TypeScript: **PASS**
 - ESLint: **PASS**
 - Production build and ten migrations: **PASS**
-- Unit/contract/integration: **PASS — 158/158 across 22 files**
+- Unit/contract/integration: **PASS — 159/159 across 22 files**
 - Playwright mobile: **PASS — 2/2**
 - Real catalogue matrix: **PASS — 11,185 places; 9 plans; 27/27 unique surfaced stops; 5/5 tweak modes**
 - Visual verification: **PASS — controls and hunch editor at Pixel 7 dimensions**
@@ -37,7 +37,7 @@
 - Removed the three-route Lisbon shortcut that caused the same results.
 - Replaced it with a durable large catalogue and strict recent-stop exclusion.
 - Added resolver-ID membership validation so catalogue-backed claims cannot invent a venue.
-- Added Overpass mirror failover after the acceptance run caught an upstream 504.
+- Added Overpass mirror failover after the acceptance run caught an upstream 504, then bundled the verified 11,185-place snapshot after Render could not complete any large refresh. Cold starts no longer depend on an external catalogue request.
 - Reused one 60 km cache for smaller radius settings so moving a slider does not trigger another slow discovery fetch.
 - Skipped local-place discovery for getaway/vacation flows, which do not use the local composer.
 - Added immediate surgical edits so timing/walking/outdoor changes do not wait on a model or replace unrelated stops.

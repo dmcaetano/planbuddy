@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { overpassQuery, parseOverpassElements } from "../../src/server/resolver/placeResolver.js";
+import { overpassQuery, parseOverpassElements, readLisbonBootstrap } from "../../src/server/resolver/placeResolver.js";
 
 describe("place resolver catalogue", () => {
+  it("ships a large Lisbon bootstrap catalogue for instant cold starts", async () => {
+    const venues = await readLisbonBootstrap(38.7223, -9.1393);
+    expect(venues.length).toBeGreaterThan(10_000);
+    expect(venues.filter((venue) => venue.category === "food").length).toBeGreaterThan(1_000);
+    expect(await readLisbonBootstrap(41.15, -8.61)).toEqual([]);
+  });
+
   it("caps external discovery at 60 km", () => {
     const query = overpassQuery(38.7223, -9.1393, 500);
     expect(query).toContain("around:60000");

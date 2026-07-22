@@ -2,6 +2,7 @@ import { getDb } from "../db/client.js";
 import { stringifyJsonForDb } from "../db/json.js";
 import { logger } from "../logger.js";
 import { isTest } from "../env.js";
+import fs from "node:fs/promises";
 
 export interface ResolvedVenue {
   id: string;
@@ -44,6 +45,7 @@ const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const COLD_WAIT_MS = 3500;
 const MIN_USEFUL_VENUES = 30;
 const inFlight = new Map<string, Promise<ResolvedVenue[]>>();
+let lisbonBootstrap: ResolvedVenue[] | null = null;
 
 function cacheKey(lat: number, lng: number, radiusKm: number): string {
   return `${lat.toFixed(2)}:${lng.toFixed(2)}:${Math.round(radiusKm)}`;
@@ -185,24 +187,45 @@ async function readCache(key: string): Promise<{ venues: ResolvedVenue[]; fresh:
   };
 }
 
+function isLisbonArea(lat: number, lng: number): boolean {
+  return Math.abs(lat - 38.7223) < 0.75 && Math.abs(lng - -9.1393) < 0.9;
+}
+
+export async function readLisbonBootstrap(lat: number, lng: number): Promise<ResolvedVenue[]> {
+  if (!isLisbonArea(lat, lng)) return [];
+  if (lisbonBootstrap) return lisbonBootstrap;
+  try {
+    const raw = await fs.readFile(new URL("./data/lisbon-catalog.json", import.meta.url), "utf8");
+    lisbonBootstrap = parsePayload(raw);
+    return lisbonBootstrap;
+  } catch (error) {
+    logger.warn("Bundled Lisbon place catalogue unavailable", { error: String(error) });
+    return [];
+  }
+}
+
+async function storeCatalog(key: string, lat: number, lng: number, radiusKm: number, venues: ResolvedVenue[]): Promise<void> {
+  const db = await getDb();
+  await db.query(
+    `INSERT INTO place_catalog_cache (cache_key, center_lat, center_lng, radius_km, payload, fetched_at)
+     VALUES ($1, $2, $3, $4, $5, now())
+     ON CONFLICT (cache_key) DO UPDATE SET
+       center_lat = EXCLUDED.center_lat,
+       center_lng = EXCLUDED.center_lng,
+       radius_km = EXCLUDED.radius_km,
+       payload = EXCLUDED.payload,
+       fetched_at = now()`,
+    [key, lat, lng, radiusKm, stringifyJsonForDb(venues)]
+  );
+}
+
 async function refreshCatalog(key: string, lat: number, lng: number, radiusKm: number): Promise<ResolvedVenue[]> {
   const existing = inFlight.get(key);
   if (existing) return existing;
   const promise = (async () => {
     const venues = await fetchOverpassCatalog(lat, lng, radiusKm);
     if (venues.length < MIN_USEFUL_VENUES) throw new Error(`Place catalog too small: ${venues.length}`);
-    const db = await getDb();
-    await db.query(
-      `INSERT INTO place_catalog_cache (cache_key, center_lat, center_lng, radius_km, payload, fetched_at)
-       VALUES ($1, $2, $3, $4, $5, now())
-       ON CONFLICT (cache_key) DO UPDATE SET
-         center_lat = EXCLUDED.center_lat,
-         center_lng = EXCLUDED.center_lng,
-         radius_km = EXCLUDED.radius_km,
-         payload = EXCLUDED.payload,
-         fetched_at = now()`,
-      [key, lat, lng, radiusKm, stringifyJsonForDb(venues)]
-    );
+    await storeCatalog(key, lat, lng, radiusKm, venues);
     logger.info("Place catalog refreshed", { key, venueCount: venues.length });
     return venues;
   })().finally(() => inFlight.delete(key));
@@ -234,6 +257,12 @@ export async function resolvePlaces(lat: number, lng: number, radiusKm: number):
       }
       return { mode: "resolved", venues: cached.venues };
     }
+    const bootstrap = await readLisbonBootstrap(lat, lng);
+    if (bootstrap.length >= MIN_USEFUL_VENUES) {
+      await storeCatalog(key, lat, lng, catalogRadiusKm, bootstrap);
+      logger.info("Seeded place catalog from bundled Lisbon snapshot", { key, venueCount: bootstrap.length });
+      return { mode: "resolved", venues: bootstrap };
+    }
     const refreshed = await Promise.race([refreshCatalog(key, lat, lng, catalogRadiusKm), wait(COLD_WAIT_MS)]);
     return refreshed && refreshed.length >= MIN_USEFUL_VENUES
       ? { mode: "resolved", venues: refreshed }
@@ -248,5 +277,11 @@ export async function warmPlaceCatalog(lat: number, lng: number, radiusKm: numbe
   const key = cacheKey(lat, lng, radiusKm);
   const cached = await readCache(key);
   if (cached?.fresh && cached.venues.length >= MIN_USEFUL_VENUES) return;
+  const bootstrap = await readLisbonBootstrap(lat, lng);
+  if (bootstrap.length >= MIN_USEFUL_VENUES) {
+    await storeCatalog(key, lat, lng, radiusKm, bootstrap);
+    logger.info("Seeded place catalog from bundled Lisbon snapshot", { key, venueCount: bootstrap.length });
+    return;
+  }
   await refreshCatalog(key, lat, lng, radiusKm);
 }

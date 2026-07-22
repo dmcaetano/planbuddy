@@ -14,7 +14,7 @@ deterministic surgical tweaks, and full learned-hunch edit/delete controls.
 The live-source acceptance harness loaded 11,185 places and generated three
 plans for each of three different setups: nine plans, 27 unique stops, no
 repeats. Restaurant, meal-time, budget, walking, and outdoor tweaks all passed
-preservation checks. Typecheck, lint, build, 158 Vitest tests, two Playwright
+preservation checks. Typecheck, lint, build, 159 Vitest tests, two Playwright
 mobile journeys, and mobile screenshot inspection passed.
 
 ### What failed and changed
@@ -22,6 +22,11 @@ One Overpass endpoint returned HTTP 504 during the acceptance rerun. Catalogue
 refresh now fails over across three independent mirrors and retains the last
 known-good Neon snapshot, so an upstream outage cannot collapse the product
 back to a tiny route set.
+
+The first Render canary showed that all three large refreshes could fail from
+the production network. The verified 11,185-place snapshot now ships with the
+server and seeds Neon at boot; external refresh is maintenance, never a cold-
+start dependency.
 
 ## 2026-07-22 — v1.1.1 one-click planner recovery
 
