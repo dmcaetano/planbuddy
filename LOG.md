@@ -38,6 +38,12 @@ hunches, dislikes, the current request, and recent History. The planner step is
 1 ms locally; other cities retain the bounded model plus the stricter market,
 duplicate-stop, and lake quality gates. Full suite: 148 Vitest + mobile E2E.
 
+Render deploy `dep-d9gki5vaqgkc73d0vafg` is live from `92f0d73`. The final
+production canary completed in 1.5 seconds with the Estrela/Peixaria route,
+Maps, cost, apparel, Pom and gluten checks, and History persistence. An
+immediate repeat rotated to the Necessidades/Último Porto route with zero place
+overlap. The v1.1.2 badge and mobile layout were visually verified live.
+
 ## 2026-07-22 — v1.1.0 "Wasp" release candidate
 
 Implemented the approved warm place canvas and persistent Buddy directly,

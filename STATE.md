@@ -1,12 +1,15 @@
 # PlanBuddy — State
 
 ## Status
-v1.1.2 "Wasp" is ready to deploy. Lisbon home plans now choose a concrete,
-memory-matched, History-rotating trusted route before any network model call.
+v1.1.2 "Wasp" is live at https://planbuddy.onrender.com from `main` (`92f0d73`).
+Lisbon home plans now choose a concrete, memory-matched, History-rotating
+trusted route before any network model call.
 Other cities use one bounded OpenRouter plan call with a quality gate and
 12-second fallback; DeepSeek V4 Flash remains the chat, feedback, and memory
 model. Optional citations are supporting metadata and no longer cause dead
-ends. 148 Vitest tests, typecheck, lint, build, and mobile E2E are green.
+ends. The exact production request completed in 1.5 seconds; repeat generation
+had zero venue overlap. 148 Vitest tests, typecheck, lint, build, mobile E2E,
+and live mobile visual inspection are green.
 
 v1.1.0 "Wasp" is live at https://planbuddy.onrender.com from `main`
 (`2543f18`). It adds a warm place-and-people canvas
@@ -24,8 +27,8 @@ against Gemini outages (DeepSeek reasoning-starvation fix + fast failover).
 sol with executed repros; two live production canaries run on 2026-07-20.
 
 ## Next concrete action
-Deploy v1.1.2, then run the exact Lisbon/Pom request against Render and verify
-latency, Maps-ready places, and absence of the former citation dead end.
+Hand v1.1.2 to alpha testers and use real demand to prioritize the next trusted
+city pack.
 
 Hand the live app to alpha testers; collect feedback on recommendation quality, quiz usefulness, and circle selection before venue/calendar/booking integrations.
 
