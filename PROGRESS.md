@@ -14,7 +14,8 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 - [x] Add visible Start over and immediate route-preserving tweak modes
 - [x] Add learned-hunch edit and permanent delete
 - [x] Pass 9-plan/27-unique-stop real-data acceptance and 159 automated tests
-- [ ] Deploy and complete the live production canary
+- [x] Deploy and complete the live production canary (9 plans, 27 unique stops,
+  zero repeats; live controls/reset/hunch CRUD verified)
 
 ### Phase 1 — Foundation
 - [x] Scaffold React/Vite/TypeScript client and Express/TypeScript server
@@ -65,7 +66,16 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 
 ## Current state
 
-**Version 1.1.2 "Wasp" is live on Render from `main` (`92f0d73`).** One-click planning now
+**Version 1.1.3 "Wasp" is live on Render from `main` (`93cd33b`).** Lisbon
+planning now selects from 11,185 mapped places within 60 km, excludes the last
+100 surfaced places, and permits twenty suggestions per setup. The deployed
+3-setup x 3-run matrix produced 27 unique named stops with zero repeats in
+2.1-4.6 seconds per plan. Live mobile verification covered controls, generation,
+Start over, Love learning, hunch editing, and permanent hunch deletion. The
+local release gate remains 159 Vitest tests, two Playwright journeys, typecheck,
+lint, build, and visual inspection.
+
+**Version 1.1.2 "Wasp" was the previous live baseline from `main` (`92f0d73`).** One-click planning now
 uses one bounded structured-model call instead of sequential place research and
 composition. A 12-second provider deadline falls back to a concrete, rotating,
 Maps-ready Lisbon plan; optional memory citations can be stripped but can never

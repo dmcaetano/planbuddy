@@ -36,6 +36,15 @@ displayed walking total. Only museums and galleries are now treated as indoor
 visits; monuments, viewpoints, gardens, and similar stops count toward the
 selected walking range.
 
+### Production result
+Render deploy `dep-d9glget7vvec739g8620` is live from commit `93cd33b`.
+Production boot seeded Neon from the bundled 11,185-place Lisbon snapshot.
+The requested 3-setup x 3-run production matrix returned nine plans with 27
+distinct named stops and no repeats; individual plans completed in 2.1-4.6
+seconds. A live mobile browser verified v1.1.3, all six planning controls, a
+complete detailed plan, and Start over. Live Love feedback created reusable
+feature hunches, and both hunch editing and permanent deletion persisted.
+
 ## 2026-07-22 — v1.1.1 one-click planner recovery
 
 ### What we did

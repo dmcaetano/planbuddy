@@ -217,7 +217,22 @@ The browser console records one expected 401 for the initial anonymous
   Cacilhas → Escondidinho de Cacilhas → Elevador da Boca do Vento, with zero
   named-place overlap against the first route.
 
+## v1.1.3 catalogue-diversity release gate
+
+- Local: **PASS** — 159 Vitest tests across 22 files, two mobile Playwright
+  journeys, typecheck, lint, production build, and visual inspection.
+- Real catalogue: **PASS** — 11,185 mapped places; 3 setups x 3 runs produced
+  9 plans and 27 unique stops with zero repeats.
+- Tweaks: **PASS** — restaurant, meal time, budget, walking, and outdoors edits
+  preserved the unaffected route details and retained the reversible original.
+- Production: **PASS** — deploy `dep-d9glget7vvec739g8620`, commit `93cd33b`.
+  A second 3 x 3 matrix against Render again produced 27 unique stops with zero
+  repeats in 2.1-4.6 seconds per plan.
+- Live UI/data: **PASS** — v1.1.3 loaded, controls generated a detailed plan,
+  Start over returned to a clean setup, Love created learned features, and a
+  hunch was edited and permanently deleted through the production API.
+
 ## Readiness
 
-Local and production release gates are green. Version 0.1.5 is live and ready
+Local and production release gates are green. Version 1.1.3 is live and ready
 for real household use at https://planbuddy.onrender.com.

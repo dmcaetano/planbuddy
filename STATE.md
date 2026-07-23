@@ -1,13 +1,17 @@
 # PlanBuddy — State
 
 ## Status
-v1.1.3 "Wasp" has passed local release gates and is pending Render deployment.
+v1.1.3 "Wasp" is live on Render from `main` (`93cd33b`, deploy
+`dep-d9glget7vvec739g8620`).
 It replaces the three-route Lisbon shortcut with a bundled and Neon-cached 11k-place, 60 km
 catalogue; excludes stops from the last 100 surfaced plans; adds plan controls,
 20 fresh suggestions per setup, Start over, surgical tweak paths, and hunch edit/delete. The real-data matrix
 passed 9 plans with 27 unique stops and all five tweak modes. 159 Vitest tests,
 two mobile Playwright journeys, typecheck, lint, build, and visual inspection
-are green.
+are green. A second matrix against the deployed production service also passed
+9 plans with 27 unique named stops and zero repeats; live generation completed
+in 2.1-4.6 seconds. Live login, controls, plan rendering, Start over, Love
+learning, hunch edit, and permanent hunch deletion were also verified.
 
 v1.1.2 "Wasp" is live at https://planbuddy.onrender.com from `main` (`92f0d73`).
 Lisbon home plans now choose a concrete, memory-matched, History-rotating
@@ -35,8 +39,9 @@ against Gemini outages (DeepSeek reasoning-starvation fix + fast failover).
 sol with executed repros; two live production canaries run on 2026-07-20.
 
 ## Next concrete action
-Deploy v1.1.3, wait for the Lisbon catalogue to persist in Neon, then run the
-three-by-three diversity and tweak canary against production.
+Hand v1.1.3 to alpha testers and watch whether the much broader catalogue needs
+more taste-ranking refinement, especially restaurant quality versus pure
+geographic compactness.
 
 Hand the live app to alpha testers; collect feedback on recommendation quality, quiz usefulness, and circle selection before venue/calendar/booking integrations.
 
