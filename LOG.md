@@ -16,6 +16,12 @@ the Lisbon city fallback. A real local mobile plan loaded a 1280x360 Lisbon
 panorama with attribution and no horizontal overflow. All 162 tests across 23
 files, typecheck, lint, and production build passed.
 
+### Production result
+Render deploy `dep-d9gscnsvikkc73a1akc0` is live from commit `c8914b3`. A
+fresh Lisbon plan used Ruínas do Convento de Penafirme as its opening stop and
+loaded a relevant attributed 1280x821 photograph of that exact place. The
+390 px mobile page had no horizontal overflow and no browser or request errors.
+
 ## 2026-07-23 — v1.1.3 catalogue diversity
 
 ### What we did

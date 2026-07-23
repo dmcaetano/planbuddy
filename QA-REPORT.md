@@ -234,7 +234,7 @@ The browser console records one expected 401 for the initial anonymous
 
 ## Readiness
 
-Local and production release gates are green. Version 1.1.3 is live and ready
+Local and production release gates are green. Version 1.1.4 is live and ready
 for real household use at https://planbuddy.onrender.com.
 
 ## v1.1.4 hero-photo gate
@@ -248,3 +248,6 @@ for real household use at https://planbuddy.onrender.com.
 - Mobile render: **PASS** — 390 px viewport, no clipping or horizontal overflow.
 - Regression suite: **PASS** — 162 tests across 23 files, typecheck, lint, and
   production build.
+- Production: **PASS** — deploy `dep-d9gscnsvikkc73a1akc0`, commit `c8914b3`;
+  a fresh Lisbon plan loaded a relevant 1280x821 exact-stop photo with no
+  browser errors or mobile overflow.

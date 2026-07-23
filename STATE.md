@@ -1,12 +1,14 @@
 # PlanBuddy — State
 
 ## Status
-v1.1.4 "Wasp" is ready to deploy. It makes hero-photo lookup location-aware,
+v1.1.4 "Wasp" is live on Render from `main` (`c8914b3`, deploy
+`dep-d9gscnsvikkc73a1akc0`). It makes hero-photo lookup location-aware,
 searches the exact route anchor and home-city fallback in parallel, rejects
 irrelevant document scans, and prevents obscure Lisbon places from leaving the
 ticket image-less. The full 162-test suite, typecheck, lint, production build,
 and a real 390 px Lisbon render with a loaded 1280x360 Commons panorama are
-green.
+green. The production canary loaded a relevant 1280x821 photograph of the
+actual opening stop with no browser errors or horizontal overflow.
 
 v1.1.3 "Wasp" is live on Render from `main` (`93cd33b`, deploy
 `dep-d9glget7vvec739g8620`).
@@ -46,8 +48,8 @@ against Gemini outages (DeepSeek reasoning-starvation fix + fast failover).
 sol with executed repros; two live production canaries run on 2026-07-20.
 
 ## Next concrete action
-Deploy v1.1.4 and verify a newly generated Lisbon ticket loads its hero image
-on the live mobile UI.
+Hand v1.1.4 to alpha testers and continue refining restaurant quality ranking
+from real reactions.
 
 Hand the live app to alpha testers; collect feedback on recommendation quality, quiz usefulness, and circle selection before venue/calendar/booking integrations.
 
