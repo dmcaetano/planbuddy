@@ -199,7 +199,10 @@ export async function enrichCandidate(
       }
     : groundedCopy.fallback ?? null;
 
-  const heroImage = await resolveWikimediaImage(groundedCopy.photoSearchTerm);
+  const cityPhotoFallback = input.homeBaseLabel
+    ? `${input.homeBaseLabel} cityscape`
+    : null;
+  const heroImage = await resolveWikimediaImage(groundedCopy.photoSearchTerm, cityPhotoFallback);
   const walkingMetrics = calculateWalkingMetrics(beats, groundedCopy.walkingMinutes, groundedCopy.walkingDistanceKm);
   return {
     ...groundedCopy,

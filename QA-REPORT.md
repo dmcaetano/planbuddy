@@ -236,3 +236,15 @@ The browser console records one expected 401 for the initial anonymous
 
 Local and production release gates are green. Version 1.1.3 is live and ready
 for real household use at https://planbuddy.onrender.com.
+
+## v1.1.4 hero-photo gate
+
+- Location regression: **PASS** — Faro queries no longer receive an implicit
+  Lisbon suffix.
+- Lisbon fallback: **PASS** — an obscure venue with no Commons result falls
+  back to a relevant Lisbon cityscape instead of returning no hero.
+- Real media: **PASS** — an attributed 1280x360 Commons panorama loaded in the
+  browser.
+- Mobile render: **PASS** — 390 px viewport, no clipping or horizontal overflow.
+- Regression suite: **PASS** — 162 tests across 23 files, typecheck, lint, and
+  production build.

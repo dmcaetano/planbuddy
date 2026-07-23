@@ -3,6 +3,14 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 
 ## Roadmap
 
+### v1.1.4 hero-photo reliability
+- [x] Remove the hard-coded Lisbon suffix from every photo search
+- [x] Search the exact route anchor and a home-city fallback in parallel
+- [x] Reject irrelevant PDF/book-scan results
+- [x] Add focused regression tests for Faro localization and Lisbon fallback
+- [x] Render and inspect a real Lisbon hero at a 390 px mobile viewport
+- [ ] Deploy and verify a newly generated hero on Render
+
 ### v1.1.3 catalogue diversity release
 - [x] Replace the three-route Lisbon shortcut with a 60 km OpenStreetMap catalogue
 - [x] Persist the catalogue in Neon and refresh it asynchronously with mirror failover
@@ -65,6 +73,12 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 - [ ] PlanPage circle-chip UX feedback from alpha testers
 
 ## Current state
+
+**Version 1.1.4 "Wasp" is ready to deploy.** A real local Lisbon plan loaded an
+attributed 1280x360 Commons panorama with no horizontal overflow. Exact-place
+and city fallback searches now run concurrently, other cities are no longer
+silently localized to Lisbon, and irrelevant document scans are filtered.
+All 162 tests across 23 files, typecheck, lint, and the production build pass.
 
 **Version 1.1.3 "Wasp" is live on Render from `main` (`93cd33b`).** Lisbon
 planning now selects from 11,185 mapped places within 60 km, excludes the last
@@ -132,8 +146,9 @@ covered implicitly by the plan.test.ts lock→history assertion.
 3. **Broader browser coverage** — add separate Playwright scenarios for dead ends, trip modes, friend acceptance, and hunch promotion.
 
 ## Next steps
-1. Hand the fast one-click planner to alpha testers.
-2. Expand the trusted city-pack approach beyond Lisbon using real usage demand.
+1. Deploy v1.1.4 and verify the Lisbon hero image on Render.
+2. Hand the fast one-click planner to alpha testers.
+3. Continue refining restaurant quality ranking from real reactions.
 
 1. Hand v1.0.1 to alpha testers; collect feedback on recommendation quality, quiz usefulness, and circle selection.
 2. Watch Render logs for provider-failover behavior under real Gemini outages (reasoning-starvation retry, fallback success rate).

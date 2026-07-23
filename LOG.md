@@ -1,5 +1,21 @@
 # PlanBuddy — Log
 
+## 2026-07-23 — v1.1.4 hero-photo reliability
+
+### What we did
+Fixed the missing hero regression reported after a successful Faro test. The
+Wikimedia resolver had been appending Lisbon to every photo query and depended
+on a single exact venue term. It now searches the route anchor and the actual
+home city in parallel, filters document scans and weak location matches, and
+falls back to an attributed city photograph when an obscure stop has no usable
+Commons media.
+
+### What we tested
+Added regressions proving Faro remains Faro and an obscure Lisbon venue uses
+the Lisbon city fallback. A real local mobile plan loaded a 1280x360 Lisbon
+panorama with attribution and no horizontal overflow. All 162 tests across 23
+files, typecheck, lint, and production build passed.
+
 ## 2026-07-23 — v1.1.3 catalogue diversity
 
 ### What we did
