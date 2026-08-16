@@ -100,3 +100,56 @@ describe("catalog planner", () => {
     expect(km).toBeLessThan(1.8);
   });
 });
+
+describe("catalog planner time windows", () => {
+  const parse = (value: string | null | undefined) => {
+    const [hours, minutes] = String(value).split(":").map(Number);
+    return hours * 60 + minutes;
+  };
+
+  it("keeps every stop inside a short evening window, trimming stops to fit", () => {
+    const candidate = buildCatalogCandidate(
+      context({
+        scale: "day_off",
+        startDate: "2026-08-15",
+        endDate: "2026-08-15",
+        startTime: "18:15",
+        endTime: "20:45",
+        moodContext: "Time left: 2h 30m between 18:15 and 20:45 today. Setting: outdoors",
+      }),
+      catalog
+    );
+    expect(candidate).toBeTruthy();
+    const beats = candidate!.beats;
+    expect(parse(beats[0].startTime)).toBe(parse("18:15"));
+    const finish = parse(beats[2].startTime) + (beats[2].durationMinutes ?? 0);
+    expect(finish).toBeLessThanOrEqual(parse("20:45"));
+    // Trimmed, but never below what makes the outing worth leaving for.
+    expect(beats[1].durationMinutes).toBeGreaterThanOrEqual(55);
+  });
+
+  it("anchors on a real meal hour when the window is roomy enough", () => {
+    const candidate = buildCatalogCandidate(
+      context({
+        scale: "day_off",
+        startDate: "2026-08-15",
+        endDate: "2026-08-15",
+        startTime: "15:00",
+        endTime: "22:30",
+        moodContext: "Time left: 7h 30m between 15:00 and 22:30 today",
+      }),
+      catalog
+    );
+    expect(candidate).toBeTruthy();
+    const beats = candidate!.beats;
+    expect(parse(beats[1].startTime)).toBe(parse("19:30"));
+    expect(parse(beats[0].startTime)).toBeGreaterThanOrEqual(parse("15:00"));
+    expect(beats[1].durationMinutes).toBe(90);
+  });
+
+  it("leaves a full-day request on its usual meal rhythm", () => {
+    const candidate = buildCatalogCandidate(context({ moodContext: "A relaxed dinner out" }), catalog);
+    expect(candidate).toBeTruthy();
+    expect(candidate!.beats[0].startTime).toBe("17:30");
+  });
+});

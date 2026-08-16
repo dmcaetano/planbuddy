@@ -468,6 +468,8 @@ export async function runGeneration(
     scale: spec.scale,
     startDate: spec.startDate,
     endDate: spec.endDate,
+    startTime: spec.startTime,
+    endTime: spec.endTime,
     homeBaseLabel: context.homeBaseLabel,
     homeBaseLat: context.homeBaseLat,
     homeBaseLng: context.homeBaseLng,
@@ -613,6 +615,9 @@ export async function runGeneration(
           spec.moodContext,
           ...scopedTastes.map((taste) => taste.text),
         ]),
+        // A partial-day request can never open before its window does, whatever
+        // start times the generator proposed.
+        earliestStartTime: spec.startTime,
       }),
     }))
   );

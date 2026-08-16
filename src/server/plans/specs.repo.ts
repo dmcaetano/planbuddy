@@ -12,6 +12,8 @@ interface SpecRow {
   scale: Scale;
   start_date: string;
   end_date: string;
+  start_time: string | null;
+  end_time: string | null;
   radius_km: number;
   mood_context: string | null;
   generation_count: number;
@@ -32,6 +34,8 @@ async function attachParticipants(spec: SpecRow): Promise<PlanSpec> {
     scale: spec.scale,
     startDate: toDateOnlyString(spec.start_date),
     endDate: toDateOnlyString(spec.end_date),
+    startTime: spec.start_time ?? null,
+    endTime: spec.end_time ?? null,
     radiusKm: spec.radius_km,
     moodContext: spec.mood_context,
     generationCount: spec.generation_count,
@@ -46,6 +50,8 @@ export async function createPlanSpec(
     scale: Scale;
     startDate: string;
     endDate: string;
+    startTime?: string | null;
+    endTime?: string | null;
     radiusKm?: number;
     moodContext?: string | null;
     participantIds: string[];
@@ -57,8 +63,8 @@ export async function createPlanSpec(
   const id = newId();
   const radiusKm = input.radiusKm ?? SCALE_RADIUS_KM[input.scale];
   const { rows } = await db.query<SpecRow>(
-    `INSERT INTO plan_specs (id, user_id, parent_spec_id, version, scale, start_date, end_date, radius_km, mood_context)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO plan_specs (id, user_id, parent_spec_id, version, scale, start_date, end_date, start_time, end_time, radius_km, mood_context)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING *`,
     [
       id,
@@ -68,6 +74,8 @@ export async function createPlanSpec(
       input.scale,
       input.startDate,
       input.endDate,
+      input.startTime ?? null,
+      input.endTime ?? null,
       radiusKm,
       input.moodContext ?? null,
     ]

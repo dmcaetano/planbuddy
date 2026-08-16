@@ -72,12 +72,28 @@ function weatherLine(ctx: GenerateContext): string {
     .join("; ");
 }
 
+/**
+ * The usable slice of clock time the plan has to fit into. Only present when
+ * the request came from a "plan the time I have left" window; a full-day
+ * request leaves scheduling to the normal meal/sunset reasoning.
+ */
+function timeWindowLine(ctx: GenerateContext): string | null {
+  if (!ctx.startTime && !ctx.endTime) return null;
+  const parts = [
+    ctx.startTime ? `nothing may start before ${ctx.startTime}${ctx.startDate ? ` on ${ctx.startDate}` : ""}` : null,
+    ctx.endTime ? `everything must be finished by ${ctx.endTime}${ctx.endDate ? ` on ${ctx.endDate}` : ""}` : null,
+  ].filter(Boolean);
+  return `Usable time window: ${parts.join("; ")}. Fit the whole route inside it — shorten stops rather than overrunning, and set the first beat's startTime at or after the window opens.`;
+}
+
 export function buildGenerateUserPrompt(ctx: GenerateContext, fast = false): string {
   const lines: string[] = [];
   lines.push(
     `Scale: ${ctx.scale} (radius ${ctx.radiusKm}km, ${beatCountForScale(ctx.scale)} beats per candidate, trip=${isTripScale(ctx.scale)})`
   );
   lines.push(`Dates: ${ctx.startDate ?? "not supplied"} to ${ctx.endDate ?? ctx.startDate ?? "not supplied"}`);
+  const windowLine = timeWindowLine(ctx);
+  if (windowLine) lines.push(windowLine);
   lines.push(
     `Home base: ${ctx.homeBaseLabel ?? "unknown"}` +
       (ctx.homeBaseLat != null && ctx.homeBaseLng != null

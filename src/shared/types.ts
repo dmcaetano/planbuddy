@@ -138,6 +138,10 @@ export interface PlanSpec {
   scale: Scale;
   startDate: string;
   endDate: string;
+  /** Local "HH:MM" the plan may begin at on startDate; null means the whole day is open. */
+  startTime: string | null;
+  /** Local "HH:MM" the plan must be wrapped up by on endDate; null means the whole day is open. */
+  endTime: string | null;
   radiusKm: number;
   moodContext: string | null;
   participantIds: Id[];

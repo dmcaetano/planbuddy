@@ -356,3 +356,28 @@ When adding provider timeouts, budget for the fallback chain end-to-end,
 not per-call in isolation — a "resilience" cap that is tighter than the
 provider's real latency under load just converts slow successes into
 failures.
+
+## 2026-08-16 — v1.1.5: plan the time you have left
+
+### What we did
+Added a one-tap path above the spec form: **Rest of today**, **Rest of the
+weekend**, and **Rest of the week**. Each button derives a usable window from
+the current local time (45 minutes of lead time, rounded to the quarter hour,
+bounded by a 09:00–22:30 usable day), fetches the home-base forecast for
+exactly those dates, and sends a complete request — window, meal anchor,
+weather-implied setting — without the user touching a control.
+
+The window is first-class rather than prose: `plan_specs` gained
+`start_time`/`end_time`, so a regenerate or a Buddy revision of a 18:15 plan
+still plans the evening. The deterministic catalogue planner anchors on a real
+meal hour when the window has room and otherwise runs the three stops
+back-to-back from the moment the window opens, trimming each stop to fit but
+never below what makes the outing worth leaving for. Enrichment clamps any
+generated start time to the window as a final guarantee.
+
+### Lesson
+A window with nothing left in it needs an answer, not a disabled button. Late
+on a Sunday "the weekend" means the next one, so weekend and week roll forward;
+"today" has no such reading, so it stays honestly unplannable. Also: an
+integration test that hard-codes a calendar date silently rots into a failure
+once that date is in the past — `daysFromNow(14)` says what the test means.

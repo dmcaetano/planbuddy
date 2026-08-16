@@ -122,14 +122,37 @@ export const quizSubmitSchema = z.object({
 /* Plan specs                                                              */
 /* ---------------------------------------------------------------------- */
 
-export const planSpecCreateSchema = z.object({
+const clockSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+/** Object form, so routes can `.extend()`/`.partial()` it before re-applying the window check. */
+export const planSpecCreateFields = z.object({
   scale: z.enum(SCALES),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  /** Optional usable clock window — set by the "plan the time I have left" buttons. */
+  startTime: clockSchema.optional().nullable(),
+  endTime: clockSchema.optional().nullable(),
   radiusKm: z.number().min(1).max(20000).optional(),
   moodContext: z.string().trim().max(280).optional().nullable(),
   participantIds: z.array(z.string().uuid()).min(1),
 });
+
+/** A same-day window has to actually contain some time; string compare is safe on zero-padded HH:MM. */
+export function refineTimeWindowOrder(
+  value: { startDate?: string; endDate?: string; startTime?: string | null; endTime?: string | null },
+  ctx: z.RefinementCtx
+): void {
+  if (!value.startTime || !value.endTime) return;
+  if (value.startDate && value.endDate && value.startDate !== value.endDate) return;
+  if (value.startTime < value.endTime) return;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: "endTime must be later than startTime on a single-day plan",
+    path: ["endTime"],
+  });
+}
+
+export const planSpecCreateSchema = planSpecCreateFields.superRefine(refineTimeWindowOrder);
 
 export const notThisSchema = z.object({
   reason: z.string().trim().min(1).max(300),

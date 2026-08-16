@@ -22,6 +22,10 @@ export interface GenerateContext {
   scale: Scale;
   startDate?: string;
   endDate?: string;
+  /** Local "HH:MM" the first stop may begin at, when the request only covers part of a day. */
+  startTime?: string | null;
+  /** Local "HH:MM" the route must be finished by. */
+  endTime?: string | null;
   homeBaseLabel?: string | null;
   homeBaseLat?: number | null;
   homeBaseLng?: number | null;

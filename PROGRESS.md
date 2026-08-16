@@ -3,6 +3,15 @@ PlanBuddy is a mobile-first Buddy-family web app that gives one confident, perso
 
 ## Roadmap
 
+### v1.1.5 plan the time you have left
+- [x] Derive usable "rest of today / weekend / week" windows from local time
+- [x] Roll a spent weekend or week forward; keep a spent day honestly unplannable
+- [x] Carry the clock window on the plan spec, through regenerate and revisions
+- [x] Show the live forecast for exactly those hours and let it nudge the setting
+- [x] Schedule the deterministic route inside the window, trimming stops to fit
+- [x] Clamp generated start times to the window in enrichment
+- [x] Cover with unit, integration, and browser end-to-end tests
+
 ### v1.1.4 hero-photo reliability
 - [x] Remove the hard-coded Lisbon suffix from every photo search
 - [x] Search the exact route anchor and a home-city fallback in parallel

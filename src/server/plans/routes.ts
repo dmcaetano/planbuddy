@@ -2,7 +2,12 @@ import { Router } from "express";
 import { asyncHandler, HttpError, notFound, validateBody } from "../http.js";
 import { requireAuth } from "../auth/middleware.js";
 import { aiRateLimiter } from "../rateLimit.js";
-import { candidateReactionSchema, planSpecCreateSchema, notThisSchema } from "../../shared/schemas.js";
+import {
+  candidateReactionSchema,
+  planSpecCreateFields,
+  notThisSchema,
+  refineTimeWindowOrder,
+} from "../../shared/schemas.js";
 import { createPlanSpec, getPlanSpec, incrementGenerationCount } from "./specs.repo.js";
 import { getCandidate, listCandidatesForSpec } from "./candidates.repo.js";
 import { insertPlan } from "./plans.repo.js";
@@ -29,9 +34,9 @@ planSpecsRouter.use(requireAuth);
 // instead of starting a second generation. Kept local rather than added to
 // the shared schema since the client doesn't need to know about it to work.
 const idempotencyKeySchema = z.string().trim().min(1).max(200).optional();
-const planSpecCreateWithIdempotency = planSpecCreateSchema.extend({
-  idempotencyKey: idempotencyKeySchema,
-});
+const planSpecCreateWithIdempotency = planSpecCreateFields
+  .extend({ idempotencyKey: idempotencyKeySchema })
+  .superRefine(refineTimeWindowOrder);
 
 function planView(candidate: Candidate, context: PipelineResult["context"], viewerUserId: string) {
   return {
@@ -229,7 +234,10 @@ planSpecsRouter.post(
   })
 );
 
-const tweakBody = planSpecCreateSchema.partial().extend({ idempotencyKey: idempotencyKeySchema });
+const tweakBody = planSpecCreateFields
+  .partial()
+  .extend({ idempotencyKey: idempotencyKeySchema })
+  .superRefine(refineTimeWindowOrder);
 
 planSpecsRouter.post(
   "/:id/tweak",
@@ -248,6 +256,10 @@ planSpecsRouter.post(
       scale: req.body.scale ?? original.scale,
       startDate: req.body.startDate ?? original.startDate,
       endDate: req.body.endDate ?? original.endDate,
+      // A revision of a "time I have left" plan stays inside the same hours
+      // unless the request explicitly moves the window.
+      startTime: req.body.startTime !== undefined ? req.body.startTime : original.startTime,
+      endTime: req.body.endTime !== undefined ? req.body.endTime : original.endTime,
       radiusKm: req.body.radiusKm ?? original.radiusKm,
       moodContext: req.body.moodContext !== undefined ? req.body.moodContext : original.moodContext,
       participantIds,

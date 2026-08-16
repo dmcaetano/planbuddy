@@ -56,6 +56,9 @@ interface StartSpecPayload {
   scale: string;
   startDate: string;
   endDate: string;
+  /** Local "HH:MM" bounds, set when the plan only covers the time the user has left. */
+  startTime?: string | null;
+  endTime?: string | null;
   radiusKm?: number;
   participantIds: string[];
   moodContext: string | null;

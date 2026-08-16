@@ -1,6 +1,19 @@
 # PlanBuddy — State
 
 ## Status
+v1.1.5 "Wasp" is built on `claude/plan-buddy-time-button-estxb7` and not yet
+deployed. It adds the one-tap **Time left** row above the spec form: **Rest of
+today**, **Rest of the weekend**, and **Rest of the week** derive a usable
+clock window from local time, show the home-base forecast for exactly those
+hours, and send the window as first-class `plan_specs.start_time`/`end_time`,
+so regenerates and Buddy revisions keep planning inside the same hours. The
+deterministic planner anchors on a real meal hour when the window allows and
+otherwise trims the three stops to fit; enrichment clamps any generated start
+time to the window. A spent weekend or week rolls forward to the next one; a
+spent day stays honestly unplannable. 179 Vitest tests, a new mobile Playwright
+journey, typecheck, lint, and the production build are green, and the plan page
+was inspected at a 390 px viewport.
+
 v1.1.4 "Wasp" is live on Render from `main` (`c8914b3`, deploy
 `dep-d9gscnsvikkc73a1akc0`). It makes hero-photo lookup location-aware,
 searches the exact route anchor and home-city fallback in parallel, rejects

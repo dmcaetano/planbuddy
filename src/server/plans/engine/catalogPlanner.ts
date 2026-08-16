@@ -2,6 +2,7 @@ import type { AiCandidate } from "../../../shared/schemas.js";
 import type { GenerateContext } from "../../ai/demoAi.js";
 import { hashSeed, mulberry32, seededShuffle } from "../../ai/rng.js";
 import type { ResolvedVenue } from "../../resolver/placeResolver.js";
+import { DAY_END_MINUTES, formatClock, parseClock } from "../../../shared/timeWindow.js";
 
 const EARTH_RADIUS_KM = 6371;
 const MAX_WALKING_LEG_KM = 2.4;
@@ -110,6 +111,63 @@ function walkingLegLimit(ctx: GenerateContext): number {
   return 1.7;
 }
 
+const DEFAULT_DURATIONS: [number, number, number] = [35, 90, 25];
+/** How far each stop can be trimmed before the route stops being worth leaving the house for. */
+const MIN_DURATIONS: [number, number, number] = [20, 55, 15];
+const MEAL_TARGETS = { lunch: 13 * 60, dinner: 19 * 60 + 30 } as const;
+
+interface BeatSchedule {
+  times: [string, string, string];
+  durations: [number, number, number];
+}
+
+function scaledDurations(availableMinutes: number): [number, number, number] {
+  const defaultTotal = DEFAULT_DURATIONS.reduce((total, value) => total + value, 0);
+  const minTotal = MIN_DURATIONS.reduce((total, value) => total + value, 0);
+  if (availableMinutes >= defaultTotal) return [...DEFAULT_DURATIONS];
+  const factor = Math.max(0, Math.min(1, (availableMinutes - minTotal) / (defaultTotal - minTotal)));
+  return MIN_DURATIONS.map((min, index) =>
+    Math.round(min + (DEFAULT_DURATIONS[index] - min) * factor)
+  ) as [number, number, number];
+}
+
+function scheduleFrom(start: number, durations: [number, number, number], toMeal: number, toPost: number): BeatSchedule {
+  const mealStart = start + durations[0] + toMeal;
+  const postStart = mealStart + durations[1] + toPost;
+  return { times: [formatClock(start), formatClock(mealStart), formatClock(postStart)], durations };
+}
+
+/**
+ * Builds the three start times for a request that only owns part of a day.
+ * When the window comfortably contains a real meal hour the route is anchored
+ * on the meal; when it does not, the stops run back-to-back from the moment
+ * the window opens, trimmed just enough to finish inside it.
+ */
+function windowSchedule(ctx: GenerateContext, toMeal: number, toPost: number): BeatSchedule | null {
+  const start = parseClock(ctx.startTime);
+  if (start == null) return null;
+  // On a multi-day window, endTime belongs to the last day — this route is on the first one.
+  const multiDay = Boolean(ctx.startDate && ctx.endDate && ctx.startDate !== ctx.endDate);
+  const end = (multiDay ? null : parseClock(ctx.endTime)) ?? DAY_END_MINUTES;
+  const travel = toMeal + toPost;
+
+  const request = ctx.moodContext ?? "";
+  const preferred: (keyof typeof MEAL_TARGETS)[] = /\blunch|midday|noon\b/i.test(request)
+    ? ["lunch"]
+    : /\bdinner|evening|night\b/i.test(request)
+      ? ["dinner"]
+      : ["lunch", "dinner"];
+  for (const meal of preferred) {
+    const mealStart = MEAL_TARGETS[meal];
+    const preStart = mealStart - toMeal - DEFAULT_DURATIONS[0];
+    const finish = mealStart + DEFAULT_DURATIONS[1] + toPost + DEFAULT_DURATIONS[2];
+    if (preStart >= start && finish <= end) {
+      return scheduleFrom(preStart, [...DEFAULT_DURATIONS], toMeal, toPost);
+    }
+  }
+  return scheduleFrom(start, scaledDurations(end - start - travel), toMeal, toPost);
+}
+
 function venuePlace(venue: ResolvedVenue) {
   const descriptor = venue.tags.filter((tag) => tag !== venue.subcategory).slice(0, 3).join(", ");
   return {
@@ -198,11 +256,19 @@ export function buildCatalogCandidate(ctx: GenerateContext, venues: ResolvedVenu
   const request = ctx.moodContext ?? "";
   const wantsLunch = /\blunch|midday|noon\b/i.test(request);
   const wantsDinner = /\bdinner|evening|night\b/i.test(request);
-  const times = wantsLunch ? ["11:15", "12:45", "14:25"] : wantsDinner ? ["17:30", "19:00", "20:50"] : ["11:30", "13:00", "14:40"];
   const transport = requestedTransport(ctx);
   const firstLeg = travelLeg(distanceKm({ lat: ctx.homeBaseLat!, lng: ctx.homeBaseLng! } as ResolvedVenue, choice.pre), transport);
   const mealLeg = travelLeg(choice.preToMealKm, transport);
   const postLeg = travelLeg(choice.mealToPostKm, transport);
+  const schedule = windowSchedule(ctx, mealLeg.travelMinutes, postLeg.travelMinutes) ?? {
+    times: (wantsLunch
+      ? ["11:15", "12:45", "14:25"]
+      : wantsDinner
+        ? ["17:30", "19:00", "20:50"]
+        : ["11:30", "13:00", "14:40"]) as [string, string, string],
+    durations: [...DEFAULT_DURATIONS] as [number, number, number],
+  };
+  const { times, durations } = schedule;
   const hasPet = (ctx.participants ?? []).some((participant) => participant.kind === "pet");
   const beats: AiCandidate["beats"] = [
     {
@@ -211,7 +277,7 @@ export function buildCatalogCandidate(ctx: GenerateContext, venues: ResolvedVenu
       category: isIndoorVisit(choice.pre) ? "activity" : "walk",
       indoor: isIndoorVisit(choice.pre),
       startTime: times[0],
-      durationMinutes: 35,
+      durationMinutes: durations[0],
       ...firstLeg,
       distanceFromPreviousKm: Math.round(distanceKm({ lat: ctx.homeBaseLat!, lng: ctx.homeBaseLng! } as ResolvedVenue, choice.pre) * 10) / 10,
       place: venuePlace(choice.pre),
@@ -222,7 +288,7 @@ export function buildCatalogCandidate(ctx: GenerateContext, venues: ResolvedVenu
       category: "food",
       indoor: true,
       startTime: times[1],
-      durationMinutes: 90,
+      durationMinutes: durations[1],
       ...mealLeg,
       distanceFromPreviousKm: Math.round(choice.preToMealKm * 10) / 10,
       place: venuePlace(choice.meal),
@@ -235,7 +301,7 @@ export function buildCatalogCandidate(ctx: GenerateContext, venues: ResolvedVenu
       category: isIndoorVisit(choice.post) ? "activity" : "stroll",
       indoor: isIndoorVisit(choice.post),
       startTime: times[2],
-      durationMinutes: 25,
+      durationMinutes: durations[2],
       ...postLeg,
       distanceFromPreviousKm: Math.round(choice.mealToPostKm * 10) / 10,
       place: venuePlace(choice.post),

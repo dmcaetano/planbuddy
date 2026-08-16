@@ -4,6 +4,14 @@ import { getTestApp } from "../helpers/testApp.js";
 import { getDb } from "../../src/server/db/client.js";
 import { postAndAwaitGeneration, waitForJob, HDR } from "../helpers/planJobs.js";
 
+/** A date that is always genuinely upcoming, so History's upcoming/past split
+ * does not depend on when the suite happens to run. */
+function daysFromNow(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 async function signUpWithHomeBase(app: unknown, email: string) {
   const agent = request.agent(app as never);
   await agent.post("/api/auth/signup").set(HDR, "1").send({ email, password: "password123" });
@@ -28,8 +36,8 @@ describe("plan generation integration (demo AI)", () => {
 
     const generate = await postAndAwaitGeneration(agent, "/api/plan-specs", {
       scale: "day_off",
-      startDate: "2026-08-01",
-      endDate: "2026-08-01",
+      startDate: daysFromNow(14),
+      endDate: daysFromNow(14),
       participantIds: [ownerId],
     });
     expect(generate.kickoffStatus).toBe(202);
@@ -101,6 +109,58 @@ describe("plan generation integration (demo AI)", () => {
     const matchingRecords = [...history.body.suggested, ...history.body.upcoming, ...history.body.past]
       .filter((p: { candidateId: string }) => p.candidateId === winner.candidate.id);
     expect(matchingRecords).toHaveLength(1);
+  });
+
+  it("plans only inside the time window a one-tap request supplies", async () => {
+    const { agent, ownerId } = await signUpWithHomeBase(app, "plan-window@example.com");
+    const date = daysFromNow(3);
+    const generate = await postAndAwaitGeneration(agent, "/api/plan-specs", {
+      scale: "day_off",
+      startDate: date,
+      endDate: date,
+      startTime: "18:15",
+      endTime: "22:30",
+      participantIds: [ownerId],
+      moodContext: "Time left: 4h 15m between 18:15 and 22:30 today. Setting: outdoors",
+    });
+    expect(generate.job.status).toBe("succeeded");
+
+    const spec = generate.body.spec as { id: string; startTime: string; endTime: string };
+    expect(spec.startTime).toBe("18:15");
+    expect(spec.endTime).toBe("22:30");
+
+    const winner = generate.body.winner as { candidate: { beats: { startTime: string | null }[] } };
+    const starts = winner.candidate.beats
+      .map((beat) => beat.startTime)
+      .filter((value): value is string => Boolean(value));
+    expect(starts.length).toBeGreaterThan(0);
+    for (const start of starts) expect(start >= "18:15").toBe(true);
+
+    // A revision of the same plan keeps planning inside the same hours.
+    const tweak = await agent
+      .post(`/api/plan-specs/${spec.id}/tweak`)
+      .set(HDR, "1")
+      .send({ moodContext: "Keep it lighter on walking" });
+    expect(tweak.status).toBe(202);
+    const tweakJob = await waitForJob(agent, tweak.body.jobId);
+    expect(tweakJob.status).toBe("succeeded");
+    const revisedSpec = (tweakJob.result as { spec: { startTime: string; endTime: string } }).spec;
+    expect(revisedSpec.startTime).toBe("18:15");
+    expect(revisedSpec.endTime).toBe("22:30");
+  });
+
+  it("rejects a time window that ends before it starts", async () => {
+    const { agent, ownerId } = await signUpWithHomeBase(app, "plan-window-bad@example.com");
+    const date = daysFromNow(3);
+    const response = await agent.post("/api/plan-specs").set(HDR, "1").send({
+      scale: "day_off",
+      startDate: date,
+      endDate: date,
+      startTime: "21:00",
+      endTime: "19:00",
+      participantIds: [ownerId],
+    });
+    expect(response.status).toBe(400);
   });
 
   it("returns a destination anchor and exactly 3 beats for a getaway plan", async () => {
