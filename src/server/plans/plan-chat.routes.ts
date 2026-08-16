@@ -169,6 +169,8 @@ planChatRouter.post(
         scale: currentSpec.scale,
         startDate: currentSpec.startDate,
         endDate: currentSpec.endDate,
+        startTime: currentSpec.startTime,
+        endTime: currentSpec.endTime,
         radiusKm: currentSpec.radiusKm,
         moodContext: action.instruction,
         participantIds: currentSpec.participantIds,

@@ -16,6 +16,10 @@ preparation, operational checks, and a compact fallback. DeepSeek V4 Flash
 powers memory chat, plan actions, and Love feature learning. Users can make
 reversible one-detail edits, connect friends for private group planning, and
 share scrubbed itineraries through expiring private links.
+One tap on **Rest of today**, **Rest of the weekend**, or **Rest of the week**
+plans only the hours that are actually left: the window is computed from the
+current local time, checked against the live forecast for exactly those hours,
+and filled using remembered tastes — no form to fill in.
 Every surfaced recommendation is saved in History before the user chooses it,
 so it can be reopened, rated, shared, or locked later. Recent titles and named
 venues are fed back into discovery and deterministic novelty scoring to prevent

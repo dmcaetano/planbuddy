@@ -1188,3 +1188,19 @@ button {
 .buddy-thread { min-height: 0; display: flex; flex: 1; flex-direction: column; }.buddy-thread__intro { padding: 12px 16px 0; font-size: 0.79rem; }.buddy-thread__messages { flex: 1; min-height: 150px; max-height: 310px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 8px 16px 12px; }.buddy-message { max-width: 90%; padding: 9px 11px; border-radius: 14px; font-size: 0.82rem; }.buddy-message--assistant { align-self: flex-start; background: var(--paper); border: 1px solid var(--hairline); color: var(--ink-soft); }.buddy-message--user { align-self: flex-end; background: var(--plum); color: #fff; border-bottom-right-radius: 4px; }.buddy-empty { padding: 18px; border: 1px dashed var(--hairline-strong); border-radius: 14px; color: var(--ink-faint); font-size: 0.8rem; text-align: center; }.buddy-composer { display: grid; grid-template-columns: minmax(0, 1fr) 42px; gap: 8px; padding: 10px 16px 12px; border-top: 1px solid var(--hairline); }.buddy-composer input { min-width: 0; border: 1px solid var(--hairline-strong); border-radius: var(--radius-pill); padding: 10px 14px; background: var(--paper); }.buddy-composer .btn { width: 42px; height: 42px; padding: 0; }.buddy-panel__full-chat { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 10px; border-top: 1px solid var(--hairline); color: var(--plum); font-size: 0.78rem; font-weight: 700; text-decoration: none; }
 @keyframes buddy-pulse { 0% { transform: scale(.88); opacity: .75; } 100% { transform: scale(1.18); opacity: 0; } } @keyframes buddy-panel-in { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (min-width: 840px) { .buddy-dock { bottom: 28px; right: 28px; } .app-main { padding-bottom: var(--space-7); } } @media (prefers-reduced-motion: reduce) { .buddy-fab, .buddy-panel { transition: none; animation: none; }.buddy-fab--working::before { animation: none; } }
+
+/* "Plan the time I have left" — the one-tap path above the manual spec form.
+   Each button is a whole request (window + forecast + remembered taste), so it
+   carries its own hours and weather line rather than a bare label. */
+.time-left h2 { margin: 0 0 4px; font-size: 1.12rem; }
+.time-left > p.muted { margin: 0 0 var(--space-3); }
+.time-left__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-2); }
+.time-left__button { display: grid; gap: 4px; padding: 13px 14px; text-align: left; border: 1px solid var(--hairline-strong); border-radius: 15px; background: linear-gradient(150deg, var(--honey-soft), var(--paper-raised)); color: var(--ink); transition: transform 0.08s ease, border-color 0.15s ease; }
+.time-left__button:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--clay); }
+.time-left__button:active:not(:disabled) { transform: scale(0.99); }
+.time-left__button:disabled { opacity: 0.55; cursor: not-allowed; background: var(--paper); }
+.time-left__head { display: flex; align-items: center; gap: 7px; color: var(--clay); }
+.time-left__head strong { font-size: 0.92rem; color: var(--ink); }
+.time-left__detail { color: var(--ink-soft); font-size: 0.78rem; font-weight: 600; }
+.time-left__weather { display: flex; align-items: center; gap: 5px; color: var(--pine); font-size: 0.74rem; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .time-left__button { transition: none; } }

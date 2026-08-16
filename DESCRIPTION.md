@@ -14,6 +14,12 @@ or unsafe rules.
 ## What it does
 
 - Produces one three-beat plan rather than a generic list of ideas.
+- Plans the time that is actually left in one tap. **Rest of today**, **Rest of
+  the weekend**, and **Rest of the week** derive a usable clock window from the
+  current local time, show the forecast for exactly those hours, and pass the
+  window to the planner so nothing is scheduled before the user can leave the
+  house or after the window closes. A spent weekend or week rolls forward to
+  the next one; a spent day says so instead of promising a plan.
 - Grounds every named place in a web-sourced dossier and mechanically rejects
   names or source links that are not in that dossier.
 - Shows real stops, Maps search/directions/full-route links, an attributed place
@@ -36,8 +42,10 @@ or unsafe rules.
 
 ## How it works
 
-The user chooses a scale, date, and participants, optionally adds one sentence
-of context, and presses **Plan my weekend**. The server gathers the relevant
+The user either taps a **Time left** button — which derives the window, meal
+anchor, and weather-implied setting on its own — or chooses a scale, date, and
+participants, optionally adds one sentence of context, and presses
+**Plan my weekend**. The server gathers the relevant
 memory, selected people and pets, recent plan history, home location, and an
 Open-Meteo forecast. Gemini with Google Search builds a closed dossier containing
 a meal venue, two distinct outdoor stops, and a fallback venue; a second
@@ -132,6 +140,9 @@ sequenceDiagram
 ## Data & state
 
 Production data lives in the `planbuddy` schema of a dedicated Neon project.
+A plan spec carries an optional `start_time`/`end_time` clock window alongside
+its dates, so regenerating or revising a "time left" plan keeps planning inside
+the same hours.
 Candidate payloads are JSONB so richer route, image, preparation, and fallback
 fields require no migration. Every surfaced winner also has a `plans` snapshot
 whose status moves from `suggested` to `locked` or `rejected` without creating a

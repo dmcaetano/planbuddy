@@ -9,6 +9,7 @@ import ReactionBar from "../components/ReactionBar";
 import ShareButton from "../components/ShareButton";
 import PlanEditChat from "../components/PlanEditChat";
 import GenerationProgress from "../components/GenerationProgress";
+import TimeLeftPlans, { type QuickPlanRequest } from "../components/TimeLeftPlans";
 import { useGeneration } from "../state/GenerationContext";
 import { useAuth } from "../state/AuthContext";
 import { usePlanFocus } from "../state/PlanFocusContext";
@@ -271,6 +272,21 @@ export default function PlanPage() {
           `Transport: ${transport}`,
         ].filter(Boolean).join(". ").slice(0, 280),
       });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't reach PlanBuddy. Please try again.");
+      setState("error");
+    }
+  }
+
+  // One-tap plan for the hours the user actually has left. It skips the form
+  // entirely: the window, the meal it can still anchor on, and the forecast for
+  // those exact hours are all the request needs — memory does the rest.
+  async function planTimeLeft(request: QuickPlanRequest) {
+    setError(null);
+    setLooseners(null);
+    if (currentFriendSelectedIds.length > 0) saveLastGroup(currentFriendSelectedIds);
+    try {
+      await generation.startSpec({ ...request, participantIds: selectedIds });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't reach PlanBuddy. Please try again.");
       setState("error");
@@ -544,13 +560,15 @@ export default function PlanPage() {
       <div>
         <div className="row-gap" style={{ alignItems: "center", marginBottom: 4 }}>
           <div className="eyebrow" style={{ marginBottom: 0 }}>Plan</div>
-          <span className="version-pill">v1.1.4 · wasp</span>
+          <span className="version-pill">v1.1.5 · wasp</span>
         </div>
         <h1>One click. One genuinely good plan.</h1>
         <p>PlanBuddy combines what it remembers with live context, then commits to the best fit.</p>
       </div>
       {error && <div className="error-banner">{error}</div>}
+      <TimeLeftPlans disabled={selectedIds.length === 0} onPlan={planTimeLeft} />
       <div className="card">
+        <div className="eyebrow">Or set it up yourself</div>
         <div className="field">
           <label>Scale</label>
           <div className="chip-row">

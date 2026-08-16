@@ -149,12 +149,26 @@ function formatClockMinutes(value: number): string {
   return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
 }
 
-function normalizeBeatStartTimes(beats: AiCandidate["beats"]): AiCandidate["beats"] {
+/**
+ * Keeps start times monotonic (each beat begins no earlier than the previous
+ * one ends, plus travel) and — for a partial-day request — pushes the whole
+ * route to start at or after the window opens.
+ */
+function normalizeBeatStartTimes(
+  beats: AiCandidate["beats"],
+  earliestStartTime?: string | null
+): AiCandidate["beats"] {
+  const windowStart = parseClockMinutes(earliestStartTime);
   let previousEnd: number | null = null;
   return beats.map((beat) => {
     const statedStart = parseClockMinutes(beat.startTime);
-    const earliestStart = previousEnd == null ? null : previousEnd + (beat.travelMinutes ?? 0);
-    const start = statedStart == null ? earliestStart : earliestStart == null ? statedStart : Math.max(statedStart, earliestStart);
+    const floors = [
+      previousEnd == null ? null : previousEnd + (beat.travelMinutes ?? 0),
+      // Only the first beat is anchored to the window; later beats inherit it
+      // through previousEnd, so a long route is never pinned back to the start.
+      previousEnd == null ? windowStart : null,
+    ].filter((value): value is number => value != null);
+    const start = floors.length === 0 ? statedStart : Math.max(statedStart ?? 0, ...floors);
     if (start == null) return beat;
     previousEnd = start + (beat.durationMinutes ?? 0);
     return { ...beat, startTime: formatClockMinutes(start) };
@@ -168,11 +182,14 @@ export async function enrichCandidate(
     weather: WeatherSnapshot;
     participants: Participant[];
     walkingTargetMinutes?: { min: number; max: number } | null;
+    /** Local "HH:MM" the route may not begin before, from the spec's time window. */
+    earliestStartTime?: string | null;
   }
 ): Promise<AiCandidate> {
   const groundedCopy = normalizeLisbonGeography(candidate, input.homeBaseLabel);
   const normalizedBeats = normalizeBeatStartTimes(
-    normalizeWalkingDuration(groundedCopy.beats, input.walkingTargetMinutes)
+    normalizeWalkingDuration(groundedCopy.beats, input.walkingTargetMinutes),
+    input.earliestStartTime
   );
   let previous = input.homeBaseLabel || "Current location";
   const queries: string[] = [];
