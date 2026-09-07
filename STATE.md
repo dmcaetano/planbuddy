@@ -1,5 +1,7 @@
 # PlanBuddy — State
 
+**SDLC class:** SOLO
+
 ## Status
 v1.1.4 "Wasp" is live on Render from `main` (`c8914b3`, deploy
 `dep-d9gscnsvikkc73a1akc0`). It makes hero-photo lookup location-aware,
