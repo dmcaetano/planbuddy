@@ -64,11 +64,12 @@ Increment 2 — time off (Diogo's second example; ◇ the split into two increme
    Vienna / Serra da Estrela example. ◇ When no time-off dates exist, vacation is never mentioned.
 
 ## Explicitly out of scope
-- Notifications, push or email when the app is closed (the "less than one click" end state). ◇ Diogo
-  to confirm this waits.
+- Notifications, push or email when the app is closed (the "less than one click" end state).
+  Confirmed by Diogo 2026-10-05: out for now, goes to the features backlog.
 - Booking, payment, flight or hotel prices or availability.
-- Importing time off from a calendar (private calendar link or Google login). ◇ Deliberately later:
-  it would make "the app knows" stronger than manual entry, and Diogo may pull it forward.
+- Importing time off from a calendar. Confirmed by Diogo 2026-10-05: out for now, goes to the
+  must-have backlog. MentorAI already has a calendar import, so it is possible and easy, but today it
+  needs too much of his involvement.
 - A restaurant catalogue for cities other than Lisbon; trips stay at destination level, as Getaway
   and Vacation already are, not full itineraries.
 - Any change to hard-constraint, memory, friend-sharing or privacy rules.
@@ -76,8 +77,13 @@ Increment 2 — time off (Diogo's second example; ◇ the split into two increme
   editors it needs.
 
 ## Open questions
-1. Calendar import: manual entry first (default taken). Does Diogo want a private calendar link
-   or Google login pulled into a later increment? Not blocking: increments 1 and 2 need neither.
+None. (Calendar import and notifications were answered by Diogo on 2026-10-05: both are backlog,
+not this unit of work.)
+
+## Guiding principle (Diogo, 2026-10-05)
+Anything that provides passive information about the user is important: the app should learn from
+signals it can read without the user doing anything, because the user has no time to feed it.
+Where two designs are otherwise equal, prefer the one that needs less input from Diogo.
 
 ---
 ## Review

@@ -134,6 +134,20 @@ Hand the live app to alpha testers; collect feedback on recommendation quality, 
   images). Supersedes the 2026-07-22 `openai/gpt-4o-mini` planner role once guarded
   DeepSeek meets the latency bar.
 
+- 2026-10-05 — Guiding principle: anything that gives passive information about the
+  user is important (the user has no time to feed the app). Prefer signals read
+  without user effort; when two designs are otherwise equal, choose the one that
+  needs less input from Diogo.
+
+## Backlog — must-have features (Diogo, 2026-10-05)
+- **Calendar import** (time off, free windows, busy slots) as a passive signal. Not now:
+  it still needs too much of Diogo's involvement to connect. MentorAI-app already has a
+  calendar import, so it is feasible and easy — reuse it when this is picked up.
+- **Notifications / push / email when the app is closed** — the "less than one click"
+  end state (e.g. a Friday 18:30 nudge with the proposal already attached).
+- Other passive-signal sources to evaluate: device location and time zone, weather,
+  public holidays and school calendars, past plan feedback (already learned).
+
 ## Future ideas
 - RSVP (Available / Maybe / Can't) on dated plans for included friends
 - Comments/reactions on shared plans (ownership/privacy design needed first)
