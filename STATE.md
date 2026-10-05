@@ -125,6 +125,15 @@ Hand the live app to alpha testers; collect feedback on recommendation quality, 
   end. DeepSeek remains the conversational/memory model; `openai/gpt-4o-mini`
   handles only latency-sensitive structured plan drafting.
 
+- 2026-10-05 — North star "max 1 click life": the app opens on a proposal for the
+  current moment (time of day, day of week, household, tastes, weather, History,
+  and life dates) instead of a setup form; one tap accepts, zero taps is the goal.
+  Work is tracked as `sdlc/001-max-one-click/`.
+- 2026-10-05 — Model routing: DeepSeek V4 Flash for every LLM role it can do, with
+  guardrails; another model only for a capability DeepSeek lacks (Google grounding,
+  images). Supersedes the 2026-07-22 `openai/gpt-4o-mini` planner role once guarded
+  DeepSeek meets the latency bar.
+
 ## Future ideas
 - RSVP (Available / Maybe / Can't) on dated plans for included friends
 - Comments/reactions on shared plans (ownership/privacy design needed first)
