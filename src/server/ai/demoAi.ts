@@ -36,6 +36,20 @@ export interface GenerateContext {
   recentSuggestions?: { title: string; category: string; placeNames: string[] }[];
   groundedPlaces?: AiPlaceResearchResponse["places"];
   seed: string; // unique per (planSpecId, batchIndex) for determinism
+  /**
+   * Max-1-click moment (spec rule 4). Absent for Customize plans, in which case every
+   * consumer behaves exactly as before. `startTime`/`mealStart` are "HH:MM".
+   */
+  moment?: {
+    kind: "tonight" | "day" | "weekend";
+    startTime: string | null;
+    mealFirst: boolean;
+    mealStart: string | null;
+    romantic: boolean;
+    lateMealFirst?: boolean;
+    /** Length of the first stop when the meal is second (the first stop is lengthened to reach the meal window). */
+    firstStopMinutes?: number;
+  };
   edit?: {
     request: string;
     mode: "restaurant" | "meal_time" | "budget" | "walking" | "general";

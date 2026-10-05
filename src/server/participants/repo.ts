@@ -2,6 +2,14 @@ import { getDb } from "../db/client.js";
 import { newId } from "../db/id.js";
 import type { Participant, ParticipantKind } from "../../shared/types.js";
 
+/** A blank relationship means "none": store NULL so clearing really clears. */
+function normalizeRelationship(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
 interface ParticipantRow {
   id: string;
   user_id: string;
@@ -64,7 +72,7 @@ export async function createParticipant(
     `INSERT INTO participants (id, user_id, name, kind, relationship, is_owner)
      VALUES ($1, $2, $3, $4, $5, false)
      RETURNING *`,
-    [id, userId, input.name, input.kind, input.relationship ?? null]
+    [id, userId, input.name, input.kind, normalizeRelationship(input.relationship) ?? null]
   );
   return toDomain(rows[0]);
 }
@@ -77,6 +85,7 @@ export async function updateParticipant(
   const db = await getDb();
   const existing = await getParticipant(userId, id);
   if (!existing) return null;
+  const relationship = normalizeRelationship(input.relationship);
   const { rows } = await db.query<ParticipantRow>(
     `UPDATE participants SET name = $3, kind = $4, relationship = $5
      WHERE user_id = $1 AND id = $2
@@ -86,7 +95,7 @@ export async function updateParticipant(
       id,
       input.name ?? existing.name,
       input.kind ?? existing.kind,
-      input.relationship !== undefined ? input.relationship : existing.relationship,
+      relationship !== undefined ? relationship : existing.relationship,
     ]
   );
   return rows[0] ? toDomain(rows[0]) : null;

@@ -1,0 +1,155 @@
+/* Home: the proposal for right now, the reason line, scope chips and the trip nudge. */
+
+.home-head {
+  margin-bottom: var(--space-1);
+}
+
+.home-status {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 0 0 var(--space-3);
+}
+
+.home-skeleton__image {
+  height: 140px;
+  border-radius: 12px;
+  margin-bottom: var(--space-3);
+}
+
+.home-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.home-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--clay-soft);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.home-reason svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--clay);
+}
+
+.home-scopes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.home-scopes__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* 44px touch targets, visible focus. */
+.home-chip {
+  min-height: 44px;
+  padding: 8px 16px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.home-chip:hover {
+  border-color: var(--clay);
+  color: var(--ink);
+}
+
+.home-chip:focus-visible,
+.trip-nudge__idea:focus-visible {
+  outline: 3px solid var(--pine);
+  outline-offset: 2px;
+}
+
+.home-chip--customize {
+  color: var(--pine);
+  border-style: dashed;
+}
+
+.trip-nudge .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trip-nudge__line {
+  margin: 0 0 var(--space-3);
+}
+
+.trip-nudge__line--small {
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.trip-nudge--lead {
+  border-color: var(--clay);
+}
+
+.trip-nudge__ideas {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.trip-nudge__idea {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  padding: var(--space-3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.trip-nudge__idea:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.trip-nudge__idea-tag {
+  justify-self: start;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--plum);
+  background: var(--plum-soft);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+}
+
+.trip-nudge__idea-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.trip-nudge__idea-reason {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}

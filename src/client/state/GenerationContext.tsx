@@ -8,7 +8,9 @@ import { useAuth } from "./AuthContext";
 // through POST /plan-specs/:id/chat-action, which the server intentionally kept synchronous (it's
 // an AI-interpreted action dispatch, not a plan-generation pipeline run) — so it is NOT modeled as
 // a job kind here. If a future async NL-tweak lands, extend JobKind then.
-export type JobKind = "generate" | "regenerate" | "edit";
+// "moment" is a generation the Home screen asked for by opening the app (POST /api/moment answered
+// status "generating"); Home owns it and calls /api/moment again when it succeeds.
+export type JobKind = "generate" | "regenerate" | "edit" | "moment";
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";
 
 export type JobResult = PipelineResponse;

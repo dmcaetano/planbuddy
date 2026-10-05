@@ -4,6 +4,7 @@ import { api, ApiError } from "../api/client";
 import type { ChatMessage, ChatSession } from "../api/types";
 import { Send } from "lucide-react";
 import { SkeletonList } from "../components/Skeleton";
+import RelationshipProposalChips, { type RelationshipProposal } from "../components/RelationshipProposalChips";
 
 interface MemoryUpdate {
   kind: "constraint" | "taste" | "hunch";
@@ -20,6 +21,7 @@ export default function ChatPage() {
   const [lastUpdates, setLastUpdates] = useState<MemoryUpdate[]>([]);
   const [specUpdate, setSpecUpdate] = useState<{ scale: string | null; moodContext: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [proposal, setProposal] = useState<{ id: string; value: RelationshipProposal } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -42,6 +44,7 @@ export default function ChatPage() {
     if (!session || !input.trim() || sending) return;
     setError(null);
     setSending(true);
+    setProposal(null);
     const content = input.trim();
     setInput("");
     setMessages((prev) => [
@@ -55,11 +58,13 @@ export default function ChatPage() {
         memoryUpdates: MemoryUpdate[];
         specUpdate: { scale: string | null; moodContext: string | null } | null;
         session: ChatSession;
+        relationshipProposal?: RelationshipProposal | null;
       }>(`/chat/session/${session.id}/messages`, { content });
       setMessages((prev) => [...prev.slice(0, -1), data.userMessage, data.assistantMessage]);
       setLastUpdates(data.memoryUpdates);
       setSpecUpdate(data.specUpdate);
       setSession(data.session);
+      setProposal(data.relationshipProposal ? { id: data.assistantMessage.id, value: data.relationshipProposal } : null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Message didn't send. Please try again.");
     } finally {
@@ -110,6 +115,7 @@ export default function ChatPage() {
                 {m.content}
               </div>
             ))}
+            {proposal && <RelationshipProposalChips key={proposal.id} proposal={proposal.value} />}
             <div ref={bottomRef} />
           </div>
 

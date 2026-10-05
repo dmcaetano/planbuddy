@@ -6,6 +6,7 @@ import type { ChatMessage, ChatSession } from "../api/types";
 import { useGeneration } from "../state/GenerationContext";
 import { usePlanFocus } from "../state/PlanFocusContext";
 import PlanEditChat from "./PlanEditChat";
+import RelationshipProposalChips, { type RelationshipProposal } from "./RelationshipProposalChips";
 
 function MemoryBuddyThread() {
   const [session, setSession] = useState<ChatSession | null>(null);
@@ -13,6 +14,7 @@ function MemoryBuddyThread() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [proposal, setProposal] = useState<{ id: string; value: RelationshipProposal } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,12 +27,13 @@ function MemoryBuddyThread() {
   async function send() {
     const content = input.trim();
     if (!session || !content || sending) return;
-    setInput(""); setSending(true); setError(null);
+    setInput(""); setSending(true); setError(null); setProposal(null);
     setMessages((current) => [...current, { id: `local-${Date.now()}`, sessionId: session.id, role: "user", content, createdAt: new Date().toISOString() }]);
     try {
-      const data = await api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage; session: ChatSession }>(`/chat/session/${session.id}/messages`, { content });
+      const data = await api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage; session: ChatSession; relationshipProposal?: RelationshipProposal | null }>(`/chat/session/${session.id}/messages`, { content });
       setMessages((current) => [...current.slice(0, -1), data.userMessage, data.assistantMessage]);
       setSession(data.session);
+      setProposal(data.relationshipProposal ? { id: data.assistantMessage.id, value: data.relationshipProposal } : null);
     } catch (err) {
       setMessages((current) => current.filter((message) => !message.id.startsWith("local-")));
       setError(err instanceof ApiError ? err.message : "Buddy couldn't send that. Try again.");
@@ -42,6 +45,7 @@ function MemoryBuddyThread() {
     <div className="buddy-thread__messages" aria-live="polite">
       {messages.length === 0 && <div className="buddy-empty">Try “we want quieter weekends” or “my Pom comes with us.”</div>}
       {messages.map((message) => <div className={`buddy-message buddy-message--${message.role}`} key={message.id}>{message.content}</div>)}
+      {proposal && <RelationshipProposalChips key={proposal.id} proposal={proposal.value} />}
       {sending && <div className="buddy-message buddy-message--assistant"><Sparkles size={14} /> Thinking with your memory…</div>}
       <div ref={bottomRef} />
     </div>

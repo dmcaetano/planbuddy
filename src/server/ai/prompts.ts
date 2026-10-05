@@ -27,6 +27,9 @@ export function buildGenerateSystemPrompt(ctx?: GenerateContext, fast = false): 
     "Every beat must include travelMode, distanceFromPreviousKm, and travelMinutes. For beat 1, estimate the leg from the supplied home base; for later beats, estimate from the previous stop.",
     "Make start times coherent with the request, sunset, heat, meals, and companions. Rationale must explain why this specific route fits the remembered household.",
     "For a local request that asks for walking plus a meal, use this exact sequence: a gentle pre-meal walk, the meal, then a soft after-meal stroll. Schedule the requested meal time exactly when one is given.",
+    ...(fast && ctx?.moment?.mealFirst
+      ? ["Exception for this request: it states that the meal is the FIRST beat. Use this sequence instead: the meal, then two distinct nearby stops (a short walk, then a soft finish)."]
+      : []),
     fast
       ? "For that local walk-meal-walk sequence, use two distinct outdoor places for beats 1 and 3; never repeat the same park or landmark on both sides of the meal."
       : "For that local walk-meal-walk sequence, use the dossier's two distinct outdoor places for beats 1 and 3; never repeat the same park or landmark on both sides of the meal.",
@@ -72,6 +75,27 @@ function weatherLine(ctx: GenerateContext): string {
     .join("; ");
 }
 
+/** Fast-path hint for a max-1-click moment (spec rule 4): timing, beat order, framing. */
+function momentHintLines(ctx: GenerateContext): string[] {
+  const moment = ctx.moment;
+  if (!moment) return [];
+  const lines: string[] = [];
+  if (moment.kind !== "weekend" && moment.startTime) {
+    lines.push(`Moment timing: the first beat starts at ${moment.startTime}; start times must not be earlier than that.`);
+    if (moment.mealFirst) {
+      lines.push(`Beat order: the meal is beat 1 and starts at ${moment.mealStart ?? moment.startTime}, followed by two distinct nearby stops.`);
+    } else if (moment.mealStart) {
+      lines.push(`Beat order: stop, meal, stop. The meal (beat 2) starts at ${moment.mealStart}; make beat 1 long enough to reach it.`);
+    }
+  }
+  lines.push(
+    moment.romantic
+      ? "Framing: this is a romantic evening for two. A romantic tone is welcome in the rationale."
+      : "Framing: keep the wording neutral. Do not call this romantic."
+  );
+  return lines;
+}
+
 export function buildGenerateUserPrompt(ctx: GenerateContext, fast = false): string {
   const lines: string[] = [];
   lines.push(
@@ -86,6 +110,7 @@ export function buildGenerateUserPrompt(ctx: GenerateContext, fast = false): str
   );
   lines.push(weatherLine(ctx));
   if (ctx.moodContext) lines.push(`Current request/context: "${ctx.moodContext}"`);
+  if (fast && ctx.moment) lines.push(...momentHintLines(ctx));
 
   lines.push("People and pets included:");
   if (!ctx.participants?.length) lines.push("- household owner");

@@ -8,6 +8,8 @@ import { Users } from "lucide-react";
 import { SkeletonList } from "../components/Skeleton";
 import TasteQuiz from "../components/TasteQuiz";
 import { useAuth } from "../state/AuthContext";
+import RelationshipEditor from "../components/RelationshipEditor";
+import { PawPrint, User } from "lucide-react";
 
 type Tab = "constraints" | "tastes" | "hunches";
 
@@ -197,6 +199,24 @@ export default function MemoryPage() {
         <SkeletonList rows={3} lines={2} label="Loading memory" />
       ) : !showQuiz && (
         <>
+      <div className="card people-card">
+        <div className="eyebrow">People &amp; pets</div>
+        <div className="stack" style={{ gap: 8 }}>
+          {participants.filter((p) => !p.isOwner).length === 0 && (
+            <div className="empty-state">Nobody added yet. Tell Buddy "Dani is my wife" or add people during onboarding.</div>
+          )}
+          {participants.filter((p) => !p.isOwner).map((p) => (
+            <div className="list-item list-item--plain" key={p.id}>
+              <span className="row">{p.kind === "pet" ? <PawPrint size={16} /> : <User size={16} />} <strong>{p.name}</strong></span>
+              <RelationshipEditor
+                participant={p}
+                onSaved={(updated) => setParticipants((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="tab-row" role="tablist">
         <button className={tab === "constraints" ? "active" : ""} onClick={() => setTab("constraints")}>
           Constraints

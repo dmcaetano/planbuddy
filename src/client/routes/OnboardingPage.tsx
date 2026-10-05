@@ -5,6 +5,7 @@ import { api, ApiError } from "../api/client";
 import type { Participant } from "../api/types";
 import { PawPrint, User, Plus, MapPin, Sparkles } from "lucide-react";
 import TasteQuiz from "../components/TasteQuiz";
+import RelationshipEditor from "../components/RelationshipEditor";
 
 interface GeocodeResult {
   label: string;
@@ -122,11 +123,15 @@ export default function OnboardingPage() {
           <div className="stack mb-4">
             {participants.length === 0 && <div className="empty-state">Nobody added yet — add the people (and pets) you plan for below.</div>}
             {participants.map((p) => (
-              <div className="list-item" key={p.id}>
+              <div className="list-item people-card" key={p.id} style={{ flexWrap: "wrap" }}>
                 <span className="row">
                   {p.kind === "pet" ? <PawPrint size={16} /> : <User size={16} />} {p.name}
                   {p.isOwner && <span className="badge badge-pine">You</span>}
                 </span>
+                <RelationshipEditor
+                  participant={p}
+                  onSaved={(updated) => setParticipants((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))}
+                />
               </div>
             ))}
           </div>

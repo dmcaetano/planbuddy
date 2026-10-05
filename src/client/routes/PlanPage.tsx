@@ -1,18 +1,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import { listFriendLabels, listFriendsWithLabels } from "../api/friends";
-import type { Friend, FriendLabelSummary, Participant, PlanView, PipelineResponse } from "../api/types";
+import type { Friend, FriendLabelSummary, Participant, PipelineResponse } from "../api/types";
 import { SCALE_LABELS, SCALE_RADIUS_KM, type Scale } from "@shared/scale";
-import TicketCard from "../components/TicketCard";
-import ReactionBar from "../components/ReactionBar";
-import ShareButton from "../components/ShareButton";
-import PlanEditChat from "../components/PlanEditChat";
+import PlanBrowser from "../components/PlanBrowser";
 import GenerationProgress from "../components/GenerationProgress";
 import { useGeneration } from "../state/GenerationContext";
 import { useAuth } from "../state/AuthContext";
-import { usePlanFocus } from "../state/PlanFocusContext";
-import { Bot, ChevronDown, ChevronUp, Lock, PawPrint, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, User, UserPlus, Users, X } from "lucide-react";
+import { VERSION_PILL } from "../version";
+import type { CustomizeState } from "../lib/momentClient";
+import { ChevronDown, ChevronUp, PawPrint, SlidersHorizontal, User, UserPlus, Users } from "lucide-react";
 
 function lastGroupStorageKey(userId: string): string {
   return `planbuddy.lastGroup.${userId}`;
@@ -27,45 +25,31 @@ function nextSaturday(): string {
   return `${year}-${month}-${day}`;
 }
 
-type ViewState = "spec" | "browsing" | "locked" | "deadEnd" | "error";
-
 export default function PlanPage() {
   const generation = useGeneration();
   const auth = useAuth();
-  const { setFocusedPlan } = usePlanFocus();
+  // Home hands over the household group and the kind of moment so Customize opens prefilled.
+  const handoff = (useLocation().state ?? null) as CustomizeState | null;
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendLabels, setFriendLabels] = useState<FriendLabelSummary[]>([]);
   const [friendLabelsLoaded, setFriendLabelsLoaded] = useState(false);
   const [lastGroupIds, setLastGroupIds] = useState<string[] | null>(null);
-  const [scale, setScale] = useState<Scale>("weekend");
-  const [startDate, setStartDate] = useState(nextSaturday());
-  const [endDate, setEndDate] = useState(nextSaturday());
+  const [scale, setScale] = useState<Scale>(handoff?.scale ?? (handoff?.kind === "weekend" ? "weekend" : handoff?.kind ? "day_off" : "weekend"));
+  const [startDate, setStartDate] = useState(handoff?.planDate ?? nextSaturday());
+  const [endDate, setEndDate] = useState(handoff?.planDate ?? nextSaturday());
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [moodContext, setMoodContext] = useState("");
-  const [radiusKm, setRadiusKm] = useState(SCALE_RADIUS_KM.weekend);
+  const [radiusKm, setRadiusKm] = useState(SCALE_RADIUS_KM[handoff?.scale ?? (handoff?.kind === "weekend" ? "weekend" : handoff?.kind ? "day_off" : "weekend")]);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [mealTiming, setMealTiming] = useState<"flexible" | "lunch" | "dinner">("flexible");
+  const [mealTiming, setMealTiming] = useState<"flexible" | "lunch" | "dinner">(handoff?.kind === "tonight" ? "dinner" : handoff?.kind === "day" ? "lunch" : "flexible");
   const [walkingLevel, setWalkingLevel] = useState<"light" | "balanced" | "long">("balanced");
   const [budget, setBudget] = useState<"flexible" | "25" | "40" | "60">("flexible");
   const [setting, setSetting] = useState<"mixed" | "outdoors" | "indoors">("mixed");
   const [transport, setTransport] = useState<"flexible" | "public" | "car">("flexible");
 
-  const [state, setState] = useState<ViewState>("spec");
   const [result, setResult] = useState<PipelineResponse | null>(null);
-  const [otherVersion, setOtherVersion] = useState<PipelineResponse | null>(null);
-  const [displayIndex, setDisplayIndex] = useState(0);
-  const [notThisOpen, setNotThisOpen] = useState(false);
-  const [notThisReason, setNotThisReason] = useState("");
-  const [lockedPlanId, setLockedPlanId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [looseners, setLooseners] = useState<string[] | null>(null);
-  const [tweakOpen, setTweakOpen] = useState(false);
-  const [tweakRequest, setTweakRequest] = useState("");
-  const [tweakSubmitting, setTweakSubmitting] = useState(false);
-  const [tweakError, setTweakError] = useState<string | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatThreadSpecId, setChatThreadSpecId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -75,8 +59,12 @@ export default function PlanPage() {
       const friendParticipants = friendData.friends.map((friend) => friend.participant);
       setParticipants([...participantData.participants, ...friendParticipants]);
       setFriends(friendData.friends);
-      setSelectedIds(participantData.participants.map((participant) => participant.id));
+      const allLocalIds = participantData.participants.map((participant) => participant.id);
+      const handedOver = (handoff?.group ?? []).filter((id) => allLocalIds.includes(id));
+      setSelectedIds(handedOver.length > 0 ? handedOver : allLocalIds);
     }).catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't load your group."));
+    // Runs once on mount: the handoff from Home is only a starting selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -85,18 +73,18 @@ export default function PlanPage() {
 
   // Lazily loads friend-group labels the first time the spec form is shown, not on every mount.
   useEffect(() => {
-    if (state !== "spec" || friendLabelsLoaded) return;
+    if (friendLabelsLoaded) return;
     setFriendLabelsLoaded(true);
     listFriendLabels()
       .then((data) => setFriendLabels(data.labels))
       .catch(() => {
         // Chips simply don't render — the manual checklist still works.
       });
-  }, [state, friendLabelsLoaded]);
+  }, [friendLabelsLoaded]);
 
   // Reads the saved "last group" (a set of friend participant ids) whenever the spec form is shown.
   useEffect(() => {
-    if (state !== "spec") return;
+    if (result) return;
     const userId = auth.user?.id;
     if (!userId) {
       setLastGroupIds(null);
@@ -113,7 +101,7 @@ export default function PlanPage() {
     } catch {
       setLastGroupIds(null);
     }
-  }, [state, auth.user?.id]);
+  }, [result, auth.user?.id]);
 
   const friendUserIdToParticipantId = useMemo(() => {
     const map = new Map<string, string>();
@@ -187,64 +175,31 @@ export default function PlanPage() {
     }
   }
 
-  const displayQueue: PlanView[] = useMemo(() => {
-    if (!result?.winner) return [];
-    return [result.winner, ...result.alternates];
-  }, [result]);
-  const current = displayQueue[displayIndex] ?? null;
-
-  useEffect(() => {
-    if (state === "browsing" && result && current) {
-      setFocusedPlan({ specId: chatThreadSpecId ?? result.spec.id, candidate: current.candidate });
-    } else {
-      setFocusedPlan(null);
-    }
-  }, [chatThreadSpecId, current, result, setFocusedPlan, state]);
-
-  useEffect(() => {
-    function onLocked(event: Event) {
-      const detail = (event as CustomEvent<{ planId?: string }>).detail;
-      if (!detail?.planId) return;
-      setLockedPlanId(detail.planId);
-      setState("locked");
-    }
-    window.addEventListener("planbuddy:locked", onLocked);
-    return () => window.removeEventListener("planbuddy:locked", onLocked);
-  }, []);
-
   // Tracks which terminal job we've already folded into local view state, so re-renders (or a
   // job that was already terminal when this page mounted) don't reapply it more than once.
   const appliedJobIdRef = useRef<string | null>(null);
 
-  // Runs synchronously before paint so a just-finished job never flashes the stale spec/browsing
-  // view for a frame before the result (or failure) is folded in. Buddy edits use the same job
-  // lifecycle as a fresh plan, but retain the exact prior plan as a reversible comparison.
+  // Folds a finished plan job into the page while no plan is being browsed yet (a fresh generate, or
+  // a job that finished while the user was elsewhere). Once a plan is on screen, PlanBrowser folds
+  // regenerate/edit results itself. Moment jobs belong to Home and are never touched here. Runs
+  // synchronously before paint so a just-finished job never flashes the stale form.
   useLayoutEffect(() => {
     const job = generation.job;
     if (!job || (job.status !== "succeeded" && job.status !== "failed")) return;
+    if (job.kind === "moment") return;
     if (appliedJobIdRef.current === job.jobId) return;
     appliedJobIdRef.current = job.jobId;
+    if (result) return;
 
     // Failures stay visible via GenerationProgress (with Retry) until the user retries or starts
     // a new plan, so leave the job in place here.
     if (job.status === "failed") return;
 
     if (job.result) {
-      const data = job.result;
-      if (data.looseners) {
-        setLooseners(data.looseners);
-        setState("browsing");
-      } else if (job.kind === "edit" && result) {
-        setOtherVersion(result);
-        setResult(data);
-        setDisplayIndex(0);
-        setState(data.deadEnd ? "deadEnd" : "browsing");
+      if (job.result.looseners) {
+        setError(`No fresh batches. Try: ${job.result.looseners.join(" · ")}`);
       } else {
-        setResult(data);
-        setChatThreadSpecId(data.spec.id);
-        setOtherVersion(null);
-        setDisplayIndex(0);
-        setState(data.deadEnd ? "deadEnd" : "browsing");
+        setResult(job.result);
       }
     }
     generation.markSeen();
@@ -253,7 +208,6 @@ export default function PlanPage() {
 
   async function planIt() {
     setError(null);
-    setLooseners(null);
     if (currentFriendSelectedIds.length > 0) saveLastGroup(currentFriendSelectedIds);
     try {
       await generation.startSpec({
@@ -273,127 +227,12 @@ export default function PlanPage() {
       });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't reach PlanBuddy. Please try again.");
-      setState("error");
     }
-  }
-
-  async function showAnother() {
-    if (!result) return;
-    if (displayIndex + 1 < displayQueue.length) {
-      setDisplayIndex((index) => index + 1);
-      return;
-    }
-    setError(null);
-    try {
-      await generation.startRegenerate(result.spec.id);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't reach PlanBuddy. Please try again.");
-      setState("error");
-    }
-  }
-
-  async function submitNotThis() {
-    if (!result || !current) return;
-    try {
-      await api.post(`/plan-specs/${result.spec.id}/not-this`, {
-        candidateId: current.candidate.id,
-        reason: notThisReason.trim() || "Not a fit right now",
-      });
-      setNotThisOpen(false);
-      setNotThisReason("");
-      await showAnother();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't record that. Please try again.");
-    }
-  }
-
-  async function lockIt() {
-    if (!result || !current) return;
-    setError(null);
-    try {
-      const data = await api.post<{ plan: { id: string } }>(`/plan-specs/${result.spec.id}/lock`, {
-        candidateId: current.candidate.id,
-      });
-      setLockedPlanId(data.plan.id);
-      setState("locked");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't lock this plan. Please try again.");
-    }
-  }
-
-  // The Tweak panel sends a free-text request through the same synchronous chat-action endpoint
-  // PlanEditChat uses (an AI-interpreted action dispatch, not the async plan-generation pipeline),
-  // so this stays a plain request/response call rather than a tracked job.
-  async function submitTweak() {
-    if (!result || !current) return;
-    setTweakSubmitting(true);
-    setTweakError(null);
-    try {
-      const data = await api.post<{ jobId?: string | null; jobSpecId?: string | null; jobKind?: "edit" | "regenerate" | null; revision: PipelineResponse | null; assistantMessage: { content: string } }>(`/plan-specs/${chatThreadSpecId ?? result.spec.id}/chat-action`, {
-        candidateId: current.candidate.id,
-        message: tweakRequest.trim(),
-      });
-      if (data.jobId) {
-        generation.trackJob(data.jobId, data.jobKind === "regenerate" ? "regenerate" : "edit", data.jobSpecId ?? result.spec.id);
-        setTweakOpen(false);
-        setTweakRequest("");
-        return;
-      }
-      if (!data.revision?.winner) {
-        setTweakError(data.assistantMessage.content || "I couldn't find a safe revision. Your current plan is still right here.");
-        return;
-      }
-      applyRevision(data.revision);
-      setTweakOpen(false);
-      setTweakRequest("");
-    } catch (err) {
-      setTweakError(
-        `${err instanceof ApiError ? err.message : "Couldn't build that revision."} Your current plan has not changed.`
-      );
-    } finally {
-      setTweakSubmitting(false);
-    }
-  }
-
-  function applyRevision(revision: PipelineResponse) {
-    if (!revision.winner) return;
-    setOtherVersion(result);
-    setResult(revision);
-    setDisplayIndex(0);
-    setState("browsing");
-    // A synchronous tweak (submitTweak, or PlanEditChat's onRevision) just moved local state onto a
-    // newer child spec. If a previously-tracked generate/regenerate job is still sitting around in a
-    // terminal state, it must be dismissed here rather than merely left "seen": staying in the
-    // provider means a later remount of this page (e.g. navigating away and back) re-runs the fold
-    // effect above, and — because local state has reset — that effect can no longer see this tweak
-    // happened, so it would resurrect the stale pre-edit job result over the freshly tweaked plan.
-    if (generation.job && (generation.job.status === "succeeded" || generation.job.status === "failed")) {
-      generation.dismiss();
-    }
-  }
-
-  function swapVersion() {
-    if (!otherVersion || !result) return;
-    const visible = result;
-    setResult(otherVersion);
-    setOtherVersion(visible);
-    setDisplayIndex(0);
-    setTweakOpen(false);
-    setChatOpen(false);
-    setChatThreadSpecId(null);
   }
 
   function startOver() {
-    generation.dismiss();
-    setState("spec");
     setResult(null);
-    setOtherVersion(null);
-    setDisplayIndex(0);
-    setLooseners(null);
     setError(null);
-    setTweakOpen(false);
-    setChatOpen(false);
-    setChatThreadSpecId(null);
     setMoodContext("");
     setScale("weekend");
     setRadiusKm(SCALE_RADIUS_KM.weekend);
@@ -415,128 +254,20 @@ export default function PlanPage() {
     setSelectedIds((previous) => previous.includes(id) ? previous.filter((participantId) => participantId !== id) : [...previous, id]);
   }
 
-  if (state === "locked" && lockedPlanId) {
-    return (
-      <div className="stack">
-        <div className="card">
-          <div className="eyebrow">Locked</div>
-          <h1>It's on.</h1>
-          <p>Your plan is saved to History. React afterward and PlanBuddy will learn what made it work.</p>
-          <div className="row-gap">
-            <Link to="/history" className="btn btn-secondary">View in History</Link>
-            <button className="btn btn-ghost" onClick={startOver}>Plan something else</button>
-          </div>
-        </div>
-        {current && <TicketCard view={current} eventStartDate={result?.spec.startDate} eventEndDate={result?.spec.endDate} />}
-      </div>
-    );
-  }
-
-  // A fresh generate/regenerate job (queued, running, or failed-with-retry) takes over the whole
-  // page regardless of local `state` — it may have been reattached after a reload or tab switch,
-  // long before this render's local state caught up.
-  if (generation.job && generation.job.status !== "succeeded" && generation.job.kind !== "edit") {
-    return <GenerationProgress job={generation.job} />;
-  }
-
-  if (state === "browsing" || state === "deadEnd") {
+  if (result) {
     return (
       <div className="stack">
         {error && <div className="error-banner">{error}</div>}
-        {looseners && <div className="hint-banner"><strong>No more fresh batches.</strong> Try: {looseners.join(" · ")}</div>}
-
-        {state === "deadEnd" || !current ? (
-          <div className="card">
-            <div className="eyebrow">Dead end</div>
-            <h2>Nothing cleared your constraints this time.</h2>
-            <p>{result?.deadEndReasons?.length ? `Every candidate was rejected: ${result.deadEndReasons.slice(0, 3).join("; ")}.` : "Try loosening the radius, dates, or a soft preference."}</p>
-            <button className="btn btn-primary" onClick={startOver}>Adjust and try again</button>
-          </div>
-        ) : (
-          <>
-            {otherVersion && (
-              <div className="version-banner">
-                <div><strong>{result!.spec.version > otherVersion.spec.version ? "Revised plan ready" : "Original plan restored"}</strong><span>Both versions are safe—compare without losing either.</span></div>
-                <button className="btn btn-ghost btn-sm" onClick={swapVersion}>
-                  {result!.spec.version > otherVersion.spec.version ? "Back to original" : "View revision"}
-                </button>
-              </div>
-            )}
-            {generation.job?.kind === "edit" && generation.job.status !== "succeeded" && (
-              <div className="plan-edit-in-flight" role="status">
-                <Sparkles size={16} />
-                <span><strong>Buddy is shaping your revision</strong>{generation.job.stageDetail || generation.job.stageLabel || "Your current plan stays visible while it works."}</span>
-                <em>{Math.round(generation.job.progressPct)}%</em>
-              </div>
-            )}
-            <div className="plan-companions" aria-label="People included in this plan">
-              <div className="plan-companions__avatars">
-                {participants.filter((participant) => result!.spec.participantIds.includes(participant.id)).slice(0, 5).map((participant) => (
-                  <span className={`plan-companions__avatar plan-companions__avatar--${participant.kind}`} title={participant.name} key={participant.id}>{participant.name.slice(0, 1).toUpperCase()}</span>
-                ))}
-              </div>
-              <span>{participants.filter((participant) => result!.spec.participantIds.includes(participant.id)).length > 1 ? "Made for your circle" : "Made for you"}</span>
-            </div>
-            <TicketCard view={current} eventStartDate={result?.spec.startDate} eventEndDate={result?.spec.endDate} />
-            <ReactionBar key={current.candidate.id} specId={result!.spec.id} candidateId={current.candidate.id} onDislike={() => setNotThisOpen(true)} />
-            <div className="plan-action-bar">
-              <button className="btn btn-primary" onClick={lockIt}><Lock size={16} /> Lock it</button>
-              <button className="btn btn-secondary" onClick={showAnother}><RefreshCw size={16} /> Show another</button>
-              <ShareButton candidateId={current.candidate.id} />
-              <button className={`btn btn-ghost ${tweakOpen ? "active" : ""}`} onClick={() => setTweakOpen((open) => !open)}>
-                <SlidersHorizontal size={16} /> Tweak
-              </button>
-              <button className="btn btn-ghost" onClick={startOver}><RotateCcw size={16} /> Start over</button>
-            </div>
-            <button className={`btn btn-buddy btn-block ${chatOpen ? "active" : ""}`} onClick={() => setChatOpen((open) => !open)}>
-              <Bot size={17} /> {chatOpen ? "Close Buddy editor" : "Edit this plan with Buddy"}
-            </button>
-
-            {chatOpen && chatThreadSpecId && (
-              <PlanEditChat
-                threadSpecId={chatThreadSpecId}
-                candidate={current.candidate}
-                onRevision={applyRevision}
-                onLocked={(planId) => { setLockedPlanId(planId); setState("locked"); }}
-              />
-            )}
-
-            {tweakOpen && (
-              <section className="card tweak-panel">
-                <button className="icon-btn tweak-panel__close" onClick={() => setTweakOpen(false)} aria-label="Close tweak panel"><X size={18} /></button>
-                <div className="eyebrow">Risk-free revision</div>
-                <h3>What should change?</h3>
-                <p>Your current plan stays visible and saved while PlanBuddy tries the revision.</p>
-                <div className="chip-row tweak-presets">
-                  {["Less walking", "Lower cost", "Earlier finish", "More outdoors"].map((preset) => (
-                    <button type="button" className="chip" key={preset} onClick={() => setTweakRequest(preset)}>{preset}</button>
-                  ))}
-                </div>
-                <textarea rows={3} value={tweakRequest} onChange={(event) => setTweakRequest(event.target.value)} placeholder="e.g. keep the meal, but make the walks shorter and quieter" />
-                {tweakError && <div className="error-banner" role="alert">{tweakError}</div>}
-                <div className="row-gap">
-                  <button className="btn btn-primary" onClick={submitTweak} disabled={tweakSubmitting || !tweakRequest.trim()}>
-                    {tweakSubmitting ? "Trying the revision…" : "Build revision"}
-                  </button>
-                  <button className="btn btn-ghost" onClick={() => setTweakOpen(false)}>Keep current plan</button>
-                </div>
-              </section>
-            )}
-
-            {notThisOpen && (
-              <div className="card">
-                <label htmlFor="not-this-reason" style={{ fontWeight: 600, fontSize: "0.85rem" }}>What missed? This becomes a soft preference, never a hard constraint.</label>
-                <textarea id="not-this-reason" rows={2} value={notThisReason} onChange={(event) => setNotThisReason(event.target.value)} style={{ width: "100%", marginTop: 8 }} placeholder="Too crowded, too much walking, not the food mood…" />
-                <div className="row-gap" style={{ marginTop: 8 }}>
-                  <button className="btn btn-primary btn-sm" onClick={submitNotThis}>Save and show another</button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setNotThisOpen(false)}>Cancel</button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+        <PlanBrowser key={result.spec.id} initial={result} participants={participants} onStartOver={startOver} />
       </div>
     );
+  }
+
+  // A fresh generate (queued, running, or failed-with-retry) takes over the whole page regardless of
+  // local state — it may have been reattached after a reload or tab switch, long before this
+  // render's local state caught up. Moment jobs are Home's; edits keep the plan visible.
+  if (generation.job && generation.job.status !== "succeeded" && generation.job.kind !== "edit" && generation.job.kind !== "moment") {
+    return <GenerationProgress job={generation.job} />;
   }
 
   return (
@@ -544,7 +275,7 @@ export default function PlanPage() {
       <div>
         <div className="row-gap" style={{ alignItems: "center", marginBottom: 4 }}>
           <div className="eyebrow" style={{ marginBottom: 0 }}>Plan</div>
-          <span className="version-pill">v1.1.4 · wasp</span>
+          <span className="version-pill">{VERSION_PILL}</span>
         </div>
         <h1>One click. One genuinely good plan.</h1>
         <p>PlanBuddy combines what it remembers with live context, then commits to the best fit.</p>

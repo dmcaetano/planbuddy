@@ -18,7 +18,11 @@ import { enrichCandidate } from "./enrich.js";
 import { HttpError } from "../../http.js";
 import type { AiCandidate } from "../../../shared/schemas.js";
 import type { ProgressReporter } from "./stages.js";
-import { buildCatalogCandidate } from "./catalogPlanner.js";
+import { buildCatalogCandidateWithMatch } from "./catalogPlanner.js";
+import { retimeBeatsForMoment } from "../../moment/retime.js";
+import { setSpecReasonParts } from "../specs.repo.js";
+import { momentLabel } from "../../../shared/moment.js";
+import { buildReasonParts, pickTasteByOverlap } from "../../moment/reason.js";
 
 export interface PlanContext {
   selectedParticipants: Participant[];
@@ -487,6 +491,18 @@ export async function runGeneration(
     })),
     recentSuggestions,
     seed: `${spec.id}:${batchIndex}`,
+    moment:
+      !edit && spec.momentKind && spec.momentTimes
+        ? {
+            kind: spec.momentKind,
+            startTime: spec.momentTimes.startTime,
+            mealFirst: spec.momentTimes.mealFirst,
+            mealStart: spec.momentTimes.mealStart,
+            romantic: spec.momentTimes.romantic,
+            lateMealFirst: spec.momentTimes.lateMealFirst,
+            firstStopMinutes: spec.momentTimes.firstStopMinutes,
+          }
+        : undefined,
     edit: edit
       ? {
           request: edit.request,
@@ -518,9 +534,10 @@ export async function runGeneration(
   };
 
   const cachedLocalEdit = edit ? buildDeterministicEdit(edit) : null;
-  const catalogCandidate = !edit && !isTripScale(spec.scale) && resolver.mode === "resolved"
-    ? buildCatalogCandidate(genCtx, resolver.venues)
+  const catalogMatch = !edit && !isTripScale(spec.scale) && resolver.mode === "resolved"
+    ? buildCatalogCandidateWithMatch(genCtx, resolver.venues)
     : null;
+  const catalogCandidate = catalogMatch?.candidate ?? null;
   // The cached-swap path never touches grounding_places (already stamped
   // by gatherPlanContext) or generateCandidates, so it must self-report the
   // composing_plan transition. The real path leaves this stage transition to
@@ -567,10 +584,17 @@ export async function runGeneration(
     ...scopedConstraints.filter((constraint) => constraint.userId !== userId).map((constraint) => constraint.text),
     ...scopedTastes.filter((taste) => taste.userId !== userId).map((taste) => taste.text),
   ];
+  // Model and demo drafts carry their own clock times; a moment proposal must start at the moment's
+  // times (the catalogue planner is already moment-aware), otherwise reuse would see it as stale.
+  const momentTimedCandidate = (candidate: AiCandidate): AiCandidate => {
+    if (edit || catalogCandidate || !spec.momentKind || spec.momentKind === "weekend" || !spec.momentTimes) return candidate;
+    const retimed = retimeBeatsForMoment(candidate.beats, spec.momentKind, spec.momentTimes, true);
+    return retimed ? { ...candidate, beats: retimed.beats, routeMapsUrl: null } : candidate;
+  };
   const privacySafeResponse = {
     ...response,
     candidates: editSafeResponse.candidates.map((candidate) =>
-      redactFriendMemory(candidate, privateTerms, context.privateMemoryFactIds)
+      redactFriendMemory(momentTimedCandidate(candidate), privateTerms, context.privateMemoryFactIds)
     ),
   };
 
@@ -664,6 +688,31 @@ export async function runGeneration(
   const alternates = alternateScored
     .map((sc) => savedRanked.find((c) => c.title === sc.candidate.title))
     .filter((c): c is Candidate => Boolean(c));
+
+  if (!edit && spec.momentKind && spec.momentKey) {
+    // Spec rule 11: the reason line is assembled by the server from stored facts. A taste is quoted
+    // only from the viewer's own and household-scoped memory, never from a friend account.
+    const ownLoves = scopedTastes.filter((taste) => taste.polarity === "love" && taste.userId === userId);
+    const winnerText = [
+      winner.title,
+      winner.rationale,
+      ...winner.beats.flatMap((beat) => [beat.title, beat.description, beat.place?.name ?? "", beat.place?.kind ?? ""]),
+    ].join(" ");
+    const taste = catalogCandidate
+      ? ownLoves.find((item) => item.id === catalogMatch?.matchedTasteId) ?? null
+      : pickTasteByOverlap(ownLoves, winnerText);
+    await setSpecReasonParts(
+      userId,
+      spec.id,
+      buildReasonParts({
+        momentLabel: momentLabel(spec.momentKind, spec.planDate ?? spec.startDate),
+        participants: selectedParticipants.filter((participant) => participant.userId === userId && !participant.isFriendAccount),
+        romantic: spec.momentTimes?.romantic ?? false,
+        taste: taste ? { id: taste.id, text: taste.text } : null,
+        weather: context.weather,
+      })
+    );
+  }
 
   for (const candidate of [winner, ...alternates]) {
     const candidateSources = Array.from(new Map([

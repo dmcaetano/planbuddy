@@ -4,6 +4,7 @@ import { GenerationProvider } from "./state/GenerationContext";
 import AuthPage from "./routes/AuthPage";
 import OnboardingPage from "./routes/OnboardingPage";
 import PlanPage from "./routes/PlanPage";
+import HomePage from "./routes/HomePage";
 import ChatPage from "./routes/ChatPage";
 import MemoryPage from "./routes/MemoryPage";
 import HistoryPage from "./routes/HistoryPage";
@@ -48,13 +49,15 @@ export default function App() {
         <main className="app-main">
           <Routes>
             <Route path="/onboarding" element={<OnboardingPage />} />
-            <Route path="/plan" element={<PlanPage />} />
+            <Route path="/" element={<HomePage />} />
+            <Route path="/plan/custom" element={<PlanPage />} />
+            <Route path="/plan" element={<Navigate to="/" replace />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/memory" element={<MemoryPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/friends" element={<FriendsPage />} />
             <Route path="/invite/:token" element={<InvitePage />} />
-            <Route path="*" element={<Navigate to="/plan" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
         {user.homeBaseLabel && <NavBar />}

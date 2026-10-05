@@ -82,8 +82,10 @@ export function quickPlanQualityIssue(response: AiGenerateResponse, ctx: Generat
     return "invalid Lisbon lake framing";
   }
   const wantsMeal = /\b(meal|lunch|dinner|restaurant|fish|meat|grill(?:ed)?)\b/i.test(ctx.moodContext ?? "");
-  const mealIdentity = candidate.beats[1].place?.kind ?? "";
-  const mealName = candidate.beats[1].place?.name ?? "";
+  // Meal-first moment plans (spec rule 4) put the meal at index 0; every other plan keeps it second.
+  const mealIndex = ctx.moment?.mealFirst ? 0 : 1;
+  const mealIdentity = candidate.beats[mealIndex].place?.kind ?? "";
+  const mealName = candidate.beats[mealIndex].place?.name ?? "";
   if (wantsMeal && /market|mercado|food\s*(?:hall|court)/i.test(`${mealName} ${mealIdentity}`)) {
     return "meal stop is a generic market rather than a restaurant";
   }

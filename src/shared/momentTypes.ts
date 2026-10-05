@@ -23,6 +23,28 @@ export interface ReasonParts {
   /** One clause from a stored forecast for the plan date, or null. */
   weather: string | null;
   romantic: boolean;
+  /** Added by workstream A: the participant ids behind `people` (each exists in the viewer's household). */
+  peopleIds?: Id[];
+}
+
+/**
+ * Timing the moment engine computed when a proposal was created (stored on the spec so
+ * "Show another" under the same setup keeps the same timing). Added by workstream A.
+ */
+export interface StoredMomentTimes {
+  startTime: string | null;
+  mealFirst: boolean;
+  mealStart: string | null;
+  mealWindow: { from: string; to: string } | null;
+  lateMealFirst: boolean;
+  firstStopMinutes: number;
+  romantic: boolean;
+}
+
+/** Body of POST /api/moment. `kind` (added by workstream A) is the scope-switch override of spec rule 13. */
+export interface MomentRequest {
+  localDateTime: string;
+  kind?: MomentKind;
 }
 
 export interface TimeOff {

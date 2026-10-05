@@ -26,10 +26,12 @@ describe("plan generation integration (demo AI)", () => {
     const { agent, ownerId } = await signUpWithHomeBase(app, "plan1@example.com");
     await agent.post("/api/constraints").set(HDR, "1").send({ text: "peanut allergy" });
 
+    // A locked plan only counts as "upcoming" while its date is not in the past, so use a future date.
+    const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const generate = await postAndAwaitGeneration(agent, "/api/plan-specs", {
       scale: "day_off",
-      startDate: "2026-08-01",
-      endDate: "2026-08-01",
+      startDate: futureDate,
+      endDate: futureDate,
       participantIds: [ownerId],
     });
     expect(generate.kickoffStatus).toBe(202);

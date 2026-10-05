@@ -34,6 +34,26 @@ function candidateText(c: AiCandidate): string {
 
 const RADIUS_MULTIPLIER = 2;
 
+/**
+ * The deterministic hard-constraint check shared by candidate filtering and by
+ * the moment endpoint, which re-applies it to a reused plan.
+ */
+export function findViolatedConstraint(
+  candidate: Pick<AiCandidate, "title" | "rationale" | "category" | "indoor"> & {
+    beats: { title: string; description: string }[];
+  },
+  constraints: { id: string; text: string }[]
+): { id: string; text: string } | undefined {
+  const text = candidateText(candidate as AiCandidate);
+  return constraints.find((c) => {
+    const blocked = blockedTermsForConstraint(c.text);
+    if (blocked.some((term) => containsUnsafeBlockedTerm(text, term))) return true;
+    if (indoorOnlyRequired(c.text) && !candidate.indoor) return true;
+    if (outdoorOnlyRequired(c.text) && candidate.indoor) return true;
+    return false;
+  });
+}
+
 export function filterCandidates(candidates: AiCandidate[], ctx: FilterContext): FilterResult {
   const kept: AiCandidate[] = [];
   const rejected: RejectedCandidate[] = [];
@@ -42,16 +62,9 @@ export function filterCandidates(candidates: AiCandidate[], ctx: FilterContext):
   const resolvedVenueIds = new Set(ctx.resolvedVenueIds ?? []);
 
   for (let candidate of candidates) {
-    const text = candidateText(candidate);
     const normalizedTitle = candidate.title.trim().toLowerCase();
 
-    const violated = ctx.activeConstraints.find((c) => {
-      const blocked = blockedTermsForConstraint(c.text);
-      if (blocked.some((term) => containsUnsafeBlockedTerm(text, term))) return true;
-      if (indoorOnlyRequired(c.text) && !candidate.indoor) return true;
-      if (outdoorOnlyRequired(c.text) && candidate.indoor) return true;
-      return false;
-    });
+    const violated = findViolatedConstraint(candidate, ctx.activeConstraints);
     if (violated) {
       rejected.push({ candidate, reason: `constraint violation: ${violated.text}` });
       continue;

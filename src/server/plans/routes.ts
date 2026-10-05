@@ -33,7 +33,7 @@ const planSpecCreateWithIdempotency = planSpecCreateSchema.extend({
   idempotencyKey: idempotencyKeySchema,
 });
 
-function planView(candidate: Candidate, context: PipelineResult["context"], viewerUserId: string) {
+export function planView(candidate: Candidate, context: PipelineResult["context"], viewerUserId: string) {
   return {
     candidate,
     weather: context.weather,
@@ -54,7 +54,7 @@ function candidateGroundingSources(candidate: Candidate) {
   return Array.from(new Map(sources.map((source) => [source.url, source])).values());
 }
 
-function pipelineResponse(spec: Awaited<ReturnType<typeof createPlanSpec>>, result: PipelineResult, viewerUserId: string) {
+export function pipelineResponse(spec: Awaited<ReturnType<typeof createPlanSpec>>, result: PipelineResult, viewerUserId: string) {
   return {
     spec,
     aiMode: result.aiMode,

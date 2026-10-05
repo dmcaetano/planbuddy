@@ -143,6 +143,13 @@ export interface PlanSpec {
   participantIds: Id[];
   generationCount: number;
   createdAt: string;
+  /** Max-1-click moment (all optional; null/absent on Customize plans). */
+  momentKind?: "tonight" | "day" | "weekend" | null;
+  momentKey?: string | null;
+  planDate?: string | null;
+  inputsFingerprint?: string | null;
+  reasonParts?: import("./momentTypes.js").ReasonParts | null;
+  momentTimes?: import("./momentTypes.js").StoredMomentTimes | null;
 }
 
 export interface Beat {

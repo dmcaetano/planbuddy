@@ -26,6 +26,10 @@ test("signup -> generate -> Love -> Buddy edit -> share -> dislike -> lock -> fe
   await expect(page.getByText("Build your fun profile")).toBeVisible();
   await page.getByRole("button", { name: "Skip" }).click();
 
+  // Finishing onboarding lands on Home, which starts its own proposal; let that settle before leaving.
+  await expect(page.getByRole("button", { name: /Lock it/i })).toBeVisible({ timeout: 30000 });
+  // Customize: the manual form still works exactly as before, entered by its own route.
+  await page.goto("/plan/custom");
   await expect(page.getByText("One click. One genuinely good plan.")).toBeVisible();
   await page.getByRole("button", { name: "Plan my weekend" }).click();
 
@@ -36,7 +40,7 @@ test("signup -> generate -> Love -> Buddy edit -> share -> dislike -> lock -> fe
   await expect(stageOrLockLocator.first()).toBeVisible({ timeout: 15000 });
   if (await page.getByText("Reading your household memory").isVisible().catch(() => false)) {
     await page.getByRole("link", { name: "History" }).click();
-    await page.getByRole("link", { name: "Plan" }).click();
+    await page.getByRole("link", { name: "Plan", exact: true }).click();
   }
 
   await expect(page.getByRole("button", { name: /Lock it/i })).toBeVisible({ timeout: 15000 });
@@ -105,6 +109,9 @@ test("plan controls, start over, and learned-hunch editing work on mobile", asyn
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Skip" }).click();
 
+  // Finishing onboarding lands on Home, which starts its own proposal; let that settle before leaving.
+  await expect(page.getByRole("button", { name: /Lock it/i })).toBeVisible({ timeout: 30000 });
+  await page.goto("/plan/custom");
   await page.getByRole("button", { name: /Plan controls/i }).click();
   await expect(page.getByLabel("Search radius")).toBeVisible();
   await page.getByLabel("Search radius").fill("18");
@@ -136,4 +143,28 @@ test("plan controls, start over, and learned-hunch editing work on mobile", asyn
   await expect(page.getByText("edited preference for quiet green routes")).toBeVisible();
   await hunchCard.getByTitle("Delete permanently").click();
   await expect(page.getByText("edited preference for quiet green routes")).toHaveCount(0);
+});
+
+test("opening Home shows a plan for the moment with zero taps", async ({ page }) => {
+  const email = uniqueEmail();
+  await page.goto("/");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("password123");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.getByLabel("Home city").fill("Lisbon");
+  await page.getByRole("button", { name: /Lisbon/i }).first().click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Skip" }).click();
+
+  // Device clock: Friday 9 Oct 2026, 19:00 local. The moment is "Friday evening" (tonight).
+  await page.clock.install({ time: new Date(2026, 9, 9, 19, 0, 0) });
+  await page.goto("/");
+
+  // No form, no tap: the reason line and the plan appear on their own.
+  await expect(page.locator(".home-reason")).toContainText("Friday", { timeout: 30000 });
+  await expect(page.locator(".ticket-card").first()).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole("button", { name: /Lock it/i })).toBeVisible();
+  // Scope switch and Customize sit under the proposal.
+  await expect(page.getByRole("button", { name: "This weekend" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Customize" })).toBeVisible();
 });

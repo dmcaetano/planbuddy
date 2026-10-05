@@ -13,18 +13,19 @@ function truncateDetail(text: string): string {
 
 /**
  * Compact fixed banner shown whenever a plan-generation job is active, just finished, or has
- * failed, and the user isn't currently on /plan. Tapping the main area jumps to /plan, where
+ * failed, and the user isn't currently on Home or Customize. Tapping the main area jumps back (Home for moment/regenerate jobs, Customize for a fresh generate), where
  * GenerationProgress (or the finished result) takes over. A failed job stays visible — it is
- * NOT auto-hidden — until the user taps through to /plan and resolves it (retry/replace) there,
+ * NOT auto-hidden — until the user taps through and resolves it (retry/replace) there,
  * or dismisses it directly from the banner; that's what keeps a server-side failure from being
- * silently swallowed when the user isn't on the Plan page to see it.
+ * silently swallowed when the user isn't on the plan screen to see it.
  */
 export default function GenerationBanner() {
   const { job, connectionWarning, dismiss } = useGeneration();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const visible = Boolean(job) && location.pathname !== "/plan" && !(job?.status === "succeeded" && job?.seen);
+  const onPlanScreen = location.pathname === "/" || location.pathname === "/plan/custom";
+  const visible = Boolean(job) && !onPlanScreen && !(job?.status === "succeeded" && job?.seen);
 
   // The banner is fixed-position and can outlive the page it appeared over (e.g. a job that
   // resolves while the user is on History/Memory/Chat and never returns to /plan to mark it
@@ -61,7 +62,7 @@ export default function GenerationBanner() {
 
   return (
     <div className={`generation-banner ${failed ? "generation-banner--failed" : ""}`} aria-live="polite">
-      <button type="button" className="generation-banner__main" onClick={() => navigate("/plan")}>
+      <button type="button" className="generation-banner__main" onClick={() => navigate(job.kind === "generate" ? "/plan/custom" : "/")}>
         <div className="generation-banner__text">
           <strong>
             <span key={mainText} className="generation-crossfade">
