@@ -22,6 +22,7 @@ import { sharesRouter } from "./shares/routes.js";
 import { planChatRouter } from "./plans/plan-chat.routes.js";
 import { planJobsRouter } from "./plans/jobs.routes.js";
 import { momentRouter } from "./moment/routes.js";
+import { timeOffRouter } from "./timeoff/routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -57,6 +58,7 @@ export function createApp() {
   app.use("/api/plan-specs", planChatRouter);
   app.use("/api/plan-jobs", planJobsRouter);
   app.use("/api/moment", momentRouter);
+  app.use("/api/time-off", timeOffRouter);
   app.use("/api/history", historyRouter);
   app.use("/api/chat", chatRouter);
   app.use("/api/friends", friendsRouter);

@@ -328,3 +328,39 @@ export const aiPlanActionResponseSchema = z.object({
   reply: z.string().min(1).max(700),
 });
 export type AiPlanActionResponse = z.infer<typeof aiPlanActionResponseSchema>;
+
+/* ---------------------------------------------------------------------- */
+/* Time off (Increment 2)                                                  */
+/* ---------------------------------------------------------------------- */
+
+/** A real calendar date written YYYY-MM-DD. */
+export const isoDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-12-24")
+  .refine((value) => {
+    const [y, m, d] = value.split("-").map(Number);
+    const utc = new Date(Date.UTC(y, m - 1, d));
+    return y >= 2020 && y <= 2100 && utc.getUTCFullYear() === y && utc.getUTCMonth() === m - 1 && utc.getUTCDate() === d;
+  }, "Not a real date");
+
+export const timeOffCreateSchema = z
+  .object({
+    label: z.string().trim().min(1).max(80),
+    startDate: isoDateSchema,
+    endDate: isoDateSchema,
+  })
+  .refine((v) => v.endDate >= v.startDate, { message: "The end date can't be before the start date", path: ["endDate"] });
+
+export const timeOffUpdateSchema = z
+  .object({
+    label: z.string().trim().min(1).max(80).optional(),
+    startDate: isoDateSchema.optional(),
+    endDate: isoDateSchema.optional(),
+  })
+  .refine((v) => !(v.startDate && v.endDate) || v.endDate >= v.startDate, {
+    message: "The end date can't be before the start date",
+    path: ["endDate"],
+  });
+
+/** Body of snooze: the device-local date (so a controlled browser clock works); defaults to the server date. */
+export const timeOffSnoozeSchema = z.object({ localDate: isoDateSchema.optional() }).strict().default({});

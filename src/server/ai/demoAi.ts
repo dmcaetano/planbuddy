@@ -227,11 +227,13 @@ export function generateCandidatesDemo(ctx: GenerateContext): AiGenerateResponse
   const loveTags = new Set(ctx.loveTastes.flatMap((t) => t.tags ?? []));
 
   if (isTripScale(ctx.scale)) {
+    const requestedDestination = mood.match(/^trip idea:\s*(.{2,80})$/)?.[1]?.trim() ?? null;
     const shuffled = seededShuffle(TRIP_TEMPLATES, seed);
     const scored = shuffled
       .map((t) => {
         let bonus = 0;
         if (mood && t.tags.some((tag) => mood.includes(tag))) bonus += 2;
+        if (requestedDestination && t.destinationAnchor.toLowerCase().includes(requestedDestination)) bonus += 5;
         if (t.tags.some((tag) => loveTags.has(tag))) bonus += 1;
         return { t, bonus };
       })

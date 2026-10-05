@@ -1,0 +1,10 @@
+.time-off-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.time-off-item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--hairline); }
+.time-off-item__text { display: grid; gap: 2px; min-width: 0; flex: 1 1 180px; overflow-wrap: anywhere; }
+.time-off-item__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.time-off-btn { min-height: 44px; }
+.time-off-icon { min-width: 44px; min-height: 44px; }
+.time-off-form { display: grid; gap: 10px; margin-top: 8px; }
+.time-off-dates { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.time-off-form input { min-height: 44px; }
+.time-off-btn:focus-visible, .time-off-icon:focus-visible, .time-off-form input:focus-visible { outline: 3px solid var(--plum); outline-offset: 2px; }

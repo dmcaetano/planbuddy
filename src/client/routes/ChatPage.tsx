@@ -5,6 +5,8 @@ import type { ChatMessage, ChatSession } from "../api/types";
 import { Send } from "lucide-react";
 import { SkeletonList } from "../components/Skeleton";
 import RelationshipProposalChips, { type RelationshipProposal } from "../components/RelationshipProposalChips";
+import TimeOffProposalChips from "../components/TimeOffProposalChips";
+import type { TimeOffProposal } from "@shared/momentTypes";
 
 interface MemoryUpdate {
   kind: "constraint" | "taste" | "hunch";
@@ -22,6 +24,7 @@ export default function ChatPage() {
   const [specUpdate, setSpecUpdate] = useState<{ scale: string | null; moodContext: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [proposal, setProposal] = useState<{ id: string; value: RelationshipProposal } | null>(null);
+  const [timeOffProposal, setTimeOffProposal] = useState<{ id: string; value: TimeOffProposal } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -45,6 +48,7 @@ export default function ChatPage() {
     setError(null);
     setSending(true);
     setProposal(null);
+    setTimeOffProposal(null);
     const content = input.trim();
     setInput("");
     setMessages((prev) => [
@@ -59,12 +63,14 @@ export default function ChatPage() {
         specUpdate: { scale: string | null; moodContext: string | null } | null;
         session: ChatSession;
         relationshipProposal?: RelationshipProposal | null;
+        timeOffProposal?: TimeOffProposal | null;
       }>(`/chat/session/${session.id}/messages`, { content });
       setMessages((prev) => [...prev.slice(0, -1), data.userMessage, data.assistantMessage]);
       setLastUpdates(data.memoryUpdates);
       setSpecUpdate(data.specUpdate);
       setSession(data.session);
       setProposal(data.relationshipProposal ? { id: data.assistantMessage.id, value: data.relationshipProposal } : null);
+      setTimeOffProposal(data.timeOffProposal ? { id: data.assistantMessage.id, value: data.timeOffProposal } : null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Message didn't send. Please try again.");
     } finally {
@@ -116,6 +122,7 @@ export default function ChatPage() {
               </div>
             ))}
             {proposal && <RelationshipProposalChips key={proposal.id} proposal={proposal.value} />}
+            {timeOffProposal && <TimeOffProposalChips key={timeOffProposal.id} proposal={timeOffProposal.value} />}
             <div ref={bottomRef} />
           </div>
 

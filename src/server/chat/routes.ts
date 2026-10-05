@@ -24,6 +24,11 @@ import {
   updateParticipant,
 } from "../participants/repo.js";
 import { nameKey, parseRelationshipIntent } from "./relationshipIntent.js";
+import { parseTimeOffIntent } from "./timeOffIntent.js";
+import { createTimeOff } from "../timeoff/repo.js";
+import { timeOffCreateSchema } from "../../shared/schemas.js";
+import { formatRange } from "../timeoff/nudge.js";
+import type { TimeOffProposal } from "../../shared/momentTypes.js";
 import { z } from "zod";
 
 export const chatRouter = Router();
@@ -76,6 +81,34 @@ chatRouter.post(
         specUpdate: null,
         memoryUpdates: [],
         relationshipProposal: proposed.proposal,
+        timeOffProposal: null,
+        session: endedSession,
+      });
+      return;
+    }
+
+    // "I'm off Dec 24 to 31": propose only; saved by the confirm endpoint on one tap.
+    const today = new Date().toISOString().slice(0, 10);
+    const timeOffProposal = parseTimeOffIntent(req.body.content, today);
+    if (timeOffProposal) {
+      const range = formatRange(timeOffProposal.startDate, timeOffProposal.endDate, today);
+      const assistantMessage = await addMessage(
+        session.id,
+        "assistant",
+        `Got it: ${timeOffProposal.label}, ${range}. Tap to save it to your Time off, or ignore this and nothing changes.`
+      );
+      let endedSession = session;
+      if (session.messageCount + 2 >= MAX_MESSAGES_PER_SESSION) {
+        endedSession = (await endSession(req.user!.id, session.id)) ?? session;
+      }
+      res.status(201).json({
+        userMessage,
+        assistantMessage,
+        aiMode: currentAiMode(),
+        specUpdate: null,
+        memoryUpdates: [],
+        relationshipProposal: null,
+        timeOffProposal,
         session: endedSession,
       });
       return;
@@ -148,6 +181,7 @@ chatRouter.post(
       specUpdate: response.specUpdate ?? null,
       memoryUpdates,
       relationshipProposal: null,
+      timeOffProposal: null,
       session: endedSession,
     });
   })
@@ -243,5 +277,17 @@ chatRouter.post(
     }
     const participant = await createParticipant(userId, { name: name!, kind: "person", relationship });
     res.status(201).json({ participant, created: true });
+  })
+);
+
+export type { TimeOffProposal };
+
+// The confirm tap is what performs the write.
+chatRouter.post(
+  "/confirm-time-off",
+  validateBody(timeOffCreateSchema),
+  asyncHandler(async (req, res) => {
+    const timeOff = await createTimeOff(req.user!.id, req.body);
+    res.status(201).json({ timeOff });
   })
 );

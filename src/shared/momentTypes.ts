@@ -97,3 +97,10 @@ export interface MomentResponse {
   /** Which card leads (spec rule 22). */
   lead: "moment" | "nudge";
 }
+
+/** A Buddy-proposed time-off entry, saved only by the confirm endpoint (POST /api/chat/confirm-time-off). */
+export interface TimeOffProposal {
+  label: string;
+  startDate: string;
+  endDate: string;
+}

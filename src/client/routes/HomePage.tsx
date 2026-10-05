@@ -11,7 +11,7 @@ import TripNudgeCard from "../components/TripNudgeCard";
 import { Skeleton } from "../components/Skeleton";
 import { useGeneration } from "../state/GenerationContext";
 import { VERSION_PILL } from "../version";
-import { currentMoment, formatLocalDateTime, momentLoadingText, scopeSwitchDates, type CustomizeState } from "../lib/momentClient";
+import { currentMoment, formatLocalDate, formatLocalDateTime, momentLoadingText, scopeSwitchDates, type CustomizeState } from "../lib/momentClient";
 import "../styles/home.css";
 
 const FOCUS_REFRESH_MS = 5 * 60 * 1000;
@@ -274,7 +274,7 @@ export default function HomePage() {
     setNudgeBusy(true);
     setActionError(null);
     try {
-      await api.post(`/time-off/${nudge.timeOff.id}/snooze`);
+      await api.post(`/time-off/${nudge.timeOff.id}/snooze`, { localDate: formatLocalDate(new Date()) });
       setNudge(null);
       if (lead === "nudge") setLead("moment");
     } catch (err) {

@@ -35,7 +35,7 @@ export default function TripNudgeCard({ nudge, lead = false, busy = false, onPic
         {lead && onPlanThisWeekend && (
           <button type="button" className="btn btn-primary" disabled={busy} onClick={onPlanThisWeekend}>Plan this weekend</button>
         )}
-        <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={onOtherIdeas}>Other ideas</button>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={onOtherIdeas}>{nudge.ideas.length === 0 ? "Show ideas" : "Other ideas"}</button>
         <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={onNotNow}>Not now</button>
       </div>
     </section>

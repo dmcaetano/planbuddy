@@ -110,6 +110,10 @@ export function buildGenerateUserPrompt(ctx: GenerateContext, fast = false): str
   );
   lines.push(weatherLine(ctx));
   if (ctx.moodContext) lines.push(`Current request/context: "${ctx.moodContext}"`);
+  const requestedDestination = ctx.moodContext?.match(/^Trip idea:\s*(.{2,80})$/i)?.[1]?.trim();
+  if (requestedDestination && isTripScale(ctx.scale)) {
+    lines.push(`Destination requested: ${requestedDestination}. Plan the trip there and set destinationAnchor to it.`);
+  }
   if (fast && ctx.moment) lines.push(...momentHintLines(ctx));
 
   lines.push("People and pets included:");

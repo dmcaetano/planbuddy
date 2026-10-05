@@ -168,3 +168,33 @@ test("opening Home shows a plan for the moment with zero taps", async ({ page })
   await expect(page.getByRole("button", { name: "This weekend" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Customize" })).toBeVisible();
 });
+
+test("a Time off range added in Memory shows the trip nudge on Home on a Wednesday", async ({ page }) => {
+  const email = uniqueEmail();
+  await page.goto("/");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("password123");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.getByLabel("Home city").fill("Lisbon");
+  await page.getByRole("button", { name: /Lisbon/i }).first().click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Skip" }).click();
+  await expect(page.getByRole("button", { name: /Lock it/i })).toBeVisible({ timeout: 30000 });
+
+  await page.goto("/memory");
+  await expect(page.getByText("No time off yet")).toBeVisible();
+  await page.getByLabel("Add time off").fill("Christmas break");
+  await page.getByLabel("Start date").fill("2026-12-24");
+  await page.getByLabel("End date").fill("2026-12-31");
+  await page.getByRole("region", { name: "Time off" }).getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByText("Christmas break")).toBeVisible();
+
+  // Device clock: Wednesday 7 Oct 2026, 14:00. A weekend moment, so the nudge leads.
+  await page.clock.install({ time: new Date(2026, 9, 7, 14, 0, 0) });
+  await page.goto("/");
+  await expect(page.getByLabel("Trip idea")).toBeVisible({ timeout: 30000 });
+  await expect(page.getByLabel("Trip idea")).toContainText("Christmas break");
+  await expect(page.getByLabel("Trip idea").getByRole("button", { name: "Not now" })).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  expect(overflow).toBe(false);
+});

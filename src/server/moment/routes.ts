@@ -28,6 +28,9 @@ import { pipelineResponse } from "../plans/routes.js";
 import { enqueueGenerationJob } from "../plans/jobs.js";
 import { MAX_GENERATIONS_PER_SPEC } from "../plans/limits.js";
 import { currentAiMode } from "../ai/index.js";
+import { listLockedTripRanges, listTimeOff } from "../timeoff/repo.js";
+import { composeNudge, selectNudgeRange } from "../timeoff/nudge.js";
+import { citableTasteFor, ensureIdeas } from "../timeoff/tripIdeas.js";
 import { computeInputsFingerprint } from "./fingerprint.js";
 import { isRomanticGroup } from "./romantic.js";
 import { buildMomentMood, toStoredTimes } from "./mood.js";
@@ -273,7 +276,7 @@ async function startGeneration(
   return respond(base, "generating", { jobId });
 }
 
-export async function resolveMomentForUser(
+async function resolveCore(
   userId: string,
   body: { localDateTime: string; kind?: MomentInfo["kind"] }
 ): Promise<MomentResponse> {
@@ -306,6 +309,28 @@ export async function resolveMomentForUser(
     if (reused) return reused;
   }
   return startGeneration(base, fingerprint, times);
+}
+
+/**
+ * The moment plus the trip nudge (spec rules 18-24). Precedence: a locked plan covering the moment, or a
+ * `tonight`/`day` moment, leads with the nudge as the smaller card; a `weekend` moment is led by the nudge.
+ * With no time-off rows nothing about time off is computed or returned.
+ */
+export async function resolveMomentForUser(
+  userId: string,
+  body: { localDateTime: string; kind?: MomentInfo["kind"] }
+): Promise<MomentResponse> {
+  const response = await resolveCore(userId, body);
+  if (response.status === "empty_household") return response;
+  const timeOff = await listTimeOff(userId);
+  if (timeOff.length === 0) return response;
+  const localDate = parseLocalDateTime(body.localDateTime)!.date;
+  const range = selectNudgeRange(timeOff, localDate, await listLockedTripRanges(userId));
+  if (!range) return response;
+  const [ideas, taste] = await Promise.all([ensureIdeas(userId, range), citableTasteFor(userId, range)]);
+  const nudge = composeNudge(range, taste, localDate, ideas);
+  const lead = response.moment.kind === "weekend" && response.status !== "locked" ? "nudge" : "moment";
+  return { ...response, nudge, lead };
 }
 
 momentRouter.post(

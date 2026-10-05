@@ -9,6 +9,7 @@ import { SkeletonList } from "../components/Skeleton";
 import TasteQuiz from "../components/TasteQuiz";
 import { useAuth } from "../state/AuthContext";
 import RelationshipEditor from "../components/RelationshipEditor";
+import TimeOffSection from "../components/TimeOffSection";
 import { PawPrint, User } from "lucide-react";
 
 type Tab = "constraints" | "tastes" | "hunches";
@@ -216,6 +217,8 @@ export default function MemoryPage() {
           ))}
         </div>
       </div>
+
+      <TimeOffSection />
 
       <div className="tab-row" role="tablist">
         <button className={tab === "constraints" ? "active" : ""} onClick={() => setTab("constraints")}>
