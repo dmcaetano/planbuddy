@@ -177,3 +177,9 @@ Hand the live app to alpha testers; collect feedback on recommendation quality, 
 - Calendar-aware friend availability
 - Notifications and post-plan reminders
 - Detailed itinerary generation after the one-pick loop proves valuable
+
+
+## To-do: Buddy family unification (Diogo, 2026-10-05)
+Source of truth: `~/.claude/skills/buddy-chat/references/family-ledger.md` (your column) + `what-is-a-buddy.md` "Family standard" + `Projects/2026 Claude/_meta/buddies/`. Do these when you next work here; flip the ledger cell when done.
+- Stack Cloudflare Pages Functions + React/Vite/TS (Render only if a free resource needs it); shared Supabase account + `buddy` memory schema; EN + PT-PT at onboarding.
+- **Max 1 click is DONE (1.2.0): it is the model for the others** (ledger row exists). TODO: chat from L0-1 to L1-2 (server persona + data block + CURRENT STATE, markdown rendering, validated actions with Undo, rate limit); expose quote-or-demote (`memory/quoteVerify.ts`) as the shared implementation; EN + PT-PT; PWA; delete account + export; stop the silent fallback to demo AI; migrate constraints/tastes/hunches/feedback to the unified tables.
