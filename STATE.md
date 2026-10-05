@@ -153,7 +153,7 @@ Hand the live app to alpha testers; collect feedback on recommendation quality, 
   without user effort; when two designs are otherwise equal, choose the one that
   needs less input from Diogo.
 
-- 2026-10-05 — Fast plan-draft role stays on openai/gpt-4o-mini: DeepSeek V4 Flash timed out 20/20 at the 12 s ceiling; gpt-4o-mini 85% valid (3 repeated-stop failures), p95 10.6 s. Numbers reported to Diogo.
+- 2026-10-05 — Fast plan-draft role moved to DeepSeek V4 Flash (reasoning disabled, provider sorted by latency, AI_FAST_TIMEOUT_MS 25000). Initial 12 s benchmark was invalid for a reasoning model; re-run: 90% valid, p95 15.3 s.
 
 ## Backlog — must-have features (Diogo, 2026-10-05)
 - **Calendar import** (time off, free windows, busy slots) as a passive signal. Not now:

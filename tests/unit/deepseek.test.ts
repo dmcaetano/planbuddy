@@ -85,7 +85,7 @@ describe("OpenRouter reasoning-starvation recovery", () => {
     expect(requestBody.reasoning.max_tokens).toBeLessThan(requestBody.max_tokens);
   });
 
-  it("makes fast planning a single direct low-reasoning call", async () => {
+  it("makes fast planning a single direct call with reasoning off on a latency-sorted provider", async () => {
     global.fetch = vi.fn(async () => openRouterResponse(okBody({ ok: true }))) as unknown as typeof fetch;
 
     await callAiJson("system prompt", "user prompt", testSchema, { fast: true });
@@ -95,9 +95,9 @@ describe("OpenRouter reasoning-starvation recovery", () => {
     const requestBody = JSON.parse(init.body as string);
     expect(requestBody.model).toBe(env.FAST_MODEL_ID);
     expect(requestBody.max_tokens).toBe(9000);
-    expect(requestBody.reasoning).toEqual({ effort: "low", exclude: true });
+    expect(requestBody.reasoning).toEqual({ enabled: false });
     expect(requestBody.plugins).toBeUndefined();
-    expect(requestBody.provider).toBeUndefined();
+    expect(requestBody.provider).toEqual({ sort: "latency", allow_fallbacks: true });
   });
 
   it("does not double fast-path latency with a validation repair call", async () => {

@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-05 — v1.2.1 fast role on DeepSeek
+
+Diogo challenged the 12 s ceiling for a reasoning model. Probing showed some OpenRouter providers ignore reasoning-off (38 s) while a latency-sorted one honours it (~8 s). Re-benchmark with a 30 s ceiling: DeepSeek 90% valid, p50 11.6 s, p95 15.3 s (gpt-4o-mini 85%, p95 10.6 s). Fast role now DeepSeek V4 Flash, 25 s ceiling, deterministic fallback unchanged.
+
 ## 2026-10-05 — v1.2.0 "Batman": max 1 click life
 
 ### What we did

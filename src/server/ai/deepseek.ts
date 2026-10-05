@@ -105,8 +105,11 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
     // production: 24.5k reasoning tokens, 0 content, against a 6000-token
     // cap). Always cap reasoning tokens well under max_tokens so real
     // content headroom survives even a "high demand" degraded run.
-    const reasoning =
-      options.webSearch || options.directAnswer || options.fast
+    // The fast plan role is a latency-bound structured draft: measured 2026-10-05, turning DeepSeek's
+    // reasoning fully off answers in ~3 s where "low" effort takes ~5 s and a pinned provider ~10 s.
+    const reasoning = options.fast && model.toLowerCase().includes("deepseek")
+      ? { enabled: false as const }
+      : options.webSearch || options.directAnswer || options.fast
         ? { effort: "low" as const, exclude: true }
         : { max_tokens: options.heavy ? 8000 : Math.min(2500, Math.floor(maxTokens / 2)) };
     const res = await fetch(OPENROUTER_URL, {
@@ -134,7 +137,12 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
         // Baidu's FP8 endpoint is the current low-latency, structured-output
         // path for this exact model. OpenRouter may still fall through to its
         // other providers if that endpoint is unavailable.
-        ...(options.webSearch || !model.toLowerCase().includes("deepseek")
+        // Fast DeepSeek drafts: some providers ignore "reasoning off" and take ~38 s; sorting by latency
+        // lands on one that honours it (~8 s measured on the real plan prompt, 2026-10-05).
+        ...(options.fast && model.toLowerCase().includes("deepseek")
+          ? { provider: { sort: "latency", allow_fallbacks: true } }
+          : {}),
+        ...(options.webSearch || options.fast || !model.toLowerCase().includes("deepseek")
           ? {}
           : {
               provider: {

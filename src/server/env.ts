@@ -14,7 +14,7 @@ const envSchema = z.object({
   MODEL_ID: z.string().default("deepseek/deepseek-v4-flash"),
   // Plan generation is latency-sensitive and can use a smaller structured
   // model independently from the conversational/memory model above.
-  FAST_MODEL_ID: z.string().default("openai/gpt-4o-mini"),
+  FAST_MODEL_ID: z.string().default("deepseek/deepseek-v4-flash"),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_API_KEY_FILE: z.string().optional(),
   GROUNDING_MODEL_ID: z.string().default("gemini-3.5-flash"),
@@ -22,7 +22,7 @@ const envSchema = z.object({
   // The one-click path is deliberately bounded. If the provider cannot
   // return a direct structured plan quickly, the deterministic fallback wins
   // instead of making the user watch a multi-minute research chain.
-  AI_FAST_TIMEOUT_MS: z.coerce.number().int().min(5000).max(30000).default(12000),
+  AI_FAST_TIMEOUT_MS: z.coerce.number().int().min(5000).max(30000).default(25000),
   // Gemini should fail over to the DeepSeek fallback chain fast during a
   // provider outage (e.g. 503 "high demand") rather than let a hung request
   // eat into the overall generation budget.
