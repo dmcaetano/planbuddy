@@ -257,3 +257,20 @@ build; live items against production after deploy.
   cited, never whether a plan is allowed.
 - **First open with an empty household or no tastes.** Onboarding still runs first; with no tastes the
   line carries only the moment and the people.
+
+---
+## Review
+Verdict: PASS WITH NOTES
+Reviewer: spec reviewer (independent, read-only) · model sonnet · 2026-10-05 (first pass on rev 2; the earlier FAIL was on rev 1, so this is not a second FAIL on the same artefact)
+Findings (all notes, no blocker). Resolutions carried into plan.md:
+1. Rules 25/26: the fast role staying on `openai/gpt-4o-mini` when the bar is missed is a documented, time-boxed exception, decided by Diogo's own "else report numbers"; the numbers go to him, nothing switches silently.
+2. Rule 25 wording corrected: Gemini grounding already exists on the non-catalogue and trip path and is unchanged; this feature adds no new use of it. Trip ideas and the reason line use DeepSeek only.
+3. Rules 11 / Acceptance 7: the catalogue planner must RETURN the matched taste (new build item). On the model path the taste clause is chosen by deterministic token overlap between a love taste and the plan text, and omitted when none overlaps.
+4. Rule 22: under a locked plan covering the moment, a trip nudge (if it exists) still appears as the smaller card; a locked dinner/day plan never suppresses a nudge. Test added.
+5. Rule 8: "covers the moment" uses date-range overlap (a locked Sat–Sun weekend plan covers a Sunday moment). Test added.
+6. Rules 5/13: a Customize/scope-switch plan with tomorrow's date shares key `tonight:<tomorrow>` and is reused the next day if still valid; intended.
+7. Acceptance 16: "both tests in e2e/happy-path.spec.ts"; the Buddy-edit and share steps run from Home after the rewrite.
+8. Acceptance 15: Claude creates the dedicated canary account with generated credentials stored under `API Keys\`, never in the repo or chat.
+9. Rule 16: relationship editors are new work in onboarding and Memory (the client has none today).
+10. Rule 13: Trip with no nudge opens Customize on Getaway; accepted (◇).
+11. Rule 26: 20 requests is an indicative smoke bar, reported as such; the run is extended to 40 if the first 20 sit near the thresholds.
