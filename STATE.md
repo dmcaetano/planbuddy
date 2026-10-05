@@ -3,6 +3,18 @@
 **SDLC class:** SOLO
 
 ## Status
+v1.2.0 "Batman" (max 1 click life): the app now opens on `/` with a proposal for the
+current moment (Friday evening -> dinner, Saturday -> a day out, other days -> the
+weekend), built from the household, tastes, weather and History, with a one-line reason,
+scope chips (Tonight / A day out / This weekend / Trip) and Customize one tap away
+(the old setup form lives at `/plan/custom`). Relationships (wife, ...) are editable in
+onboarding, Memory and by telling Buddy; romantic framing only for owner + one local
+partner. Time off is manual entry (Memory, or Buddy confirm chip) and drives a trip nudge
+with cached local + farther ideas. Spec/plan: `sdlc/001-max-one-click/`. 334 Vitest + 4
+Playwright journeys green. Fast-model benchmark (20 requests, 2026-10-05): DeepSeek V4
+Flash 0% valid (every request hit the 12 s ceiling); gpt-4o-mini 85% valid, p95 10.6 s.
+Bar (>=90% valid and p95 <= 12 s) not met, so FAST_MODEL_ID stays openai/gpt-4o-mini.
+
 v1.1.4 "Wasp" is live on Render from `main` (`c8914b3`, deploy
 `dep-d9gscnsvikkc73a1akc0`). It makes hero-photo lookup location-aware,
 searches the exact route anchor and home-city fallback in parallel, rejects
@@ -50,7 +62,9 @@ against Gemini outages (DeepSeek reasoning-starvation fix + fast failover).
 sol with executed repros; two live production canaries run on 2026-07-20.
 
 ## Next concrete action
-Hand v1.1.4 to alpha testers and continue refining restaurant quality ranking
+Watch Diogo's real opens of v1.2.0; then backlog: calendar import, notifications. Retry the DeepSeek fast-role benchmark with a lighter prompt/reasoning cap.
+
+(older) Hand v1.1.4 to alpha testers and continue refining restaurant quality ranking
 from real reactions.
 
 Hand the live app to alpha testers; collect feedback on recommendation quality, quiz usefulness, and circle selection before venue/calendar/booking integrations.
@@ -138,6 +152,8 @@ Hand the live app to alpha testers; collect feedback on recommendation quality, 
   user is important (the user has no time to feed the app). Prefer signals read
   without user effort; when two designs are otherwise equal, choose the one that
   needs less input from Diogo.
+
+- 2026-10-05 — Fast plan-draft role stays on openai/gpt-4o-mini: DeepSeek V4 Flash timed out 20/20 at the 12 s ceiling; gpt-4o-mini 85% valid (3 repeated-stop failures), p95 10.6 s. Numbers reported to Diogo.
 
 ## Backlog — must-have features (Diogo, 2026-10-05)
 - **Calendar import** (time off, free windows, busy slots) as a passive signal. Not now:

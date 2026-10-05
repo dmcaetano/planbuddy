@@ -187,6 +187,10 @@ npm start
 
 ## Status
 
+Version 1.2.0 "Batman": the app opens on a proposal for the current moment (`POST /api/moment`),
+with relationship-aware framing, time-off dates and a trip nudge. The setup form moved to `/plan/custom`.
+See `sdlc/001-max-one-click/` for intent, spec and plan.
+
 Version 0.1.5 “Long Memory” saves every surfaced suggestion, recovers earlier
 unselected winners, prevents venue/title repeats, and lets History reopen, rate,
 share, or lock suggestions. See `STATE.md`,

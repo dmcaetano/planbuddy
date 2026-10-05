@@ -1,5 +1,21 @@
 # PlanBuddy — Log
 
+## 2026-10-05 — v1.2.0 "Batman": max 1 click life
+
+### What we did
+Intent -> spec (reviewed, PASS WITH NOTES) -> plan -> build in `sdlc/001-max-one-click/`.
+Home at `/` resolves the device-local moment (tonight / day / weekend), reuses or retimes
+an existing proposal by moment key + inputs fingerprint, supports meal-first plans, shows a
+server-built reason line, and offers scope chips. Relationship editors and a Buddy confirm
+chip, time-off CRUD, and a trip nudge with cached ideas. PlanBrowser extracted from
+PlanPage. Benchmarked the fast plan role: DeepSeek 0/20 within 12 s, gpt-4o-mini 17/20.
+
+### Lesson
+Two things bit during the build: a moment job started under an earlier clock can hold the
+single job slot, so the Home follow-up must tolerate a second "generating" answer; and
+demo/model drafts carry their own clock times, so a moment proposal must retime them at
+generation or reuse sees them as stale.
+
 ## 2026-07-23 — v1.1.4 hero-photo reliability
 
 ### What we did
