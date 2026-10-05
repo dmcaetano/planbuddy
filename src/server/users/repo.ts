@@ -9,6 +9,8 @@ interface UserRow {
   home_base_label: string | null;
   home_base_lat: number | null;
   home_base_lng: number | null;
+  travel_day_km: number | null;
+  travel_weekend_km: number | null;
   created_at: string;
 }
 
@@ -19,6 +21,8 @@ function toPublic(row: UserRow): PublicUser {
     homeBaseLabel: row.home_base_label,
     homeBaseLat: row.home_base_lat,
     homeBaseLng: row.home_base_lng,
+    travelDayKm: row.travel_day_km,
+    travelWeekendKm: row.travel_weekend_km,
     createdAt: row.created_at,
   };
 }
@@ -28,7 +32,7 @@ export async function createUser(email: string, passwordHash: string): Promise<P
   const id = newId();
   const { rows } = await db.query<UserRow>(
     `INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)
-     RETURNING id, email, password_hash, home_base_label, home_base_lat, home_base_lng, created_at`,
+     RETURNING id, email, password_hash, home_base_label, home_base_lat, home_base_lng, travel_day_km, travel_weekend_km, created_at`,
     [id, email, passwordHash]
   );
   return toPublic(rows[0]);
@@ -39,7 +43,7 @@ export async function getUserByEmail(
 ): Promise<(PublicUser & { passwordHash: string }) | null> {
   const db = await getDb();
   const { rows } = await db.query<UserRow>(
-    `SELECT id, email, password_hash, home_base_label, home_base_lat, home_base_lng, created_at
+    `SELECT id, email, password_hash, home_base_label, home_base_lat, home_base_lng, travel_day_km, travel_weekend_km, created_at
      FROM users WHERE email = $1`,
     [email]
   );
@@ -51,7 +55,7 @@ export async function getUserByEmail(
 export async function getUserById(id: string): Promise<PublicUser | null> {
   const db = await getDb();
   const { rows } = await db.query<UserRow>(
-    `SELECT id, email, password_hash, home_base_label, home_base_lat, home_base_lng, created_at
+    `SELECT id, email, password_hash, home_base_label, home_base_lat, home_base_lng, travel_day_km, travel_weekend_km, created_at
      FROM users WHERE id = $1`,
     [id]
   );
@@ -69,8 +73,19 @@ export async function setHomeBase(
   const { rows } = await db.query<UserRow>(
     `UPDATE users SET home_base_label = $2, home_base_lat = $3, home_base_lng = $4
      WHERE id = $1
-     RETURNING id, email, password_hash, home_base_label, home_base_lat, home_base_lng, created_at`,
+     RETURNING id, email, password_hash, home_base_label, home_base_lat, home_base_lng, travel_day_km, travel_weekend_km, created_at`,
     [userId, label, lat, lng]
+  );
+  return toPublic(rows[0]);
+}
+
+export async function setTravelPreferences(userId: string, travelDayKm: number, travelWeekendKm: number): Promise<PublicUser> {
+  const db = await getDb();
+  const { rows } = await db.query<UserRow>(
+    `UPDATE users SET travel_day_km = $2, travel_weekend_km = $3
+     WHERE id = $1
+     RETURNING id, email, password_hash, home_base_label, home_base_lat, home_base_lng, travel_day_km, travel_weekend_km, created_at`,
+    [userId, travelDayKm, travelWeekendKm]
   );
   return toPublic(rows[0]);
 }

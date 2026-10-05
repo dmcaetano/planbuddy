@@ -16,7 +16,8 @@ import type {
   MomentStatus,
   ReasonParts,
 } from "../../shared/momentTypes.js";
-import { SCALE_RADIUS_KM, type Scale } from "../../shared/scale.js";
+import { radiusForScale, type Scale } from "../../shared/scale.js";
+import { getUserById } from "../users/repo.js";
 import type { Candidate, Constraint, Participant, PlanRecord, PlanSpec, WeatherSnapshot } from "../../shared/types.js";
 import { listParticipants } from "../participants/repo.js";
 import { listActiveConstraints } from "../memory/constraints.repo.js";
@@ -67,6 +68,8 @@ interface Base {
   moment: MomentInfo;
   romantic: boolean;
   household: Participant[];
+  /** The user's own how-far-from-home for this moment's scale. */
+  radiusKm: number;
 }
 
 function respond(
@@ -209,6 +212,11 @@ async function tryReuse(
   });
 }
 
+/** The reason line shown at once while the plan is still being built: the moment and the people, no venue yet. */
+function earlyParts(base: Base): ReasonParts {
+  return buildReasonParts({ momentLabel: base.moment.label, participants: base.household, romantic: base.romantic, taste: null, weather: null });
+}
+
 function momentScale(kind: MomentInfo["kind"]): Scale {
   return kind === "weekend" ? "weekend" : "day_off";
 }
@@ -220,7 +228,7 @@ async function startGeneration(
 ): Promise<MomentResponse> {
   const { userId, moment } = base;
   const active = await findActiveJob(userId);
-  if (active) return respond(base, "generating", { jobId: active.jobId });
+  if (active) return respond(base, "generating", { jobId: active.jobId, reasonParts: earlyParts(base) });
 
   const mood = buildMomentMood(moment, times, base.romantic);
   const stored = toStoredTimes(times, base.romantic);
@@ -244,14 +252,14 @@ async function startGeneration(
         return pipelineResponse({ ...fresh, generationCount: count }, result, userId);
       },
     });
-    return respond(base, "generating", { jobId });
+    return respond(base, "generating", { jobId, reasonParts: earlyParts(base) });
   }
 
   const spec = await createPlanSpec(userId, {
     scale: momentScale(moment.kind),
     startDate: moment.planDate,
     endDate: moment.planDate,
-    radiusKm: SCALE_RADIUS_KM[momentScale(moment.kind)],
+    radiusKm: base.radiusKm,
     moodContext: mood,
     participantIds: base.household.map((participant) => participant.id),
     moment: {
@@ -273,7 +281,7 @@ async function startGeneration(
       return pipelineResponse({ ...fresh, generationCount: count }, result, userId);
     },
   });
-  return respond(base, "generating", { jobId });
+  return respond(base, "generating", { jobId, reasonParts: earlyParts(base) });
 }
 
 async function resolveCore(
@@ -283,7 +291,9 @@ async function resolveCore(
   const localIso = body.localDateTime;
   const moment = body.kind ? scopeSwitchMoments(localIso)[body.kind] : resolveMoment(localIso);
   const household = await listParticipants(userId);
-  const base: Base = { userId, moment, romantic: isRomanticGroup(household, moment.kind), household };
+  const user = await getUserById(userId);
+  const radiusKm = radiusForScale(momentScale(moment.kind), user);
+  const base: Base = { userId, moment, romantic: isRomanticGroup(household, moment.kind), household, radiusKm };
   if (household.length === 0) return respond(base, "empty_household");
 
   const locked = await coveringLockedPlan(base, localIso);
@@ -300,7 +310,7 @@ async function resolveCore(
   }
 
   const constraints = await listActiveConstraints(userId);
-  const fingerprint = computeInputsFingerprint(household, constraints);
+  const fingerprint = computeInputsFingerprint(household, constraints, radiusKm);
   const times = momentTimes(moment.kind, moment.planDate, localIso);
 
   const newest = await findNewestMomentPlan(userId, moment.key, fingerprint);

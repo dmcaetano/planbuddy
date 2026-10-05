@@ -4,12 +4,13 @@ import { Compass, Sparkles, SlidersHorizontal } from "lucide-react";
 import { api, ApiError } from "../api/client";
 import type { Participant, PipelineResponse } from "../api/types";
 import type { MomentInfo, MomentKind, MomentResponse, TripIdea, TripNudge } from "@shared/momentTypes";
-import { SCALE_RADIUS_KM, type Scale } from "@shared/scale";
+import { radiusForScale, type Scale } from "@shared/scale";
 import PlanBrowser from "../components/PlanBrowser";
 import GenerationProgress from "../components/GenerationProgress";
 import TripNudgeCard from "../components/TripNudgeCard";
 import { Skeleton } from "../components/Skeleton";
 import { useGeneration } from "../state/GenerationContext";
+import { useAuth } from "../state/AuthContext";
 import { VERSION_PILL } from "../version";
 import { currentMoment, formatLocalDate, formatLocalDateTime, momentLoadingText, scopeSwitchDates, type CustomizeState } from "../lib/momentClient";
 import "../styles/home.css";
@@ -30,9 +31,23 @@ const SCOPE_CHIPS: { kind: MomentKind; label: string }[] = [
   { kind: "weekend", label: "This weekend" },
 ];
 
+/** Collects the distinct narration lines of one running job, so the person sees the work happen as a trail. */
+function useLiveSteps(line: string | null, jobId: string | null): string[] {
+  const [steps, setSteps] = useState<{ jobId: string | null; lines: string[] }>({ jobId: null, lines: [] });
+  useEffect(() => {
+    if (!line) return;
+    setSteps((prev) => {
+      const lines = prev.jobId === jobId ? prev.lines : [];
+      return lines[lines.length - 1] === line ? prev : { jobId, lines: [...lines, line].slice(-5) };
+    });
+  }, [line, jobId]);
+  return steps.jobId === jobId ? steps.lines : [];
+}
+
 /** The screen the app opens on: a proposal for right now, one tap from locking. */
 export default function HomePage() {
   const generation = useGeneration();
+  const auth = useAuth();
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState<Phase>("loading");
@@ -108,7 +123,7 @@ export default function HomePage() {
           return;
         }
         setProposal(null);
-        setReasonLine(null);
+        setReasonLine(data.reasonLine);
         setPhase("loading");
         generationRef.current.trackJob(data.jobId, "moment", null);
         return;
@@ -234,7 +249,7 @@ export default function HomePage() {
         scale,
         startDate: dates[kind],
         endDate: dates[kind],
-        radiusKm: SCALE_RADIUS_KM[scale],
+        radiusKm: radiusForScale(scale, auth.user),
         participantIds: group,
         moodContext: kind === "tonight" ? "Meal: dinner" : kind === "day" ? "Meal: lunch" : null,
       });
@@ -251,7 +266,7 @@ export default function HomePage() {
         scale,
         startDate: nudge.timeOff.startDate,
         endDate: nudge.timeOff.endDate,
-        radiusKm: SCALE_RADIUS_KM[scale],
+        radiusKm: radiusForScale(scale, auth.user),
         participantIds: group,
         moodContext,
       });
@@ -323,12 +338,21 @@ export default function HomePage() {
   // A scope-switch generation (or a Customize one picked up here) takes over the screen; a moment job
   // shows its moment-specific wording above the same progress.
   const job = generation.job;
+  const liveSteps = useLiveSteps(job && job.status !== "succeeded" && job.status !== "failed" ? job.stageDetail ?? job.stageLabel ?? null : null, job?.jobId ?? null);
   if (job && job.status !== "succeeded" && (job.kind === "generate" || job.kind === "moment")) {
     const text = moment && job.kind === "moment" ? momentLoadingText(moment) : job.kind === "moment" ? provisional : "Building your plan…";
     return (
       <div className="stack home">
         {header}
         <p className="home-status" role="status" aria-live="polite">{text}</p>
+        {reasonLine && <p className="home-reason"><Sparkles size={15} aria-hidden="true" /> <span>{reasonLine}</span></p>}
+        {liveSteps.length > 0 && (
+          <ol className="home-live-steps" aria-label="What PlanBuddy is doing">
+            {liveSteps.map((step, index) => (
+              <li key={step} className={index === liveSteps.length - 1 ? "home-live-steps__item home-live-steps__item--now" : "home-live-steps__item"}>{step}</li>
+            ))}
+          </ol>
+        )}
         <GenerationProgress job={job} />
         {job.status === "failed" && (
           <div className="row-gap">
@@ -347,6 +371,7 @@ export default function HomePage() {
         {header}
         <section className="home-skeleton" aria-busy="true">
           <p className="home-status" role="status" aria-live="polite">{text}</p>
+          {reasonLine && <p className="home-reason"><Sparkles size={15} aria-hidden="true" /> <span>{reasonLine}</span></p>}
           <div className="card skeleton-card" aria-hidden="true">
             <Skeleton className="home-skeleton__image" />
             <Skeleton className="skeleton-line skeleton-line--title" />

@@ -11,6 +11,7 @@ import { useAuth } from "../state/AuthContext";
 import RelationshipEditor from "../components/RelationshipEditor";
 import TimeOffSection from "../components/TimeOffSection";
 import { PawPrint, User } from "lucide-react";
+import { radiusForScale } from "@shared/scale";
 
 type Tab = "constraints" | "tastes" | "hunches";
 
@@ -178,6 +179,8 @@ export default function MemoryPage() {
           </div>
         )}
       </div>
+
+      {auth.user?.homeBaseLabel && <TravelDistanceCard />}
 
       {error && <div className="error-banner">{error}</div>}
 
@@ -406,6 +409,39 @@ export default function MemoryPage() {
           <LogOut size={14} /> {loggingOut ? "Logging out…" : "Log out"}
         </button>
       </div>
+    </div>
+  );
+}
+
+function TravelDistanceCard() {
+  const auth = useAuth();
+  const [day, setDay] = useState(radiusForScale("day_off", auth.user));
+  const [weekend, setWeekend] = useState(radiusForScale("weekend", auth.user));
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dirty = day !== radiusForScale("day_off", auth.user) || weekend !== radiusForScale("weekend", auth.user);
+
+  async function save() {
+    setError(null);
+    try {
+      const data = await api.put<{ user: NonNullable<typeof auth.user> }>("/auth/travel-preferences", { travelDayKm: day, travelWeekendKm: weekend });
+      if (data.user) auth.setUser(data.user);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not save how far you will go.");
+    }
+  }
+
+  return (
+    <div className="card travel-distance-card">
+      <div className="eyebrow">How far from home</div>
+      <p className="muted" style={{ marginTop: 4 }}>Plans stay inside these distances. Closer places are preferred.</p>
+      <div className="field-label-row"><label htmlFor="travel-day">Dinner or a day out</label><strong>{day} km</strong></div>
+      <input id="travel-day" type="range" min={3} max={100} step={1} value={day} onChange={(event) => { setDay(Number(event.target.value)); setSaved(false); }} />
+      <div className="field-label-row"><label htmlFor="travel-weekend">A weekend</label><strong>{weekend} km</strong></div>
+      <input id="travel-weekend" type="range" min={10} max={200} step={5} value={weekend} onChange={(event) => { setWeekend(Number(event.target.value)); setSaved(false); }} />
+      {error && <div className="error-banner">{error}</div>}
+      <button type="button" className="btn btn-sm mt-2" disabled={!dirty} onClick={() => void save()}>{saved && !dirty ? "Saved" : "Save distances"}</button>
     </div>
   );
 }

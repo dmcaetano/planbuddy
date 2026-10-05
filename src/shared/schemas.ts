@@ -22,6 +22,11 @@ export const homeBaseSchema = z.object({
   lng: z.number().min(-180).max(180),
 });
 
+export const travelPreferencesSchema = z.object({
+  travelDayKm: z.number().int().min(2).max(200),
+  travelWeekendKm: z.number().int().min(2).max(400),
+});
+
 /* ---------------------------------------------------------------------- */
 /* Participants                                                            */
 /* ---------------------------------------------------------------------- */

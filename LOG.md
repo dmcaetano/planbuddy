@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-05 - v1.3.0 "Goku": user distance setting, progressive Home, stop quality
+
+Read real production output as the canary (Fri 19:00, Sat 11:00, Wed 14:00, 5 "show another" each, `scripts/live-read.mjs`). Defects found: museums at 21:05, fountains and a prison fort as stops, a Portuguese-language title, Trafaria picks needing a ferry. Fixes: `stopUnsuitable` in catalogPlanner (evening = no activity venues; name blocklist), picker prompt (prefer closer, opening hours, English). Distance: migration 0012 `travel_day_km`/`travel_weekend_km`, `PUT /api/auth/travel-preferences`, `radiusForScale`, radius in the moment fingerprint, Memory sliders; hard cap removed. Progressive UX: moment `generating` response carries the reason line; picker narrates; Home shows a live step trail. Spec amendment clarified (models stay).
+
 ## 2026-10-05 — v1.2.2 Lisbon routes chosen by the model
 
 Diogo: Lisbon suggestions were poor (random OSM picks). The catalogue stays the only source of venues, but DeepSeek now chooses the restaurant and two stops from a validated shortlist (1.4-2.2 s measured); invalid picks fall back to the deterministic planner. Restaurants capped to 10 km from home for tonight/day (25 km weekend) unless the request is a day trip. Overrides spec rule 27 (see spec Amendment).

@@ -3,6 +3,8 @@
 **SDLC class:** SOLO
 
 ## Status
+v1.3.0 "Goku": distance from home is now the user's own setting (Memory > "How far from home", day/weekend sliders, stored on the user; defaults 25/60 km) and replaces my hard 10/25 km cap; Home shows the reason line plus a live step trail while a plan builds (progressive UX; models stay). Quality rules from reading live output: no museums/galleries for evening outings, no fountains/prison forts/cemeteries as stops, model told to answer in English and avoid ferry detours.
+
 v1.2.2: Lisbon (catalogue) plans now use a model call to choose the route from a validated shortlist of real venues; deterministic planner is the fallback.
 
 v1.2.0 "Batman" (max 1 click life): the app now opens on `/` with a proposal for the

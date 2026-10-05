@@ -8,6 +8,9 @@ export interface PublicUser {
   homeBaseLabel: string | null;
   homeBaseLat: number | null;
   homeBaseLng: number | null;
+  /** How far from home (km) the user will go for a day out / a weekend; null = the app default. */
+  travelDayKm: number | null;
+  travelWeekendKm: number | null;
   createdAt: string;
 }
 

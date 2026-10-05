@@ -6,12 +6,12 @@ import type { Constraint, Participant } from "../../shared/types.js";
  * active constraints and their relationships. A new allergy, a new relationship, or a person
  * added or removed changes it; a taste change or a rename does not.
  */
-export function computeInputsFingerprint(participants: Participant[], constraints: Constraint[]): string {
+export function computeInputsFingerprint(participants: Participant[], constraints: Constraint[], radiusKm?: number): string {
   const people = participants
     .map((participant) => [participant.id, (participant.relationship ?? "").trim().toLowerCase()])
     .sort((a, b) => a[0].localeCompare(b[0]));
   const rules = constraints
     .map((constraint) => [constraint.id, constraint.participantId ?? "", constraint.text.trim().toLowerCase(), constraint.status])
     .sort((a, b) => a[0].localeCompare(b[0]));
-  return crypto.createHash("sha256").update(JSON.stringify({ people, rules })).digest("hex").slice(0, 32);
+  return crypto.createHash("sha256").update(JSON.stringify(radiusKm == null ? { people, rules } : { people, rules, radiusKm })).digest("hex").slice(0, 32);
 }

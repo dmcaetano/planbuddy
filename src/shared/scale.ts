@@ -23,3 +23,13 @@ export function isTripScale(scale: Scale): boolean {
 export function beatCountForScale(_scale: Scale): number {
   return 3;
 }
+
+/** The user's own "how far from home" for a scale, else the app default. Only day and weekend are user-set. */
+export function radiusForScale(
+  scale: Scale,
+  prefs: { travelDayKm?: number | null; travelWeekendKm?: number | null } | null | undefined
+): number {
+  if (scale === "day_off" && prefs?.travelDayKm) return prefs.travelDayKm;
+  if (scale === "weekend" && prefs?.travelWeekendKm) return prefs.travelWeekendKm;
+  return SCALE_RADIUS_KM[scale];
+}

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler, validateBody } from "../http.js";
-import { loginSchema, signupSchema, homeBaseSchema } from "../../shared/schemas.js";
-import { createUser, getUserByEmail, setHomeBase } from "../users/repo.js";
+import { loginSchema, signupSchema, homeBaseSchema, travelPreferencesSchema } from "../../shared/schemas.js";
+import { createUser, getUserByEmail, setHomeBase, setTravelPreferences } from "../users/repo.js";
 import { hashPassword, verifyPassword } from "./passwords.js";
 import { clearSessionCookie, createSession, destroySession, setSessionCookie } from "./session.js";
 import { requireAuth } from "./middleware.js";
@@ -79,6 +79,17 @@ authRouter.put(
   asyncHandler(async (req, res) => {
     const { label, lat, lng } = req.body as { label: string; lat: number; lng: number };
     const user = await setHomeBase(req.user!.id, label, lat, lng);
+    res.json({ user });
+  })
+);
+
+authRouter.put(
+  "/travel-preferences",
+  requireAuth,
+  validateBody(travelPreferencesSchema),
+  asyncHandler(async (req, res) => {
+    const { travelDayKm, travelWeekendKm } = req.body as { travelDayKm: number; travelWeekendKm: number };
+    const user = await setTravelPreferences(req.user!.id, travelDayKm, travelWeekendKm);
     res.json({ user });
   })
 );

@@ -153,3 +153,15 @@
   font-size: 0.85rem;
   color: var(--ink-soft);
 }
+
+.home-live-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.home-live-steps__item { color: var(--muted, #6b7280); font-size: 0.92rem; animation: home-step-in 240ms ease-out both; }
+.home-live-steps__item::before { content: "✓ "; color: var(--accent, #0f766e); }
+.home-live-steps__item--now { color: inherit; font-weight: 600; }
+.home-live-steps__item--now::before { content: "● "; animation: home-pulse 1.1s ease-in-out infinite; }
+@keyframes home-step-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes home-pulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .home-live-steps__item, .home-live-steps__item--now::before { animation: none; } }
+
+.travel-distance-card input[type="range"] { display: block; width: 100%; margin: 4px 0 14px; }
+.travel-distance-card .btn { display: block; }

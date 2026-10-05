@@ -136,6 +136,20 @@ function isIndoorVisit(venue: ResolvedVenue): boolean {
   return venue.category === "activity" && /^(museum|gallery)$/.test(venue.subcategory);
 }
 
+const UNWORTHY_STOP_NAME = /(?<![\p{L}])(chafariz|fontan[aá]rio|fonte|fountain|pres[ií]dio|pris[aã]o|prison|cemit[eé]rio|cemetery)(?![\p{L}])/iu;
+
+/** True when the meal (hence the stops after it) falls in the evening, when museums and the like are shut. */
+function isEveningOuting(ctx: GenerateContext): boolean {
+  const start = clockToMinutes(ctx.moment?.mealStart ?? ctx.moment?.startTime ?? null);
+  return start != null && start >= 17 * 60 + 30;
+}
+
+/** A stop worth walking to: not a bare fountain, prison fort or cemetery, and nothing that closes before an evening meal. */
+export function stopUnsuitable(ctx: GenerateContext, venue: ResolvedVenue): boolean {
+  if (UNWORTHY_STOP_NAME.test(venue.name)) return true;
+  return venue.category === "activity" && isEveningOuting(ctx);
+}
+
 function findRouteChoices(ctx: GenerateContext, venues: ResolvedVenue[]): RouteChoice[] {
   if (ctx.homeBaseLat == null || ctx.homeBaseLng == null) return [];
   const home = { lat: ctx.homeBaseLat, lng: ctx.homeBaseLng };
@@ -149,7 +163,7 @@ function findRouteChoices(ctx: GenerateContext, venues: ResolvedVenue[]): RouteC
     !recent.has(normalized(venue.name)) && !GENERIC_NAMES.test(venue.name.trim()) && distanceKm(home, venue) <= ctx.radiusKm
   );
   const setting = (ctx.moodContext ?? "").match(/Setting:\s*(mixed|outdoors|indoors)/i)?.[1]?.toLowerCase();
-  let nonMealPlaces = usable.filter((venue) => venue.category !== "food");
+  let nonMealPlaces = usable.filter((venue) => venue.category !== "food" && !stopUnsuitable(ctx, venue));
   if (setting === "outdoors") nonMealPlaces = nonMealPlaces.filter((venue) => venue.category === "outdoor");
   if (setting === "indoors") nonMealPlaces = nonMealPlaces.filter(isIndoorVisit);
   let meals = usable.filter((venue) => venue.category === "food" && venue.subcategory === "restaurant");
@@ -520,16 +534,13 @@ export function buildCatalogShortlist(ctx: GenerateContext, venues: ResolvedVenu
   const maxLegKm = walkingLegLimit(ctx);
   const [bandMin, bandMax] = distanceBand(seed, ctx.moodContext ?? "", ctx.radiusKm);
   const usable = venues.filter((venue) => isUsableName(venue, recent) && distanceKm(home, venue) <= ctx.radiusKm && !violatesConstraints(ctx, venue));
-  const stopPool = usable.filter((venue) => venue.category !== "food" && settingAllowsStop(ctx, venue));
+  const stopPool = usable.filter((venue) => venue.category !== "food" && settingAllowsStop(ctx, venue) && !stopUnsuitable(ctx, venue));
   let meals = usable.filter((venue) => venue.category === "food" && venue.subcategory === "restaurant");
   const foodTerms = requestedFoodTerms(ctx);
   const foodMatches = foodTerms.length ? meals.filter((meal) => foodTerms.some((term) => venueText(meal).includes(term))) : [];
   if (foodMatches.length >= 8) meals = foodMatches;
-  // A dinner or day out starts from home: keep the restaurant in the city unless the request is a day trip.
-  const wantsFar = /day trip|escape|outside|farther|further|coast|beach|countryside/i.test(ctx.moodContext ?? "");
-  const homeCapKm = wantsFar ? ctx.radiusKm : ctx.moment?.kind === "weekend" ? 25 : ctx.moment ? 10 : ctx.radiusKm;
-  const withinCap = meals.filter((meal) => distanceKm(home, meal) <= homeCapKm);
-  if (withinCap.length >= 8) meals = withinCap;
+  // How far is the user's own setting (ctx.radiusKm, already applied above); closeness is only a mild
+  // preference so a short trip wins ties but never overrides what the user allowed.
   const random = mulberry32(seed);
   const scored = seededShuffle(meals, seed)
     .map((meal) => {
@@ -538,6 +549,7 @@ export function buildCatalogShortlist(ctx: GenerateContext, venues: ResolvedVenu
       let score = qualityScore(meal, loves, avoids) + random() * 2;
       if (foodTerms.some((term) => text.includes(term))) score += 6;
       if (homeKm >= bandMin && homeKm <= bandMax) score += 3;
+      score += (1 - Math.min(1, homeKm / Math.max(1, ctx.radiusKm))) * 2.5;
       return { meal, homeKm, score };
     })
     .sort((a, b) => b.score - a.score);
@@ -606,6 +618,7 @@ export function buildCandidateFromPicks(
     if (!isUsableName(venue, recent) || violatesConstraints(ctx, venue)) return null;
   }
   if (!settingAllowsStop(ctx, pre) || !settingAllowsStop(ctx, post)) return null;
+  if (stopUnsuitable(ctx, pre) || stopUnsuitable(ctx, post)) return null;
   const homeDistanceKm = distanceKm(home, meal);
   if (homeDistanceKm > ctx.radiusKm) return null;
   const maxLegKm = walkingLegLimit(ctx);
