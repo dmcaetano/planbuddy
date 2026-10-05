@@ -3,6 +3,8 @@
 **SDLC class:** SOLO
 
 ## Status
+v1.2.2: Lisbon (catalogue) plans now use a model call to choose the route from a validated shortlist of real venues; deterministic planner is the fallback.
+
 v1.2.0 "Batman" (max 1 click life): the app now opens on `/` with a proposal for the
 current moment (Friday evening -> dinner, Saturday -> a day out, other days -> the
 weekend), built from the household, tastes, weather and History, with a one-line reason,

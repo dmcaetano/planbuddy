@@ -274,3 +274,7 @@ Findings (all notes, no blocker). Resolutions carried into plan.md:
 9. Rule 16: relationship editors are new work in onboarding and Memory (the client has none today).
 10. Rule 13: Trip with no nudge opens Customize on Getaway; accepted (◇).
 11. Rule 26: 20 requests is an indicative smoke bar, reported as such; the run is extended to 40 if the first 20 sit near the thresholds.
+
+---
+## Amendment 2026-10-05
+Rule 27 (Lisbon proposals have no LLM call on their critical path) is **deliberately overridden at Diogo's instruction**: Lisbon, and any city with a resolved place catalogue, MUST use a model call to choose the route. Design stays "DeepSeek proposes, the server validates": the real catalogue remains the only source of venues; the server builds a shortlist (~20 restaurants, ~6 nearby stops each), the fast model (DeepSeek, reasoning off, 25 s ceiling) picks ids plus a title and one-sentence reason, and every id is re-validated (exists, walkable, distinct, not recent, constraints). Any failure (timeout, schema, unknown id, validation) falls back to the deterministic catalogue planner with a logged warning. Demo/test mode is unchanged (deterministic, no call). Code: `src/server/plans/engine/catalogModelPicker.ts`, `catalogPlanner.ts` (`buildCatalogShortlist`, `buildCandidateFromPicks`).

@@ -2,6 +2,7 @@ import type { AiCandidate } from "../../../shared/schemas.js";
 import type { GenerateContext } from "../../ai/demoAi.js";
 import { hashSeed, mulberry32, seededShuffle } from "../../ai/rng.js";
 import type { ResolvedVenue } from "../../resolver/placeResolver.js";
+import { blockedTermsForConstraint, containsUnsafeBlockedTerm, indoorOnlyRequired, outdoorOnlyRequired } from "./constraintKeywords.js";
 import { clockToMinutes, minutesToClock } from "../../../shared/moment.js";
 
 const EARTH_RADIUS_KM = 6371;
@@ -235,6 +236,16 @@ export function buildCatalogCandidateWithMatch(ctx: GenerateContext, venues: Res
   if (!choices.length) return null;
   const seed = hashSeed(ctx.seed);
   const choice = choices[Math.min(choices.length - 1, seed % Math.min(24, choices.length))];
+  return assembleCatalogCandidate(ctx, venues, choice);
+}
+
+/** Beats, timing and meal-first logic for one explicit route choice; shared by the deterministic and model paths. */
+function assembleCatalogCandidate(
+  ctx: GenerateContext,
+  venues: ResolvedVenue[],
+  choice: RouteChoice,
+  overrides: { title?: string; rationale?: string } = {}
+): CatalogMatch {
   const recentNames = new Set((ctx.recentSuggestions ?? []).flatMap((suggestion) => suggestion.placeNames.map(normalized)));
   const mealAlternatives = venues
     .filter((venue) => venue.category === "food" && venue.subcategory === "restaurant" && venue.id !== choice.meal.id && !recentNames.has(normalized(venue.name)) && distanceKm(venue, choice.meal) <= 2.5)
@@ -387,13 +398,13 @@ export function buildCatalogCandidateWithMatch(ctx: GenerateContext, venues: Res
     titleOrder = [choice.pre.name, choice.meal.name, choice.post.name];
   }
 
-  const title = `${titleOrder[0]}, ${titleOrder[1]}, and ${titleOrder[2]}`.slice(0, 120);
+  const title = overrides.title ?? `${titleOrder[0]}, ${titleOrder[1]}, and ${titleOrder[2]}`.slice(0, 120);
   const routeSentence = `fresh, geographically compact route selected from ${venues.length.toLocaleString("en-US")} mapped places within your search area, with the meal and both stops kept close together.`;
   const candidate: AiCandidate = {
     title,
-    rationale: moment?.romantic
+    rationale: overrides.rationale ?? (moment?.romantic
       ? `A romantic evening on a ${routeSentence}`
-      : `A ${routeSentence}`,
+      : `A ${routeSentence}`),
     category: "food",
     indoor: false,
     beats,
@@ -426,4 +437,183 @@ export function buildCatalogCandidateWithMatch(ctx: GenerateContext, venues: Res
     travelEstimateKm: Math.round(choice.homeDistanceKm * 10) / 10,
   };
   return { candidate, matchedTasteId: matchedLoveTaste(ctx, choice) };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Model-assisted route choice. The catalogue stays the ONLY source of venues: the server builds a
+// shortlist, the model picks ids from it, and buildCandidateFromPicks re-validates every id.
+// ---------------------------------------------------------------------------------------------
+
+export interface ShortlistStop {
+  id: string;
+  name: string;
+  kind: string;
+  tags: string[];
+  /** Distance from the restaurant. */
+  distanceKm: number;
+  /** Distance from home. */
+  homeKm: number;
+}
+
+export interface ShortlistMeal {
+  id: string;
+  name: string;
+  kind: string;
+  tags: string[];
+  homeKm: number;
+  stops: ShortlistStop[];
+}
+
+export interface CatalogShortlist {
+  meals: ShortlistMeal[];
+}
+
+export interface RoutePicks {
+  mealId: string;
+  firstStopId: string;
+  secondStopId: string;
+}
+
+const SHORTLIST_MEALS = 20;
+const SHORTLIST_STOPS = 6;
+const MAX_STOPS_PER_KIND = 3;
+const MIN_STOP_GAP_KM = 0.15;
+const MIN_STOP_TO_MEAL_KM = 0.08;
+
+function recentNameSet(ctx: GenerateContext): Set<string> {
+  return new Set((ctx.recentSuggestions ?? []).flatMap((suggestion) => suggestion.placeNames.map(normalized)));
+}
+
+function violatesConstraints(ctx: GenerateContext, venue: ResolvedVenue): boolean {
+  const text = venueText(venue);
+  return ctx.activeConstraints.some((constraint) => {
+    if (blockedTermsForConstraint(constraint.text).some((term) => containsUnsafeBlockedTerm(text, term))) return true;
+    if (venue.category !== "food" && indoorOnlyRequired(constraint.text) && !isIndoorVisit(venue)) return true;
+    if (venue.category !== "food" && outdoorOnlyRequired(constraint.text) && venue.category !== "outdoor") return true;
+    return false;
+  });
+}
+
+function settingAllowsStop(ctx: GenerateContext, venue: ResolvedVenue): boolean {
+  const setting = (ctx.moodContext ?? "").match(/Setting:\s*(mixed|outdoors|indoors)/i)?.[1]?.toLowerCase();
+  if (setting === "outdoors") return venue.category === "outdoor";
+  if (setting === "indoors") return isIndoorVisit(venue);
+  return true;
+}
+
+function isUsableName(venue: ResolvedVenue, recent: Set<string>): boolean {
+  return !recent.has(normalized(venue.name)) && !GENERIC_NAMES.test(venue.name.trim());
+}
+
+function roundKm(km: number): number {
+  return Math.round(km * 100) / 100;
+}
+
+/** ~20 restaurant candidates, each with ~6 varied nearby non-food stops, for the model to choose from. */
+export function buildCatalogShortlist(ctx: GenerateContext, venues: ResolvedVenue[]): CatalogShortlist {
+  if (ctx.homeBaseLat == null || ctx.homeBaseLng == null) return { meals: [] };
+  const home = { lat: ctx.homeBaseLat, lng: ctx.homeBaseLng };
+  const recent = recentNameSet(ctx);
+  const loves = preferenceTokens(ctx, "love");
+  const avoids = preferenceTokens(ctx, "avoid");
+  const seed = hashSeed(ctx.seed);
+  const maxLegKm = walkingLegLimit(ctx);
+  const [bandMin, bandMax] = distanceBand(seed, ctx.moodContext ?? "", ctx.radiusKm);
+  const usable = venues.filter((venue) => isUsableName(venue, recent) && distanceKm(home, venue) <= ctx.radiusKm && !violatesConstraints(ctx, venue));
+  const stopPool = usable.filter((venue) => venue.category !== "food" && settingAllowsStop(ctx, venue));
+  let meals = usable.filter((venue) => venue.category === "food" && venue.subcategory === "restaurant");
+  const foodTerms = requestedFoodTerms(ctx);
+  const foodMatches = foodTerms.length ? meals.filter((meal) => foodTerms.some((term) => venueText(meal).includes(term))) : [];
+  if (foodMatches.length >= 8) meals = foodMatches;
+  // A dinner or day out starts from home: keep the restaurant in the city unless the request is a day trip.
+  const wantsFar = /day trip|escape|outside|farther|further|coast|beach|countryside/i.test(ctx.moodContext ?? "");
+  const homeCapKm = wantsFar ? ctx.radiusKm : ctx.moment?.kind === "weekend" ? 25 : ctx.moment ? 10 : ctx.radiusKm;
+  const withinCap = meals.filter((meal) => distanceKm(home, meal) <= homeCapKm);
+  if (withinCap.length >= 8) meals = withinCap;
+  const random = mulberry32(seed);
+  const scored = seededShuffle(meals, seed)
+    .map((meal) => {
+      const homeKm = distanceKm(home, meal);
+      const text = venueText(meal);
+      let score = qualityScore(meal, loves, avoids) + random() * 2;
+      if (foodTerms.some((term) => text.includes(term))) score += 6;
+      if (homeKm >= bandMin && homeKm <= bandMax) score += 3;
+      return { meal, homeKm, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const out: ShortlistMeal[] = [];
+  for (const { meal, homeKm } of scored) {
+    if (out.length >= SHORTLIST_MEALS) break;
+    const nearby = stopPool
+      .map((place) => ({ place, km: distanceKm(place, meal) }))
+      .filter(({ km }) => km >= MIN_STOP_TO_MEAL_KM && km <= maxLegKm)
+      .sort((a, b) => a.km - b.km)
+      .slice(0, 24)
+      .map((item) => ({ ...item, q: qualityScore(item.place, loves, avoids) }))
+      .sort((a, b) => b.q - a.q || a.km - b.km);
+    const perKind = new Map<string, number>();
+    const stops: ShortlistStop[] = [];
+    for (const { place, km } of nearby) {
+      if (stops.length >= SHORTLIST_STOPS) break;
+      const used = perKind.get(place.subcategory) ?? 0;
+      if (used >= MAX_STOPS_PER_KIND) continue;
+      perKind.set(place.subcategory, used + 1);
+      stops.push({
+        id: place.id,
+        name: place.name,
+        kind: place.subcategory.replaceAll("_", " "),
+        tags: place.tags.filter((tag) => tag !== place.subcategory).slice(0, 4),
+        distanceKm: roundKm(km),
+        homeKm: roundKm(distanceKm(home, place)),
+      });
+    }
+    if (stops.length < 2) continue;
+    out.push({
+      id: meal.id,
+      name: meal.name,
+      kind: meal.subcategory.replaceAll("_", " "),
+      tags: meal.tags.filter((tag) => tag !== meal.subcategory).slice(0, 5),
+      homeKm: roundKm(homeKm),
+      stops,
+    });
+  }
+  return { meals: out };
+}
+
+/**
+ * Validates a model's picks against the real catalogue and assembles the candidate; null when any
+ * check fails (unknown id, wrong kind, too far to walk, recent, generic, constraint-violating).
+ */
+export function buildCandidateFromPicks(
+  ctx: GenerateContext,
+  venues: ResolvedVenue[],
+  picks: RoutePicks,
+  overrides: { title?: string; rationale?: string } = {}
+): CatalogMatch | null {
+  if (ctx.homeBaseLat == null || ctx.homeBaseLng == null) return null;
+  const byId = new Map(venues.map((venue) => [venue.id, venue]));
+  const meal = byId.get(picks.mealId);
+  const pre = byId.get(picks.firstStopId);
+  const post = byId.get(picks.secondStopId);
+  if (!meal || !pre || !post) return null;
+  if (new Set([meal.id, pre.id, post.id]).size !== 3) return null;
+  if (meal.category !== "food" || meal.subcategory !== "restaurant") return null;
+  if (pre.category === "food" || post.category === "food") return null;
+  const home = { lat: ctx.homeBaseLat, lng: ctx.homeBaseLng };
+  const recent = recentNameSet(ctx);
+  for (const venue of [meal, pre, post]) {
+    if (!isUsableName(venue, recent) || violatesConstraints(ctx, venue)) return null;
+  }
+  if (!settingAllowsStop(ctx, pre) || !settingAllowsStop(ctx, post)) return null;
+  const homeDistanceKm = distanceKm(home, meal);
+  if (homeDistanceKm > ctx.radiusKm) return null;
+  const maxLegKm = walkingLegLimit(ctx);
+  const preToMealKm = distanceKm(pre, meal);
+  const mealToPostKm = distanceKm(meal, post);
+  if (preToMealKm > maxLegKm || mealToPostKm > maxLegKm) return null;
+  if (preToMealKm < MIN_STOP_TO_MEAL_KM || mealToPostKm < MIN_STOP_TO_MEAL_KM) return null;
+  if (distanceKm(pre, post) < MIN_STOP_GAP_KM) return null;
+  const choice: RouteChoice = { meal, pre, post, homeDistanceKm, preToMealKm, mealToPostKm, score: 0 };
+  return assembleCatalogCandidate(ctx, venues, choice, overrides);
 }

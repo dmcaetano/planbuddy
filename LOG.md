@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-05 — v1.2.2 Lisbon routes chosen by the model
+
+Diogo: Lisbon suggestions were poor (random OSM picks). The catalogue stays the only source of venues, but DeepSeek now chooses the restaurant and two stops from a validated shortlist (1.4-2.2 s measured); invalid picks fall back to the deterministic planner. Restaurants capped to 10 km from home for tonight/day (25 km weekend) unless the request is a day trip. Overrides spec rule 27 (see spec Amendment).
+
 ## 2026-10-05 — v1.2.1 fast role on DeepSeek
 
 Diogo challenged the 12 s ceiling for a reasoning model. Probing showed some OpenRouter providers ignore reasoning-off (38 s) while a latency-sorted one honours it (~8 s). Re-benchmark with a 30 s ceiling: DeepSeek 90% valid, p50 11.6 s, p95 15.3 s (gpt-4o-mini 85%, p95 10.6 s). Fast role now DeepSeek V4 Flash, 25 s ceiling, deterministic fallback unchanged.

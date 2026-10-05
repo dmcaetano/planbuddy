@@ -9,7 +9,7 @@ import { getForecast } from "../../weather/openMeteo.js";
 import { resolvePlaces, type PlaceResolverResult } from "../../resolver/placeResolver.js";
 import { insertPlan, lastSurfacedPlans } from "../plans.repo.js";
 import { insertCandidates, type CandidateInsert } from "../candidates.repo.js";
-import { generateCandidates, type MemoryFact, type GenerateContext } from "../../ai/index.js";
+import { currentAiMode, generateCandidates, type MemoryFact, type GenerateContext } from "../../ai/index.js";
 import { filterCandidates } from "./filter.js";
 import { scoreCandidates, pickDiverseAlternates, type ParticipantMemory, type ScoredCandidate } from "./scoring.js";
 import type { Candidate } from "../../../shared/types.js";
@@ -18,7 +18,7 @@ import { enrichCandidate } from "./enrich.js";
 import { HttpError } from "../../http.js";
 import type { AiCandidate } from "../../../shared/schemas.js";
 import type { ProgressReporter } from "./stages.js";
-import { buildCatalogCandidateWithMatch } from "./catalogPlanner.js";
+import { selectCatalogMatch } from "./catalogModelPicker.js";
 import { retimeBeatsForMoment } from "../../moment/retime.js";
 import { setSpecReasonParts } from "../specs.repo.js";
 import { momentLabel } from "../../../shared/moment.js";
@@ -535,7 +535,7 @@ export async function runGeneration(
 
   const cachedLocalEdit = edit ? buildDeterministicEdit(edit) : null;
   const catalogMatch = !edit && !isTripScale(spec.scale) && resolver.mode === "resolved"
-    ? buildCatalogCandidateWithMatch(genCtx, resolver.venues)
+    ? await selectCatalogMatch(genCtx, resolver.venues, report)
     : null;
   const catalogCandidate = catalogMatch?.candidate ?? null;
   // The cached-swap path never touches grounding_places (already stamped
@@ -546,7 +546,9 @@ export async function runGeneration(
   // composing_plan=55) — reporting composing_plan here first would make a
   // later grounding_places detail update look like progress went backwards.
   if (catalogCandidate) {
-    await report?.("composing_plan", `Choosing a fresh compact route from ${resolver.venues.length.toLocaleString()} nearby places`);
+    if (currentAiMode() === "demo") {
+      await report?.("composing_plan", `Choosing a fresh compact route from ${resolver.venues.length.toLocaleString()} nearby places`);
+    }
   } else if (cachedLocalEdit) {
     await report?.("composing_plan", "Applying the smallest change while preserving the route");
   }
