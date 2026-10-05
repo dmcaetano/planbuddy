@@ -549,7 +549,7 @@ export function buildCatalogShortlist(ctx: GenerateContext, venues: ResolvedVenu
       let score = qualityScore(meal, loves, avoids) + random() * 2;
       if (foodTerms.some((term) => text.includes(term))) score += 6;
       if (homeKm >= bandMin && homeKm <= bandMax) score += 3;
-      score += (1 - Math.min(1, homeKm / Math.max(1, ctx.radiusKm))) * 2.5;
+      score += (1 - Math.min(1, homeKm / Math.max(1, ctx.radiusKm))) * 5;
       return { meal, homeKm, score };
     })
     .sort((a, b) => b.score - a.score);

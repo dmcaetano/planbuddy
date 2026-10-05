@@ -33,7 +33,7 @@ const SYSTEM_PROMPT = [
   "A route is: one restaurant (mealId) plus two different nearby non-food stops from THAT restaurant's own stop list (firstStopId, secondStopId).",
   "Prefer places a local would genuinely recommend: well-known, characterful restaurants over chains, tourist traps, food courts, hotel bars and fast food.",
   "Match the group's loved tastes and the occasion (a romantic evening when flagged; lunch/day versus dinner). Never pick anything that conflicts with the avoid tastes or the constraints.",
-  "Prefer restaurants closer to home (kmFromHome) unless the request asks for a trip further out; never choose a place that needs a ferry or a long detour for an ordinary evening.",
+  "Strongly prefer restaurants close to home (kmFromHome): choose one under about 8 km when any fits the tastes, and go further only when nothing close does or the request asks for a trip further out; never choose a place that needs a ferry or a long detour for an ordinary evening.",
   "Respect opening hours: after 19:00 do not pick museums, galleries, palaces, castles, monuments or churches (closed); use viewpoints, gardens lit at night, waterfront, squares or a dessert/drink spot instead. Do not pick fountains (chafariz), prisons/forts (presídio) or bare monuments as a stop - a stop should be somewhere worth walking to.",
   "Write title and why in English even when venue names are Portuguese.",
   "Keep the stops close to the restaurant, make the two stops different in kind, and use the weather (indoors when it is wet or cold, outdoors when it is mild).",
