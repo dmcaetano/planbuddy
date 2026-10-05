@@ -1,6 +1,6 @@
 # PlanBuddy — Log
 
-## 2026-10-05 - v1.3.0 "Goku": user distance setting, progressive Home, stop quality
+## 2026-10-05 - v1.3.0-1.3.1 "Goku": user distance setting, progressive Home, stop quality (1.3.1: stronger closeness preference)
 
 Read real production output as the canary (Fri 19:00, Sat 11:00, Wed 14:00, 5 "show another" each, `scripts/live-read.mjs`). Defects found: museums at 21:05, fountains and a prison fort as stops, a Portuguese-language title, Trafaria picks needing a ferry. Fixes: `stopUnsuitable` in catalogPlanner (evening = no activity venues; name blocklist), picker prompt (prefer closer, opening hours, English). Distance: migration 0012 `travel_day_km`/`travel_weekend_km`, `PUT /api/auth/travel-preferences`, `radiusForScale`, radius in the moment fingerprint, Memory sliders; hard cap removed. Progressive UX: moment `generating` response carries the reason line; picker narrates; Home shows a live step trail. Spec amendment clarified (models stay).
 
