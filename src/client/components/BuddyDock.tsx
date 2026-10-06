@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bot, ChevronUp, MessageCircle, Send, Sparkles, X } from "lucide-react";
+import { Bot, ChevronUp, MessageCircle, RefreshCw, Send, Sparkles, X } from "lucide-react";
 import { api, ApiError } from "../api/client";
 import type { ChatMessage, ChatSession } from "../api/types";
 import { useGeneration } from "../state/GenerationContext";
@@ -80,6 +80,14 @@ export default function BuddyDock() {
   const navigate = useNavigate();
   const planInView = focusedPlan && location.pathname === "/plan" ? focusedPlan : null;
   const activeJob = generation.job && (generation.job.status === "queued" || generation.job.status === "running") ? generation.job : null;
+  function newPlan() {
+    setOpen(false);
+    if (location.pathname === "/") window.dispatchEvent(new Event("planbuddy:new-plan"));
+    else {
+      sessionStorage.setItem("planbuddy:new-plan", "1");
+      navigate("/");
+    }
+  }
   const completedElsewhere = generation.job?.status === "succeeded" && location.pathname !== "/plan";
 
   return <aside className={`buddy-dock ${open ? "buddy-dock--open" : ""}`} aria-label="PlanBuddy assistant">
@@ -96,6 +104,7 @@ export default function BuddyDock() {
       {planInView ? <PlanEditChat compact threadSpecId={planInView.specId} candidate={planInView.candidate} onRevision={() => undefined} onLocked={(planId) => window.dispatchEvent(new CustomEvent("planbuddy:locked", { detail: { planId } }))} /> : <MemoryBuddyThread />}
       <Link className="buddy-panel__full-chat" to="/chat" onClick={() => setOpen(false)}><MessageCircle size={15} /> Open full chat</Link>
     </section>}
+    <button type="button" className="buddy-fab buddy-fab--plan" onClick={newPlan} disabled={Boolean(activeJob)} aria-label="New plan" title="New plan"><RefreshCw size={20} /></button>
     <button type="button" className={`buddy-fab ${activeJob ? "buddy-fab--working" : ""}`} onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label={open ? "Close Buddy" : activeJob ? "Open Buddy, plan is working" : "Open Buddy"}>
       {open ? <ChevronUp size={23} /> : <Bot size={23} />}
       {activeJob && <span className="buddy-fab__progress">{Math.round(activeJob.progressPct)}%</span>}

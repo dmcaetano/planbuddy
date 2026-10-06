@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Compass, RefreshCw, Sparkles, SlidersHorizontal } from "lucide-react";
+import { Compass, Sparkles, SlidersHorizontal } from "lucide-react";
 import { api, ApiError } from "../api/client";
 import type { Participant, PipelineResponse } from "../api/types";
 import type { MomentInfo, MomentKind, MomentResponse, TripIdea, TripNudge } from "@shared/momentTypes";
@@ -156,7 +156,9 @@ export default function HomePage() {
     // proposal when it finishes, so asking for the moment now would only compete with it.
     const running = generationRef.current.job;
     const generationInFlight = Boolean(running) && (running!.status === "queued" || running!.status === "running") && running!.kind === "generate";
-    if (!generationInFlight) void loadMoment("full");
+    const wantsFresh = sessionStorage.getItem("planbuddy:new-plan") === "1";
+    sessionStorage.removeItem("planbuddy:new-plan");
+    if (!generationInFlight) void loadMoment("full", wantsFresh);
     api.get<{ participants: Participant[] }>("/participants")
       .then((data) => {
         if (mountedRef.current) setParticipants(data.participants);
@@ -164,6 +166,12 @@ export default function HomePage() {
       .catch(() => {
         // The avatars on the plan are decoration; the proposal works without them.
       });
+  }, [loadMoment]);
+
+  useEffect(() => {
+    const onNewPlan = () => { generationRef.current.dismiss(); void loadMoment("full", true); };
+    window.addEventListener("planbuddy:new-plan", onNewPlan);
+    return () => window.removeEventListener("planbuddy:new-plan", onNewPlan);
   }, [loadMoment]);
 
   // The moment changes while the page is open (e.g. Friday 20:59 -> 21:00) or the page comes back
@@ -326,20 +334,11 @@ export default function HomePage() {
     />
   ) : null;
 
-  function newPlan() {
-    generation.dismiss();
-    setActionError(null);
-    void loadMoment("full", true);
-  }
-
   const header = (
     <div className="home-head">
       <div className="row-gap" style={{ alignItems: "center", marginBottom: 4 }}>
         <div className="eyebrow" style={{ marginBottom: 0 }}>{moment ? moment.label : "Plan"}</div>
         <span className="version-pill">{VERSION_PILL}</span>
-        {phase !== "empty" && (
-          <button type="button" className="btn btn-secondary btn-sm home-new-plan" style={{ marginLeft: "auto" }} onClick={newPlan}><RefreshCw size={14} aria-hidden="true" /> New plan</button>
-        )}
       </div>
     </div>
   );
