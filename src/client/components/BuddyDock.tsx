@@ -66,8 +66,8 @@ function MemoryBuddyThread() {
     </div>
     {error && <div className="error-banner">{error}</div>}
     <form className="buddy-composer" onSubmit={(event) => { event.preventDefault(); void send(); }}>
-      <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Talk to Buddy…" aria-label="Talk to Buddy" />
-      <button className="btn btn-primary" type="submit" disabled={!input.trim() || sending} aria-label="Send message"><Send size={16} /></button>
+      <input value={input} onChange={(event) => setInput(event.target.value)} placeholder={session ? "Talk to Buddy…" : "Opening the conversation…"} aria-label="Talk to Buddy" />
+      <button className="btn btn-primary" type="submit" disabled={!session || !input.trim() || sending} aria-label="Send message"><Send size={16} /></button>
     </form>
   </div>;
 }

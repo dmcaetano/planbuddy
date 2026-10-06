@@ -1,2 +1,2 @@
 /** The version pill text shown on Home and Customize. Bumped at release, together with package.json. */
-export const VERSION_PILL = "v1.4.1 · vegeta";
+export const VERSION_PILL = "v1.4.2 · vegeta";
