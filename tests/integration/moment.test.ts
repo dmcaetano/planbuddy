@@ -310,6 +310,20 @@ describe("POST /api/moment (demo AI)", () => {
     await waitForJob(who.agent, ended.jobId);
   });
 
+  it("zero-click: fresh=true builds a new proposal even when a plan is reused or locked", async () => {
+    const who = await account(app, "moment-fresh@example.com");
+    const made = await openReady(who, FRI_AFTERNOON);
+    const lock = await who.agent.post(`/api/plan-specs/${made.plan.spec.id}/lock`).set(HDR, "1").send({ candidateId: made.plan.winner.candidate.id });
+    expect(lock.status).toBe(201);
+    expect((await open(who, FRI_AFTERNOON)).status).toBe("locked");
+    const res = await who.agent.post("/api/moment").set(HDR, "1").send({ localDateTime: FRI_AFTERNOON, fresh: true });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("generating");
+    const job = await waitForJob(who.agent, res.body.jobId);
+    expect(job.status).toBe("succeeded");
+    expect(job.result.spec.id).not.toBe(made.plan.spec.id);
+  });
+
   it("acceptance 5: a locked Saturday plan covers a Friday 22:00 day moment dated Saturday", async () => {
     const who = await account(app, "moment-locked-sat@example.com");
     const generated = await postAndAwaitGeneration(who.agent, "/api/plan-specs", {

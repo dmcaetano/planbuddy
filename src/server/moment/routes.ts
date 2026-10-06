@@ -53,6 +53,7 @@ const momentBodySchema = z
   .object({
     localDateTime: z.string().max(40).refine((value) => parseLocalDateTime(value) !== null, "Invalid local date-time"),
     kind: z.enum(["tonight", "day", "weekend"]).optional(),
+    fresh: z.boolean().optional(),
   })
   .strict();
 
@@ -225,7 +226,8 @@ function momentScale(kind: MomentInfo["kind"]): Scale {
 async function startGeneration(
   base: Base,
   fingerprint: string,
-  times: MomentTimes
+  times: MomentTimes,
+  fresh = false
 ): Promise<MomentResponse> {
   const { userId, moment } = base;
   const active = await findActiveJob(userId);
@@ -233,7 +235,7 @@ async function startGeneration(
 
   const mood = buildMomentMood(moment, times, base.romantic);
   const stored = toStoredTimes(times, base.romantic);
-  const [existing] = await listSpecsForMoment(userId, moment.key, fingerprint);
+  const [existing] = fresh ? [] : await listSpecsForMoment(userId, moment.key, fingerprint);
 
   if (existing) {
     // Same key and fingerprint: a new proposal under the same setup, counted against its ceiling.
@@ -287,7 +289,7 @@ async function startGeneration(
 
 async function resolveCore(
   userId: string,
-  body: { localDateTime: string; kind?: MomentInfo["kind"] }
+  body: { localDateTime: string; kind?: MomentInfo["kind"]; fresh?: boolean }
 ): Promise<MomentResponse> {
   const localIso = body.localDateTime;
   const moment = body.kind ? scopeSwitchMoments(localIso)[body.kind] : resolveMoment(localIso);
@@ -297,7 +299,7 @@ async function resolveCore(
   const base: Base = { userId, moment, romantic: isRomanticGroup(household, moment.kind), household, radiusKm };
   if (household.length === 0) return respond(base, "empty_household");
 
-  const locked = await coveringLockedPlan(base, localIso);
+  const locked = body.fresh ? null : await coveringLockedPlan(base, localIso);
   if (locked) {
     const candidate = await getCandidate(locked.plan.candidateId);
     if (candidate) {
@@ -314,12 +316,12 @@ async function resolveCore(
   const fingerprint = computeInputsFingerprint(household, constraints, radiusKm, user ? { lat: user.homeBaseLat, lng: user.homeBaseLng } : null);
   const times = momentTimes(moment.kind, moment.planDate, localIso);
 
-  const newest = await findNewestMomentPlan(userId, moment.key, fingerprint);
+  const newest = body.fresh ? null : await findNewestMomentPlan(userId, moment.key, fingerprint);
   if (newest) {
     const reused = await tryReuse(base, localIso, newest, constraints, times);
     if (reused) return reused;
   }
-  return startGeneration(base, fingerprint, times);
+  return startGeneration(base, fingerprint, times, Boolean(body.fresh));
 }
 
 /**
@@ -329,7 +331,7 @@ async function resolveCore(
  */
 export async function resolveMomentForUser(
   userId: string,
-  body: { localDateTime: string; kind?: MomentInfo["kind"] }
+  body: { localDateTime: string; kind?: MomentInfo["kind"]; fresh?: boolean }
 ): Promise<MomentResponse> {
   const response = await resolveCore(userId, body);
   if (response.status === "empty_household") return response;

@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.5.0 "Trunks": New plan always available
+
+Faro cause: home base was set to Faro. Diogo named the goal "zero click". Added an always-visible New plan button (Home header) backed by `fresh` on POST /api/moment; test in moment.test.ts.
+
 ## 2026-10-07 - v1.4.3: Faro plan for a Lisbon user, planner vs chat
 
 Diogo kept seeing a Faro weekend plan while living in Lisbon. Reuse key ignored the home base and the distance of the stored plan; both now checked (`fingerprint.ts`, `tryReuse`). Separated roles: Buddy chat reads plans and worker progress through the snapshot but never builds them; the Planner worker (jobs queue) does.

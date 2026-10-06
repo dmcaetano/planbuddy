@@ -45,6 +45,8 @@ export interface StoredMomentTimes {
 export interface MomentRequest {
   localDateTime: string;
   kind?: MomentKind;
+  /** Zero-click "New plan": skip reuse, the locked cover and the per-spec ceiling and build a fresh proposal. */
+  fresh?: boolean;
 }
 
 export interface TimeOff {

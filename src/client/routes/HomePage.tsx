@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Compass, Sparkles, SlidersHorizontal } from "lucide-react";
+import { Compass, RefreshCw, Sparkles, SlidersHorizontal } from "lucide-react";
 import { api, ApiError } from "../api/client";
 import type { Participant, PipelineResponse } from "../api/types";
 import type { MomentInfo, MomentKind, MomentResponse, TripIdea, TripNudge } from "@shared/momentTypes";
@@ -88,14 +88,14 @@ export default function HomePage() {
    * (a refresh on focus); "full" shows the skeleton; "afterJob" is the follow-up to a moment job and
    * treats a second "generating" answer as a failure instead of looping.
    */
-  const loadMoment = useCallback(async (mode: "full" | "silent" | "afterJob" = "full") => {
+  const loadMoment = useCallback(async (mode: "full" | "silent" | "afterJob" = "full", fresh = false) => {
     const seq = ++requestSeqRef.current;
     if (mode !== "silent") {
       setPhase("loading");
       setError(null);
     }
     try {
-      const data = await api.post<MomentResponse>("/moment", { localDateTime: formatLocalDateTime(new Date()) });
+      const data = await api.post<MomentResponse>("/moment", { localDateTime: formatLocalDateTime(new Date()), ...(fresh ? { fresh: true } : {}) });
       if (!mountedRef.current || seq !== requestSeqRef.current) return;
       loadedAtRef.current = Date.now();
       keyRef.current = data.moment.key;
@@ -326,11 +326,20 @@ export default function HomePage() {
     />
   ) : null;
 
+  function newPlan() {
+    generation.dismiss();
+    setActionError(null);
+    void loadMoment("full", true);
+  }
+
   const header = (
     <div className="home-head">
       <div className="row-gap" style={{ alignItems: "center", marginBottom: 4 }}>
         <div className="eyebrow" style={{ marginBottom: 0 }}>{moment ? moment.label : "Plan"}</div>
         <span className="version-pill">{VERSION_PILL}</span>
+        {phase !== "empty" && (
+          <button type="button" className="btn btn-secondary btn-sm home-new-plan" style={{ marginLeft: "auto" }} onClick={newPlan}><RefreshCw size={14} aria-hidden="true" /> New plan</button>
+        )}
       </div>
     </div>
   );
