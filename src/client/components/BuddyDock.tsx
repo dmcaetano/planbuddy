@@ -8,6 +8,9 @@ import { usePlanFocus } from "../state/PlanFocusContext";
 import PlanEditChat from "./PlanEditChat";
 import RelationshipProposalChips, { type RelationshipProposal } from "./RelationshipProposalChips";
 import TimeOffProposalChips from "./TimeOffProposalChips";
+import AppliedChanges, { announceAppChange, type AppliedChange } from "./AppliedChanges";
+import { useAuth } from "../state/AuthContext";
+import type { PublicUser } from "../api/types";
 import type { TimeOffProposal } from "@shared/momentTypes";
 
 function MemoryBuddyThread() {
@@ -18,6 +21,8 @@ function MemoryBuddyThread() {
   const [error, setError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<{ id: string; value: RelationshipProposal } | null>(null);
   const [timeOffProposal, setTimeOffProposal] = useState<{ id: string; value: TimeOffProposal } | null>(null);
+  const [applied, setApplied] = useState<{ id: string; changes: AppliedChange[] } | null>(null);
+  const auth = useAuth();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,14 +35,18 @@ function MemoryBuddyThread() {
   async function send() {
     const content = input.trim();
     if (!session || !content || sending) return;
-    setInput(""); setSending(true); setError(null); setProposal(null); setTimeOffProposal(null);
+    setInput(""); setSending(true); setError(null); setProposal(null); setTimeOffProposal(null); setApplied(null);
     setMessages((current) => [...current, { id: `local-${Date.now()}`, sessionId: session.id, role: "user", content, createdAt: new Date().toISOString() }]);
     try {
-      const data = await api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage; session: ChatSession; relationshipProposal?: RelationshipProposal | null; timeOffProposal?: TimeOffProposal | null }>(`/chat/session/${session.id}/messages`, { content });
+      const data = await api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage; session: ChatSession; relationshipProposal?: RelationshipProposal | null; timeOffProposal?: TimeOffProposal | null; applied?: AppliedChange[]; user?: PublicUser | null }>(`/chat/session/${session.id}/messages`, { content });
       setMessages((current) => [...current.slice(0, -1), data.userMessage, data.assistantMessage]);
       setSession(data.session);
       setProposal(data.relationshipProposal ? { id: data.assistantMessage.id, value: data.relationshipProposal } : null);
       setTimeOffProposal(data.timeOffProposal ? { id: data.assistantMessage.id, value: data.timeOffProposal } : null);
+      if (data.applied?.length) {
+        setApplied({ id: data.assistantMessage.id, changes: data.applied });
+        announceAppChange(data.user, auth.setUser);
+      }
     } catch (err) {
       setMessages((current) => current.filter((message) => !message.id.startsWith("local-")));
       setError(err instanceof ApiError ? err.message : "Buddy couldn't send that. Try again.");
@@ -51,6 +60,7 @@ function MemoryBuddyThread() {
       {messages.map((message) => <div className={`buddy-message buddy-message--${message.role}`} key={message.id}>{message.content}</div>)}
       {proposal && <RelationshipProposalChips key={proposal.id} proposal={proposal.value} />}
       {timeOffProposal && <TimeOffProposalChips key={timeOffProposal.id} proposal={timeOffProposal.value} />}
+      {applied && <AppliedChanges key={applied.id} changes={applied.changes} />}
       {sending && <div className="buddy-message buddy-message--assistant"><Sparkles size={14} /> Thinking with your memory…</div>}
       <div ref={bottomRef} />
     </div>
@@ -68,13 +78,14 @@ export default function BuddyDock() {
   const generation = useGeneration();
   const location = useLocation();
   const navigate = useNavigate();
+  const planInView = focusedPlan && location.pathname === "/plan" ? focusedPlan : null;
   const activeJob = generation.job && (generation.job.status === "queued" || generation.job.status === "running") ? generation.job : null;
   const completedElsewhere = generation.job?.status === "succeeded" && location.pathname !== "/plan";
 
   return <aside className={`buddy-dock ${open ? "buddy-dock--open" : ""}`} aria-label="PlanBuddy assistant">
     {open && <section className="buddy-panel" aria-label="Buddy conversation">
       <header className="buddy-panel__header">
-        <div className="buddy-panel__identity"><span className="buddy-orb"><Bot size={19} /></span><div><strong>Buddy</strong><span>{focusedPlan ? "Editing this plan" : "Your planning partner"}</span></div></div>
+        <div className="buddy-panel__identity"><span className="buddy-orb"><Bot size={19} /></span><div><strong>Buddy</strong><span>{planInView ? "Editing this plan" : "Your planning partner"}</span></div></div>
         <button type="button" className="icon-btn" onClick={() => setOpen(false)} aria-label="Close Buddy"><X size={18} /></button>
       </header>
       {activeJob && <button type="button" className="buddy-job-status" onClick={() => navigate("/plan")}>
@@ -82,7 +93,7 @@ export default function BuddyDock() {
         <span><strong>{activeJob.stageDetail || activeJob.stageLabel || "Building your plan"}</strong><small>{Math.round(activeJob.progressPct)}% · keeps working while you browse</small></span>
       </button>}
       {completedElsewhere && <button type="button" className="buddy-job-status buddy-job-status--ready" onClick={() => navigate("/plan")}><Sparkles size={17} /><span><strong>Your plan is ready</strong><small>Open it to see the change.</small></span></button>}
-      {focusedPlan ? <PlanEditChat compact threadSpecId={focusedPlan.specId} candidate={focusedPlan.candidate} onRevision={() => undefined} onLocked={(planId) => window.dispatchEvent(new CustomEvent("planbuddy:locked", { detail: { planId } }))} /> : <MemoryBuddyThread />}
+      {planInView ? <PlanEditChat compact threadSpecId={planInView.specId} candidate={planInView.candidate} onRevision={() => undefined} onLocked={(planId) => window.dispatchEvent(new CustomEvent("planbuddy:locked", { detail: { planId } }))} /> : <MemoryBuddyThread />}
       <Link className="buddy-panel__full-chat" to="/chat" onClick={() => setOpen(false)}><MessageCircle size={15} /> Open full chat</Link>
     </section>}
     <button type="button" className={`buddy-fab ${activeJob ? "buddy-fab--working" : ""}`} onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label={open ? "Close Buddy" : activeJob ? "Open Buddy, plan is working" : "Open Buddy"}>

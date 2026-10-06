@@ -58,6 +58,8 @@ a second deterministic overlap penalty. DeepSeek V4 Flash separately powers chat
 Love feature extraction, and plan-action interpretation. Plan-scoped chat stores
 an append-only revision trail, so the original is always one tap away.
 
+**Buddy as app assistant (v1.4.0):** outside the plan page, Buddy answers questions about the app and the user's own data from a per-user snapshot and applies changes (distances, home base, constraints, tastes, people, time off, hunches) via a validated action list in `src/server/chat/appAssistant.ts`; every change is listed in chat with Undo and Memory refreshes live.
+
 ## Architecture
 
 ```mermaid

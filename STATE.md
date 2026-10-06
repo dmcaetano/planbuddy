@@ -3,6 +3,8 @@
 **SDLC class:** SOLO
 
 ## Status
+v1.4.0 "Vegeta": Buddy is one assistant for the whole app. The dock only says "Editing this plan" while the plan page is in view (stale plan focus was the bug). Anywhere else Buddy answers questions about the app and the user's data (people, circle/friends, constraints, tastes, hunches, time off, home base, distances) from a per-user snapshot, and can change them (set_travel, home base, constraints, tastes, people/relationships, time off, hunches) through a server-side validated action list. Each applied change shows in chat with Undo; Memory refreshes live. Code: `src/server/chat/appAssistant.ts`, `src/client/components/AppliedChanges.tsx`. 8 new Vitest tests; whole suite green file by file (the single-process run crashes with ERR_IPC_CHANNEL_CLOSED, also on the pre-change baseline). Verified live at 390px: circle question answered from real data, "weekend 90 km, day 40 km" applied and showed in Memory, Undo restored 25/60.
+
 v1.3.0 "Goku": distance from home is now the user's own setting (Memory > "How far from home", day/weekend sliders, stored on the user; defaults 25/60 km) and replaces my hard 10/25 km cap; Home shows the reason line plus a live step trail while a plan builds (progressive UX; models stay). Quality rules from reading live output: no museums/galleries for evening outings, no fountains/prison forts/cemeteries as stops, model told to answer in English and avoid ferry detours.
 
 v1.2.2: Lisbon (catalogue) plans now use a model call to choose the route from a validated shortlist of real venues; deterministic planner is the fallback.

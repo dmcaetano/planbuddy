@@ -3,6 +3,9 @@ import { Bot, Check, Copy, Send, Sparkles, User } from "lucide-react";
 import type { Candidate, FeatureSummary, PipelineResponse, PlanChatMessage } from "../api/types";
 import { api, ApiError } from "../api/client";
 import { useGeneration } from "../state/GenerationContext";
+import { useAuth } from "../state/AuthContext";
+import type { PublicUser } from "../api/types";
+import AppliedChanges, { announceAppChange, type AppliedChange } from "./AppliedChanges";
 
 interface ActionResponse {
   userMessage: PlanChatMessage;
@@ -12,6 +15,8 @@ interface ActionResponse {
   plan: { id: string } | null;
   share: { token: string } | null;
   invite: { token: string } | null;
+  applied?: AppliedChange[];
+  user?: PublicUser | null;
 }
 
 const QUICK_ACTIONS = [
@@ -35,6 +40,8 @@ export default function PlanEditChat({
   compact?: boolean;
 }) {
   const generation = useGeneration();
+  const auth = useAuth();
+  const [appliedByMessage, setAppliedByMessage] = useState<Record<string, AppliedChange[]>>({});
   const [messages, setMessages] = useState<PlanChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [working, setWorking] = useState(false);
@@ -73,6 +80,10 @@ export default function PlanEditChat({
       if (data.jobId && generation.job?.jobId !== data.jobId) {
         generation.trackJob(data.jobId, data.jobKind === "regenerate" ? "regenerate" : "edit", data.jobSpecId ?? threadSpecId);
       }
+      if (data.applied?.length) {
+        setAppliedByMessage((current) => ({ ...current, [data.assistantMessage.id]: data.applied! }));
+        announceAppChange(data.user, auth.setUser);
+      }
       if (data.revision?.winner) onRevision(data.revision);
       if (data.plan?.id) onLocked(data.plan.id);
       const actionUrl = data.share?.token
@@ -110,7 +121,7 @@ export default function PlanEditChat({
           {messages.map((message) => (
             <div className={`plan-chat-message plan-chat-message--${message.role}`} key={message.id}>
               <span>{message.role === "assistant" ? <Sparkles size={14} /> : <User size={14} />}</span>
-              <div><p>{message.content}</p>{links[message.id] && <button className="chat-link" onClick={() => void copy(message.id, links[message.id])}>{copied === message.id ? <Check size={14} /> : <Copy size={14} />} {copied === message.id ? "Copied" : "Copy private link"}</button>}</div>
+              <div><p>{message.content}</p>{appliedByMessage[message.id] && <AppliedChanges changes={appliedByMessage[message.id]} />}{links[message.id] && <button className="chat-link" onClick={() => void copy(message.id, links[message.id])}>{copied === message.id ? <Check size={14} /> : <Copy size={14} />} {copied === message.id ? "Copied" : "Copy private link"}</button>}</div>
             </div>
           ))}
           {working && <div className="plan-chat-message plan-chat-message--assistant"><span><Sparkles size={14} /></span><div><p>Checking the route, constraints, and grounded places…</p></div></div>}

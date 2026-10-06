@@ -30,6 +30,7 @@ import { timeOffCreateSchema } from "../../shared/schemas.js";
 import { formatRange } from "../timeoff/nudge.js";
 import type { TimeOffProposal } from "../../shared/momentTypes.js";
 import { z } from "zod";
+import { applyAppActions, buildAppSnapshot, composeAssistantReply } from "./appAssistant.js";
 
 export const chatRouter = Router();
 chatRouter.use(requireAuth);
@@ -114,8 +115,14 @@ chatRouter.post(
       return;
     }
 
-    const { mode, response } = await chatRespond({ message: req.body.content, seed: userMessage.id });
-    const assistantMessage = await addMessage(session.id, "assistant", response.reply);
+    const snapshot = await buildAppSnapshot(req.user!.id);
+    const { mode, response } = await chatRespond({ message: req.body.content, seed: userMessage.id, snapshot });
+    const appResult = await applyAppActions(req.user!.id, response.actions, req.body.content);
+    const assistantMessage = await addMessage(
+      session.id,
+      "assistant",
+      composeAssistantReply(response.reply, response.actions.length, appResult)
+    );
 
     const memoryUpdates: { kind: "constraint" | "taste" | "hunch"; text: string; verified: boolean }[] = [];
 
@@ -182,6 +189,8 @@ chatRouter.post(
       memoryUpdates,
       relationshipProposal: null,
       timeOffProposal: null,
+      applied: appResult.applied,
+      user: appResult.user,
       session: endedSession,
     });
   })

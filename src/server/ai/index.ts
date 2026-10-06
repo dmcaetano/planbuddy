@@ -253,7 +253,7 @@ export async function chatRespond(ctx: ChatContext): Promise<{ mode: AiMode; res
   try {
     const response = await callAiJson(
       buildChatSystemPrompt(),
-      buildChatUserPrompt(ctx.message),
+      buildChatUserPrompt(ctx.message, ctx.snapshot),
       aiChatResponseSchema
     );
     return { mode: "deepseek", response };
@@ -347,6 +347,13 @@ export async function eventFeatureExtract(
 
 function planActionFallback(message: string): AiPlanActionResponse {
   const normalized = message.toLowerCase();
+  if (
+    /\b(circles?|settings?|memory|my people|home base|time off|distance|constraints?|tastes?|hunch(es)?|friends?|the app|planbuddy)\b/.test(normalized) &&
+    !/\b(this|the) plan\b/.test(normalized) &&
+    !/\b(invite|add).{0,20}\bfriend\b/.test(normalized)
+  ) {
+    return { action: "app", reaction: null, editMode: null, instruction: message, reply: "Let me look at that." };
+  }
   if (/\blove\b/.test(normalized)) return { action: "react", reaction: "love", editMode: null, instruction: message, reply: "Loved. I'll save what makes this plan your kind of day." };
   if (/\b(dislike|hate|not this)\b/.test(normalized)) return { action: "react", reaction: "dislike", editMode: null, instruction: message, reply: "Understood. I'll record that this one missed." };
   if (/\blike\b/.test(normalized)) return { action: "react", reaction: "like", editMode: null, instruction: message, reply: "Liked. I'll use that as a light positive signal." };

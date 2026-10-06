@@ -210,19 +210,32 @@ export function buildPlaceResearchUserPrompt(ctx: GenerateContext): string {
     .join("\n");
 }
 
+const APP_KNOWLEDGE = [
+  "About PlanBuddy: it turns one tap into one grounded plan (dinner, day out, weekend, getaway, vacation) for a person, household and pets.",
+  "Pages: Plan (build and edit plans, Who's in picker), Memory (People, Constraints = things that must work or be avoided, Tastes = loves and avoids, Hunches = unconfirmed guesses you can confirm or dismiss, Distance from home, Home base), Time off (dates away, used for trip ideas), History (locked plans), Friends and circles (connected friends, grouped in circles; a friend's raw memory is never visible), Settings.",
+  "Rules: nothing is learned silently; durable facts show in Memory and can be edited or deleted. Friends never expose their memory.",
+].join("\n");
+
 export function buildChatSystemPrompt(): string {
   return [
-    "You are PlanBuddy's chat assistant. Reply with JSON only:",
+    "You are Buddy, PlanBuddy's assistant. You answer any question about the app and the user's own data, and you can change their settings and data. Reply with JSON only:",
     '{"reply": string, "specUpdate": {"scale": string|null, "moodContext": string|null}|null,',
     '"extractions": [{"participantName": string|null, "kind": "constraint"|"taste", "text": string,',
-    '"quote": string|null, "quoteStart": number|null, "quoteEnd": number|null, "polarity": "love"|"avoid"|null, "confidence": number}]}',
-    "Only extract a constraint or taste when the user directly stated it in THIS message. `quote` must be a verbatim substring of the user's message, with correct character offsets. The server re-verifies it.",
-    "Never fabricate a quote. If uncertain, omit the extraction.",
+    '"quote": string|null, "quoteStart": number|null, "quoteEnd": number|null, "polarity": "love"|"avoid"|null, "confidence": number}],',
+    '"actions": [{"type": string, ...fields}]}',
+    APP_KNOWLEDGE,
+    "'My circle' or 'who I plan with' means BOTH the people and pets in APP STATE people AND the connected friends; always list both, and say plainly when one list is empty. Answer questions about the user's people, circle, constraints, tastes, hunches, time off, home base and distances ONLY from the APP STATE JSON in the user message. If something is not in it, say you don't see it. Never invent data.",
+    "`actions` makes real changes the moment the user clearly asks for them (add, remove, change, set). Never emit an action for a question or a vague wish. Allowed types and fields (use null for unused fields):",
+    "set_travel{dayKm,weekendKm} · set_home_base{city} · add_constraint{text,personName} · remove_constraint{id} · add_taste{text,polarity,personName} · remove_taste{id} · add_person{name,kind:person|pet,relationship} · set_relationship{id,relationship} · remove_person{id} · add_time_off{label,startDate,endDate as YYYY-MM-DD} · update_time_off{id,label,startDate,endDate} · remove_time_off{id} · confirm_hunch{id} · dismiss_hunch{id} · remove_hunch{id}.",
+    "Use ids exactly as they appear in APP STATE. personName must be a name in people, or null for the whole household. Resolve relative dates against `today`. Removal needs the user to clearly name what to remove; if it is ambiguous, ask in `reply` instead.",
+    "In `reply`, say plainly what you are changing, in one or two short sentences. The server confirms what actually happened.",
+    "Only extract a constraint or taste when the user directly stated it in THIS message and did not also request it as an action. `quote` must be a verbatim substring of the user's message, with correct character offsets. The server re-verifies it. Never fabricate a quote.",
   ].join("\n");
 }
 
-export function buildChatUserPrompt(message: string): string {
-  return `User message (verify quotes against this exact text): "${message}"`;
+export function buildChatUserPrompt(message: string, snapshot?: string): string {
+  const state = snapshot ? `APP STATE: ${snapshot}\n` : "";
+  return `${state}User message (verify quotes against this exact text): "${message}"`;
 }
 
 export function buildFeedbackSystemPrompt(): string {
@@ -255,10 +268,11 @@ export function buildEventFeatureUserPrompt(structure: Record<string, unknown>):
 export function buildPlanActionSystemPrompt(): string {
   return [
     "You are the action router for a plan-scoped PlanBuddy chat. Reply with JSON only:",
-    '{"action":"edit"|"react"|"lock"|"share"|"show_another"|"invite_friend"|"explain","reaction":"dislike"|"like"|"love"|null,"editMode":"restaurant"|"meal_time"|"budget"|"walking"|"general"|null,"instruction":string,"reply":string}',
+    '{"action":"edit"|"react"|"lock"|"share"|"show_another"|"invite_friend"|"explain"|"app","reaction":"dislike"|"like"|"love"|null,"editMode":"restaurant"|"meal_time"|"budget"|"walking"|"general"|null,"instruction":string,"reply":string}',
     "Route restaurant/venue swaps to editMode restaurant; lunch/dinner/time changes to meal_time; cheaper/less expensive to budget; less/shorter walking to walking.",
     "Route Like/Love/Dislike to react. Route save/lock/choose to lock. Route send/copy/share this plan to share. Route another/new option to show_another. Route invite/add a friend to invite_friend.",
     "Everything else that asks to change the visible plan is edit/general. Questions about the plan are explain.",
+    "Anything that is NOT about the visible plan (questions about the app, the user's circle, people, memory, settings, distance, home base, time off, or requests to change those) is action app, with a short non-empty reply.",
     "Never expose, quote, or attribute another participant's private memory. Keep the reply short and say what will happen.",
   ].join("\n");
 }

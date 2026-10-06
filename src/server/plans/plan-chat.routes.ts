@@ -20,6 +20,7 @@ import { applyCandidateReaction } from "./reactions.service.js";
 import { insertPlan } from "./plans.repo.js";
 import { buildPublicSnapshot, createPlanShare } from "../shares/repo.js";
 import { createFriendInvite, planningParticipantIdsAreAuthorized } from "../friends/repo.js";
+import { answerAsApp, type AppActionResult } from "../chat/appAssistant.js";
 import { enqueueGenerationJob, getActiveJobForUser } from "./jobs.js";
 
 export const planChatRouter = Router();
@@ -85,9 +86,14 @@ planChatRouter.post(
     let jobId: string | null = null;
     let jobSpecId: string | null = null;
     let jobKind: "edit" | "regenerate" | null = null;
+    let appResult: AppActionResult | null = null;
     const activeJob = await getActiveJobForUser(req.user!.id);
 
-    if (action.action === "react" && action.reaction) {
+    if (action.action === "app") {
+      const answered = await answerAsApp(req.user!.id, req.body.message, userMessage.id);
+      reply = answered.reply;
+      appResult = answered.result;
+    } else if (action.action === "react" && action.reaction) {
       const saved = await applyCandidateReaction(req.user!.id, candidate, action.reaction);
       learned = saved.reaction === "love" ? { summary: saved.featureSummary, features: saved.features } : null;
       reply = saved.reaction === "love" && saved.featureSummary
@@ -230,6 +236,8 @@ planChatRouter.post(
       jobId,
       jobSpecId,
       jobKind,
+      applied: appResult?.applied ?? [],
+      user: appResult?.user ?? null,
     });
   })
 );

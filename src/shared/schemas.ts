@@ -295,10 +295,48 @@ export const aiSpecUpdateSchema = z.object({
   moodContext: z.string().max(280).nullable().optional(),
 });
 
+export const APP_ACTION_TYPES = [
+  "set_travel",
+  "set_home_base",
+  "add_constraint",
+  "remove_constraint",
+  "add_taste",
+  "remove_taste",
+  "add_person",
+  "set_relationship",
+  "remove_person",
+  "add_time_off",
+  "update_time_off",
+  "remove_time_off",
+  "confirm_hunch",
+  "dismiss_hunch",
+  "remove_hunch",
+] as const;
+
+/** One flat shape for every settings change Buddy may request; the server validates per type before applying. */
+export const aiAppActionSchema = z.object({
+  type: z.enum(APP_ACTION_TYPES),
+  id: z.string().max(64).nullish(),
+  personName: z.string().max(120).nullish(),
+  text: z.string().max(500).nullish(),
+  polarity: z.enum(["love", "avoid"]).nullish(),
+  name: z.string().max(120).nullish(),
+  kind: z.enum(["person", "pet"]).nullish(),
+  relationship: z.string().max(120).nullish(),
+  label: z.string().max(80).nullish(),
+  startDate: z.string().max(10).nullish(),
+  endDate: z.string().max(10).nullish(),
+  dayKm: z.number().nullish(),
+  weekendKm: z.number().nullish(),
+  city: z.string().max(120).nullish(),
+});
+export type AiAppAction = z.infer<typeof aiAppActionSchema>;
+
 export const aiChatResponseSchema = z.object({
   reply: z.string().min(1).max(1200),
   specUpdate: aiSpecUpdateSchema.nullable().optional(),
   extractions: z.array(aiExtractionSchema).max(10).default([]),
+  actions: z.array(aiAppActionSchema).max(8).default([]),
 });
 export type AiChatResponse = z.infer<typeof aiChatResponseSchema>;
 
@@ -326,7 +364,7 @@ export const aiEventFeatureResponseSchema = z.object({
 export type AiEventFeatureResponse = z.infer<typeof aiEventFeatureResponseSchema>;
 
 export const aiPlanActionResponseSchema = z.object({
-  action: z.enum(["edit", "react", "lock", "share", "show_another", "invite_friend", "explain"]),
+  action: z.enum(["edit", "react", "lock", "share", "show_another", "invite_friend", "explain", "app"]),
   reaction: reactionSchema.nullable().optional(),
   editMode: z.enum(["restaurant", "meal_time", "budget", "walking", "general"]).nullable().optional(),
   instruction: z.string().min(1).max(500),

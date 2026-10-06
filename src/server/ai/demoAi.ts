@@ -349,6 +349,7 @@ export function generateCandidatesDemo(ctx: GenerateContext): AiGenerateResponse
 export interface ChatContext {
   message: string;
   seed: string;
+  snapshot?: string;
 }
 
 const CONSTRAINT_PHRASES = [
@@ -445,7 +446,7 @@ export function chatRespondDemo(ctx: ChatContext): AiChatResponse {
       ? "Got it — I've noted that for your household memory. Want me to fold it into a plan?"
       : "Tell me a bit more about who's involved or what kind of day you're after, and I can turn it into a plan.";
 
-  return { reply, specUpdate: null, extractions };
+  return { reply, specUpdate: null, extractions, actions: [] };
 }
 
 export function feedbackExtractDemo(comment: string): AiFeedbackResponse {

@@ -44,6 +44,12 @@ export default function MemoryPage() {
   }
 
   useEffect(() => {
+    const refresh = () => { void loadAll().catch(() => undefined); };
+    window.addEventListener("planbuddy:memory-changed", refresh);
+    return () => window.removeEventListener("planbuddy:memory-changed", refresh);
+  }, []);
+
+  useEffect(() => {
     loadAll()
       .catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't load Memory."))
       .finally(() => setLoading(false));
@@ -419,7 +425,14 @@ function TravelDistanceCard() {
   const [weekend, setWeekend] = useState(radiusForScale("weekend", auth.user));
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dirty = day !== radiusForScale("day_off", auth.user) || weekend !== radiusForScale("weekend", auth.user);
+  const savedDay = radiusForScale("day_off", auth.user);
+  const savedWeekend = radiusForScale("weekend", auth.user);
+  const dirty = day !== savedDay || weekend !== savedWeekend;
+
+  useEffect(() => {
+    setDay(savedDay);
+    setWeekend(savedWeekend);
+  }, [savedDay, savedWeekend]);
 
   async function save() {
     setError(null);

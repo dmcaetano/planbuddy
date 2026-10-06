@@ -73,6 +73,8 @@ export default function PlanBrowser({ initial, participants, onStartOver, startO
     }
   }, [chatThreadSpecId, current, result, setFocusedPlan, state]);
 
+  useEffect(() => () => setFocusedPlan(null), [setFocusedPlan]);
+
   useEffect(() => {
     function onLocked(event: Event) {
       const detail = (event as CustomEvent<{ planId?: string }>).detail;
