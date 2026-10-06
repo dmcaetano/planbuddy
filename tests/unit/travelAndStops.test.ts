@@ -17,6 +17,10 @@ describe("radiusForScale", () => {
   it("changes the moment fingerprint when the radius changes", () => {
     expect(computeInputsFingerprint([], [], 25)).not.toBe(computeInputsFingerprint([], [], 40));
     expect(computeInputsFingerprint([], [])).toBe(computeInputsFingerprint([], []));
+    const lisbon = { lat: 38.72, lng: -9.14 };
+    const faro = { lat: 37.02, lng: -7.93 };
+    expect(computeInputsFingerprint([], [], 25, lisbon)).not.toBe(computeInputsFingerprint([], [], 25, faro));
+    expect(computeInputsFingerprint([], [], 25, lisbon)).toBe(computeInputsFingerprint([], [], 25, { lat: 38.721, lng: -9.141 }));
   });
 });
 

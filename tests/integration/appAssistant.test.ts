@@ -131,6 +131,7 @@ describe("Buddy app assistant", () => {
     const snapshot = await buildAppSnapshot(a.userId);
     expect(snapshot).toContain("Dani");
     expect(snapshot).not.toContain("secret-b-taste");
+    expect(JSON.parse(snapshot).planner).toMatchObject({ working: null, recentPlans: [] });
   });
 
   it("keeps the reply honest when nothing was applied", () => {

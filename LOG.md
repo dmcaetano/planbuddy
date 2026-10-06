@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.4.3: Faro plan for a Lisbon user, planner vs chat
+
+Diogo kept seeing a Faro weekend plan while living in Lisbon. Reuse key ignored the home base and the distance of the stored plan; both now checked (`fingerprint.ts`, `tryReuse`). Separated roles: Buddy chat reads plans and worker progress through the snapshot but never builds them; the Planner worker (jobs queue) does.
+
 ## 2026-10-07 - v1.4.0 "Vegeta": Buddy answers and changes anything in the app
 
 Diogo: chat broken on Memory ("Editing this plan", answered "I'm focused on this plan" to a circle question) and wanted it to answer app questions and change any setting. Root cause: `PlanFocusContext` kept the last plan focused after leaving /plan, so the dock used the plan-only lane. Fix: plan lane only when `/plan` is in view and focus cleared on unmount; everything else goes to a unified assistant (snapshot + actions + undo). Also fixed Memory's distance sliders ignoring server-side changes. Lesson: a script that types then presses Enter can miss the send; click the send button when verifying.

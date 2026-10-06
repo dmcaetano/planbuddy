@@ -162,6 +162,7 @@ async function tryReuse(
   if (!candidate || candidate.rejected) return null;
   // Spec rule 10: the hard-constraint filter is applied again to a reused plan.
   if (findViolatedConstraint(candidate, constraints)) return null;
+  if (candidate.travelEstimateKm != null && candidate.travelEstimateKm > base.radiusKm * 2) return null;
   const spec = await getPlanSpec(base.userId, plan.planSpecId);
   if (!spec) return null;
 
@@ -310,7 +311,7 @@ async function resolveCore(
   }
 
   const constraints = await listActiveConstraints(userId);
-  const fingerprint = computeInputsFingerprint(household, constraints, radiusKm);
+  const fingerprint = computeInputsFingerprint(household, constraints, radiusKm, user ? { lat: user.homeBaseLat, lng: user.homeBaseLng } : null);
   const times = momentTimes(moment.kind, moment.planDate, localIso);
 
   const newest = await findNewestMomentPlan(userId, moment.key, fingerprint);

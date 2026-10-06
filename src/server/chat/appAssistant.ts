@@ -14,6 +14,8 @@ import { listFriends } from "../friends/repo.js";
 import { getUserById, setHomeBase, setTravelPreferences } from "../users/repo.js";
 import { geocodeCity } from "../weather/openMeteo.js";
 import { chatRespond } from "../ai/index.js";
+import { lastSurfacedPlans } from "../plans/plans.repo.js";
+import { getActiveJobForUser } from "../plans/jobs.js";
 import { isoDateSchema, type AiAppAction } from "../../shared/schemas.js";
 import { radiusForScale } from "../../shared/scale.js";
 import type { PublicUser } from "../../shared/types.js";
@@ -37,7 +39,7 @@ export interface AppActionResult {
 
 /** Compact, id-bearing picture of everything Buddy may read or change. Never contains other users' memory. */
 export async function buildAppSnapshot(userId: string): Promise<string> {
-  const [user, people, constraints, tastes, hunches, timeOff, friends] = await Promise.all([
+  const [user, people, constraints, tastes, hunches, timeOff, friends, recentPlans, activeJob] = await Promise.all([
     getUserById(userId),
     listParticipants(userId),
     listConstraints(userId),
@@ -45,6 +47,8 @@ export async function buildAppSnapshot(userId: string): Promise<string> {
     listHunches(userId),
     listTimeOff(userId),
     listFriends(userId),
+    lastSurfacedPlans(userId, 3),
+    getActiveJobForUser(userId),
   ]);
   const nameOf = (id: string | null) => (id ? people.find((p) => p.id === id)?.name ?? "Household" : "Household");
   return JSON.stringify({
@@ -56,6 +60,11 @@ export async function buildAppSnapshot(userId: string): Promise<string> {
     tastes: tastes.map((t) => ({ id: t.id, text: t.text, polarity: t.polarity, for: nameOf(t.participantId) })),
     hunches: hunches.filter((h) => h.status === "active").map((h) => ({ id: h.id, text: h.text, polarity: h.polarity, for: nameOf(h.participantId) })),
     timeOff: timeOff.map((t) => ({ id: t.id, label: t.label, startDate: t.startDate, endDate: t.endDate })),
+    planner: {
+      note: "Plans are built and edited by the separate Planner worker, never by you. You can only read them here.",
+      working: activeJob ? { status: activeJob.status, stage: activeJob.stageLabel, progressPct: Math.round(activeJob.progressPct) } : null,
+      recentPlans: recentPlans.map((pl) => ({ title: pl.title, category: pl.category, distanceKmFromHome: pl.distanceKm, stops: pl.beats.map((b) => b.place?.name ?? b.title).filter(Boolean) })),
+    },
     circle: friends.map((f) => ({ name: f.displayName, groups: f.labels.map((l) => l.name) })),
   });
 }
