@@ -14,6 +14,8 @@ v1.6.0 "Naruto": PlanBuddy implements Buddy Contract v1 so the OmniBuddy hub can
 
 v1.7.0 "Spider-Man": Memory page can add/remove people and pets; Buddy chat adds stated facts directly and hands plan requests to the Planner worker (new_plan action). Verified live with canary.
 
+v1.7.1: fun-profile quiz now visible on the Memory page; hunch auto-dismissal slowed (plan-count decay 6 to 30). v1.9.0-v1.9.2 "Goku": plan length follows the time covered (afternoon 4, day 5, weekend 7 beats, was fixed 3); Sunday restarts at 10:30 with its own clock. Known limit: moment retime.ts only handles 3-beat plans, so longer plans reused at another time are regenerated.
+
 v1.5.1: the New plan button now floats beside the Buddy chat button on every page (removed from the Home header); from another page it opens Home and builds a fresh plan. Verified live at 390px. Family ledger row added (every Buddy gets one).
 
 v1.5.0 "Trunks": zero-click philosophy (the goal behind max-one-click). A "New plan" button sits in the Home header in every state (ready, locked, error, loading); it posts `fresh:true` to /api/moment, which skips reuse, the locked cover and the per-spec ceiling and builds a new proposal. Home shows a plan with no taps; New plan is the escape hatch. Home was user-confirmed to have been set to Faro (the wrong-city report was a data issue).
