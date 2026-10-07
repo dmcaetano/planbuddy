@@ -41,6 +41,16 @@ export function createApp() {
       credentials: true,
     })
   );
+  // Buddy Contract bodies are tiny: cap them at 16kb before anything is read (the first parser to run wins)
+  app.use(
+    "/api/buddy",
+    express.json({
+      limit: "16kb",
+      verify: (req, _res, buf) => {
+        (req as Request).rawBody = buf.toString("utf8");
+      },
+    })
+  );
   app.use(
     express.json({
       limit: "256kb",
@@ -107,6 +117,12 @@ export function createApp() {
     }
     if (err instanceof HttpError) {
       res.status(err.status).json({ error: err.message });
+      return;
+    }
+    // body-parser failures (too large / malformed JSON) are the client's fault, not a server error
+    const bp = err as { type?: string; status?: number };
+    if (bp && typeof bp.type === "string" && bp.type.startsWith("entity.") && (bp.status === 413 || bp.status === 400)) {
+      res.status(bp.status).json({ error: bp.status === 413 ? "Request too large" : "Malformed request" });
       return;
     }
     logger.error("Unhandled error", { error: err instanceof Error ? err.stack ?? err.message : String(err) });

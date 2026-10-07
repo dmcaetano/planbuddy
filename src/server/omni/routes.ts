@@ -42,15 +42,22 @@ buddyRouter.get("/health", (_req, res) => {
 
 const SKEW_MS = 5 * 60_000;
 
-// Brute-force damper: only FAILED signed requests count (successes are skipped), per client IP.
-const badSignatureLimiter = rateLimit({
-  windowMs: 5 * 60_000,
-  limit: 60,
-  skipSuccessfulRequests: true,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "too many bad requests" },
-});
+// Brute-force damper. It runs ONLY after a signature has failed verification, counts per source IP (never per
+// link id), and is never consulted for a valid signature: an attacker can neither burn the real hub's budget nor
+// lock it out. At most the attacker's own IP gets 429 instead of 401.
+const BAD_LIMIT = 60;
+const BAD_WINDOW_MS = 5 * 60_000;
+const badByIp = new Map<string, { n: number; resetAt: number }>();
+function noteBadSignature(ip: string, now = Date.now()): boolean {
+  if (badByIp.size > 10_000) badByIp.clear();
+  const e = badByIp.get(ip);
+  if (!e || e.resetAt < now) {
+    badByIp.set(ip, { n: 1, resetAt: now + BAD_WINDOW_MS });
+    return false;
+  }
+  e.n++;
+  return e.n > BAD_LIMIT;
+}
 
 /**
  * Signed requests only: header X-Omni-Link picks the key, X-Omni-Signature = HMAC(ts + '.' + body).
@@ -62,12 +69,15 @@ async function requireSigned(req: Request, res: Response, next: NextFunction): P
     const linkId = (req.get("X-Omni-Link") ?? "").slice(0, 128);
     const link = linkId ? await getLinkById(linkId) : null;
     const sig = req.get("X-Omni-Signature");
-    if (!link || !verifySignature(link.signingKey, req.get("X-Omni-Timestamp"), sig, req.rawBody ?? "")) {
-      res.status(401).json({ error: "bad signature" });
+    const tsHeader = req.get("X-Omni-Timestamp");
+    if (!link || !verifySignature(link.signingKey, tsHeader, sig, req.rawBody ?? "")) {
+      res.status(noteBadSignature(req.ip ?? "?") ? 429 : 401).json({ error: "bad signature" });
       return;
     }
     if (req.method !== "GET" && req.method !== "HEAD") {
-      const fresh = await claimSignature(link.linkId, String(sig).toLowerCase(), 2 * SKEW_MS + 60_000);
+      // remembered until the signature's own timestamp can no longer pass the skew check (never shorter)
+      const expiresAt = Math.max(Number(tsHeader) + SKEW_MS + 60_000, Date.now() + SKEW_MS + 60_000);
+      const fresh = await claimSignature(link.linkId, String(sig).toLowerCase(), expiresAt);
       if (!fresh) {
         res.status(401).json({ error: "request already used" });
         return;
@@ -80,7 +90,7 @@ async function requireSigned(req: Request, res: Response, next: NextFunction): P
   }
 }
 
-const signedGuards = [badSignatureLimiter, requireSigned];
+const signedGuards = [requireSigned];
 
 const bodyObject = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const str = (v: unknown, max: number): string => (typeof v === "string" ? v.slice(0, max) : "");

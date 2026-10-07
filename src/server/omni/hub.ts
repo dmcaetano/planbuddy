@@ -65,13 +65,30 @@ export function usableLinkBase(link: OmniLink): string | null {
 }
 
 const MAX_HUB_BYTES = 256 * 1024;
-async function readJsonCapped(res: Response): Promise<unknown> {
-  const len = Number(res.headers.get("content-length") ?? 0);
-  if (len > MAX_HUB_BYTES) return null;
-  const text = await res.text();
-  if (text.length > MAX_HUB_BYTES) return null;
+const MAX_PUSH_ITEMS = 500;
+/** Reads at most MAX_HUB_BYTES from the stream (declared length checked first) and only then parses. */
+export async function readJsonCapped(res: Response, max = MAX_HUB_BYTES): Promise<unknown> {
+  const declared = Number(res.headers.get("content-length") ?? 0);
+  if (declared > max) {
+    await res.body?.cancel().catch(() => undefined);
+    return null;
+  }
+  if (!res.body) return null;
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
   try {
-    return JSON.parse(text);
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
   } catch {
     return null;
   }
@@ -176,9 +193,10 @@ export async function syncToHub(userId: string): Promise<{ pushed: number; tombs
     if (!base) return null;
     const current = await buildPushItems(userId);
     const before = await pushedDigests(userId);
-    const changed = current.filter((i) => before.get(i.origin_item_id) !== digestOf(i));
+    // bounded per push, before anything is built or sent; the rest follows on the next debounced sync
+    const changed = current.filter((i) => before.get(i.origin_item_id) !== digestOf(i)).slice(0, MAX_PUSH_ITEMS);
     const alive = new Set(current.map((i) => i.origin_item_id));
-    const tombstones = [...before.keys()].filter((id) => !alive.has(id));
+    const tombstones = [...before.keys()].filter((id) => !alive.has(id)).slice(0, MAX_PUSH_ITEMS);
     if (!changed.length && !tombstones.length) return { pushed: 0, tombstoned: 0 };
     const res = await hubFetch(`${base}/api/ingest`, {
       method: "POST",

@@ -118,13 +118,15 @@ export async function sealLegacyLinks(): Promise<void> {
 }
 
 /** Remembers a signature until `ttlMs` has passed. Returns false when it was already seen (a replay). */
-export async function claimSignature(linkId: string, signature: string, ttlMs: number): Promise<boolean> {
+export async function claimSignature(linkId: string, signature: string, expiresAtMs: number): Promise<boolean> {
   const db = await getDb();
-  await db.query("DELETE FROM omni_seen WHERE expires_at < now()");
+  // one statement: the primary key makes insert-or-reject atomic, so two concurrent copies cannot both win
   const { rows } = await db.query(
-    `INSERT INTO omni_seen (signature, link_id, expires_at) VALUES ($1,$2, now() + ($3 || ' milliseconds')::interval)
+    `INSERT INTO omni_seen (signature, link_id, expires_at) VALUES ($1,$2, to_timestamp($3 / 1000.0))
      ON CONFLICT (signature) DO NOTHING RETURNING signature`,
-    [signature, linkId, String(ttlMs)]
+    [signature, linkId, expiresAtMs]
   );
+  // housekeeping is separate and best-effort; it can never un-reject a replay because only expired rows go
+  void db.query("DELETE FROM omni_seen WHERE expires_at < now()").catch(() => undefined);
   return rows.length > 0;
 }

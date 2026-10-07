@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.6.2: second security pass
+
+Bad-signature throttle moved after verification and keyed per IP (valid signatures never blocked); replay claim is one atomic insert with expiry from the signature's own timestamp; hub response read is streamed with a byte cap before parsing, push batches capped, signed bodies capped at 16kb before parsing (413). 5 new tests.
+
 ## 2026-10-07 - v1.6.1: Buddy Contract security fixes
 
 Fixed prompt injection from hub text, signature replay (omni_seen), unscoped tombstone deletes, plaintext link secrets, hub URL/secret exfil, error leakage and body validation. 10 new tests in omniContract.test.ts; lint, typecheck, build and all test files green file by file.

@@ -4,7 +4,7 @@ import { getTestApp } from "../helpers/testApp.js";
 import { HDR, waitForJob } from "../helpers/planJobs.js";
 import { getDb } from "../../src/server/db/client.js";
 import { localNow } from "../../src/server/omni/card.js";
-import { applyTombstones, buildPushItems, formatContextBlock, hubBase, sanitizeHubText, signBody, usableLinkBase, verifySignature } from "../../src/server/omni/hub.js";
+import { applyTombstones, buildPushItems, readJsonCapped, formatContextBlock, hubBase, sanitizeHubText, signBody, usableLinkBase, verifySignature } from "../../src/server/omni/hub.js";
 import { getLinkById, saveLink } from "../../src/server/omni/repo.js";
 import { env } from "../../src/server/env.js";
 import { createConstraint } from "../../src/server/memory/constraints.repo.js";
@@ -305,5 +305,64 @@ describe("security: link secrets, hub address, input limits", () => {
     const s = await signed("post", "/api/buddy/suggest", { entity: { type: ["cuisine"], canonical: "x".repeat(5000) } });
     expect(s.status).toBe(200);
     expect(s.body.candidates).toEqual([]);
+  });
+});
+
+describe("security round 2: lockout, replay atomicity, bounds before parsing", () => {
+  it("a flood of bad signatures from one IP never blocks a valid signature, from that IP or any other", async () => {
+    const bad = () => request(app).get("/api/buddy/card").set("X-Forwarded-For", "203.0.113.7").set("X-Omni-Timestamp", String(Date.now())).set("X-Omni-Link", LINK).set("X-Omni-Signature", "0".repeat(64));
+    let last = 0;
+    for (let n = 0; n < 70; n++) last = (await bad()).status;
+    expect(last).toBe(429); // the attacker's own IP is throttled...
+    const okSameIp = await signed("get", "/api/buddy/card").set("X-Forwarded-For", "203.0.113.7");
+    expect(okSameIp.status).toBe(200); // ...but a valid signature is never refused
+    const okOtherIp = await signed("get", "/api/buddy/card").set("X-Forwarded-For", "198.51.100.9");
+    expect(okOtherIp.status).toBe(200);
+    const badOtherIp = await request(app).get("/api/buddy/card").set("X-Forwarded-For", "198.51.100.10").set("X-Omni-Timestamp", String(Date.now())).set("X-Omni-Link", LINK).set("X-Omni-Signature", "0".repeat(64));
+    expect(badOtherIp.status).toBe(401); // other IPs have their own budget
+  });
+
+  it("two concurrent copies of one signed POST: exactly one wins (atomic insert-or-reject)", async () => {
+    const body = JSON.stringify({ action: "primary", actionId: "view_plan" });
+    const ts = String(Date.now());
+    const send = () => request(app).post("/api/buddy/act").set("X-Omni-Timestamp", ts).set("X-Omni-Link", LINK).set("X-Omni-Signature", signBody(KEY, ts, body)).set("Content-Type", "application/json").send(body);
+    const rs = await Promise.all([send(), send(), send(), send()]);
+    expect(rs.filter((r) => r.status === 200).length).toBe(1);
+    expect(rs.filter((r) => r.status === 401).length).toBe(3);
+  });
+
+  it("remembers a signature until its own timestamp can no longer pass the skew check", async () => {
+    const body = JSON.stringify({ action: "primary", actionId: "view_plan" });
+    const ts = String(Date.now() + 4 * 60_000); // 4 minutes ahead is still inside the window
+    const sig = signBody(KEY, ts, body);
+    const res = await request(app).post("/api/buddy/act").set("X-Omni-Timestamp", ts).set("X-Omni-Link", LINK).set("X-Omni-Signature", sig).set("Content-Type", "application/json").send(body);
+    expect(res.status).toBe(200);
+    const db = await getDb();
+    const { rows } = await db.query<{ ms: number }>("SELECT (extract(epoch from expires_at) * 1000)::float8 AS ms FROM omni_seen WHERE signature = $1", [sig]);
+    expect(rows[0].ms).toBeGreaterThanOrEqual(Number(ts) + 5 * 60_000);
+  });
+
+  it("refuses an oversize signed body before parsing it", async () => {
+    const big = JSON.stringify({ action: "accept", candidate: { title: "x".repeat(40_000) } });
+    const ts = String(Date.now());
+    const res = await request(app).post("/api/buddy/act").set("X-Omni-Timestamp", ts).set("X-Omni-Link", LINK).set("X-Omni-Signature", signBody(KEY, ts, big)).set("Content-Type", "application/json").send(big);
+    expect(res.status).toBe(413);
+  });
+
+  it("readJsonCapped stops reading at the byte cap and never parses past it", async () => {
+    const mk = (chunks: string[], headers: Record<string, string> = {}) => {
+      let i = 0;
+      const stream = new ReadableStream<Uint8Array>({
+        pull(c) {
+          if (i < chunks.length) c.enqueue(new TextEncoder().encode(chunks[i++]));
+          else c.close();
+        },
+      });
+      return new Response(stream, { headers });
+    };
+    expect(await readJsonCapped(mk(['{"a":', "1}"]))).toEqual({ a: 1 });
+    expect(await readJsonCapped(mk(['{"a":"', "x".repeat(100), '"}']), 50)).toBeNull(); // streamed past the cap
+    expect(await readJsonCapped(mk(["{}"], { "content-length": "999999" }), 50)).toBeNull(); // declared too large
+    expect(await readJsonCapped(mk(["not json"]))).toBeNull();
   });
 });
