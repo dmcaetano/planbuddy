@@ -5,7 +5,7 @@ import { HDR, waitForJob } from "../helpers/planJobs.js";
 import { getDb } from "../../src/server/db/client.js";
 import { localNow } from "../../src/server/omni/card.js";
 import { applyTombstones, buildPushItems, readJsonCapped, formatContextBlock, hubBase, sanitizeHubText, signBody, usableLinkBase, verifySignature } from "../../src/server/omni/hub.js";
-import { claimSignature, countBadSignature, getLinkById, saveLink } from "../../src/server/omni/repo.js";
+import { claimSignature, countBadSignature, sweepBadSignatures, getLinkById, saveLink } from "../../src/server/omni/repo.js";
 import { env } from "../../src/server/env.js";
 import { createConstraint } from "../../src/server/memory/constraints.repo.js";
 import { createTaste } from "../../src/server/memory/tastes.repo.js";
@@ -402,5 +402,39 @@ describe("security round 3: throttle source and persistence, single clock", () =
     await new Promise((r) => setTimeout(r, 100));
     const gone = await db.query("SELECT 1 FROM omni_seen WHERE signature = 'sig-clock-test'");
     expect(gone.rows.length).toBe(0);
+  });
+});
+
+describe("security round 4: the failure-counter table is bounded", () => {
+  it("one row per IP, expired windows purged, hard cap evicts oldest first, valid signatures unaffected", async () => {
+    const db = await getDb();
+    const t0 = Date.now();
+    await db.query("DELETE FROM omni_bad_sig");
+    await countBadSignature("203.0.113.200", t0, 60_000);
+    await countBadSignature("203.0.113.200", t0, 60_000);
+    expect((await db.query("SELECT 1 FROM omni_bad_sig WHERE ip = '203.0.113.200'")).rows.length).toBe(1); // upsert, not a row per request
+    // 50 rotating source IPs, each a little newer than the last, plus one long-expired window
+    await db.query("INSERT INTO omni_bad_sig (ip, window_start, n) VALUES ('expired', $1, 5)", [t0 - 10 * 60_000]);
+    for (let i = 0; i < 50; i++) await db.query("INSERT INTO omni_bad_sig (ip, window_start, n) VALUES ($1, $2, 1)", [`10.1.0.${i}`, t0 + i]);
+    await sweepBadSignatures(t0 + 100, 60_000, 20);
+    const left = await db.query<{ ip: string }>("SELECT ip FROM omni_bad_sig ORDER BY window_start DESC");
+    expect(left.rows.length).toBe(20);
+    expect(left.rows.some((r) => r.ip === "expired")).toBe(false);
+    expect(left.rows.some((r) => r.ip === "10.1.0.49")).toBe(true); // newest kept
+    expect(left.rows.some((r) => r.ip === "10.1.0.0")).toBe(false); // oldest evicted
+    // a valid signed request still works with the table in this state
+    expect((await signed("get", "/api/buddy/card")).status).toBe(200);
+  });
+
+  it("a failing counter never turns a bad signature into a 500 and never blocks a valid one", async () => {
+    const db = await getDb();
+    await db.query("ALTER TABLE omni_bad_sig RENAME TO omni_bad_sig_tmp");
+    try {
+      const bad = await request(app).get("/api/buddy/card").set("X-Forwarded-For", "192.0.2.77").set("X-Omni-Timestamp", String(Date.now())).set("X-Omni-Link", LINK).set("X-Omni-Signature", "2".repeat(64));
+      expect(bad.status).toBe(401);
+      expect((await signed("get", "/api/buddy/card")).status).toBe(200);
+    } finally {
+      await db.query("ALTER TABLE omni_bad_sig_tmp RENAME TO omni_bad_sig");
+    }
   });
 });

@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.6.4: bound the failure-counter table
+
+omni_bad_sig stays one row per IP (upsert) and is now swept every 500 writes or 30 s: expired windows deleted, then a hard 20,000-row cap evicts oldest first. Counter errors are caught, so a full or broken table can never fail a valid signature or turn a rejection into a 500. 2 new tests.
+
 ## 2026-10-07 - v1.6.3: third security pass
 
 Bad-signature counter is now a persistent atomic table (omni_bad_sig, migration 0015) keyed on the trusted proxy hop (req.ip, trust proxy 1) and checked only on the failure path; replay expiry uses one clock (server now + 2x skew + margin) and housekeeping uses the same app clock. 3 new tests; full suite 365 passed.

@@ -135,7 +135,30 @@ export async function claimSignature(linkId: string, signature: string, nowMs: n
   return rows.length > 0;
 }
 
-/** Atomically counts one failed signed request for a source IP; returns the count inside the current window. */
+export const BAD_SIG_MAX_ROWS = 20_000;
+const SWEEP_EVERY_WRITES = 500;
+const SWEEP_EVERY_MS = 30_000;
+let writesSinceSweep = 0;
+let lastSweepAt = 0;
+
+/** Bounds omni_bad_sig: drops expired windows, then evicts oldest-first beyond `maxRows`. One row per IP, never per request. */
+export async function sweepBadSignatures(nowMs: number, windowMs: number, maxRows = BAD_SIG_MAX_ROWS): Promise<void> {
+  const db = await getDb();
+  await db.query("DELETE FROM omni_bad_sig WHERE window_start < $1", [nowMs - windowMs]);
+  await db.query(
+    `DELETE FROM omni_bad_sig WHERE ip IN (
+       SELECT ip FROM omni_bad_sig ORDER BY window_start DESC OFFSET $1
+     )`,
+    // OFFSET keeps the newest maxRows rows; everything older is evicted
+    [maxRows]
+  );
+}
+
+/**
+ * Atomically counts one failed signed request for a source IP (upsert: one row per IP); returns the count inside the
+ * current window. The table is kept bounded by a periodic sweep (every 500 writes or 30 s), so rotating source IPs
+ * cannot grow it without limit.
+ */
 export async function countBadSignature(ip: string, nowMs: number, windowMs: number): Promise<number> {
   const db = await getDb();
   const { rows } = await db.query<{ n: number }>(
@@ -146,6 +169,11 @@ export async function countBadSignature(ip: string, nowMs: number, windowMs: num
      RETURNING n`,
     [ip, nowMs, windowMs]
   );
-  void db.query("DELETE FROM omni_bad_sig WHERE window_start < $1", [nowMs - windowMs]).catch(() => undefined);
+  writesSinceSweep++;
+  if (writesSinceSweep >= SWEEP_EVERY_WRITES || nowMs - lastSweepAt >= SWEEP_EVERY_MS) {
+    writesSinceSweep = 0;
+    lastSweepAt = nowMs;
+    void sweepBadSignatures(nowMs, windowMs).catch(() => undefined);
+  }
   return Number(rows[0]?.n ?? 1);
 }

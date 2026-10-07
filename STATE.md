@@ -3,7 +3,7 @@
 **SDLC class:** SOLO
 
 ## Status
-v1.6.3: third security pass (persistent atomic per-IP failure counter on the trusted proxy hop; replay expiry on a single server clock).
+v1.6.4: bounded the bad-signature table (periodic purge + hard 20k-row cap, oldest-first eviction, one row per IP; counter failures never affect requests). v1.6.3: persistent atomic per-IP failure counter; single-clock replay expiry.
 
 v1.6.2: second security pass (bad-signature throttle per IP and only after verification; atomic replay claim; byte caps before parsing).
 

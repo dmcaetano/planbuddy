@@ -58,7 +58,14 @@ const blockedUntil = new Map<string, number>();
 async function noteBadSignature(ip: string, now: number): Promise<boolean> {
   const until = blockedUntil.get(ip);
   if (until && until > now) return true;
-  const n = await countBadSignature(ip, now, BAD_WINDOW_MS);
+  let n = 0;
+  try {
+    n = await countBadSignature(ip, now, BAD_WINDOW_MS);
+  } catch (e) {
+    // the damper is best-effort: a database problem must never turn a rejected request into a 500
+    logger.warn("OmniBuddy failure counter unavailable", { error: (e as Error).name });
+    return false;
+  }
   if (n > BAD_LIMIT) {
     if (blockedUntil.size > 10_000) blockedUntil.clear();
     blockedUntil.set(ip, now + BAD_WINDOW_MS);
