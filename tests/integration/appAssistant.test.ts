@@ -134,6 +134,14 @@ describe("Buddy app assistant", () => {
     expect(JSON.parse(snapshot).planner).toMatchObject({ working: null, recentPlans: [] });
   });
 
+  it("signals a new plan to the client without applying or failing anything", async () => {
+    const { userId } = await signUp(app, "assistant-newplan@example.com");
+    const result = await applyAppActions(userId, [{ type: "new_plan", scope: "weekend" }], "plan something relaxed near the water");
+    expect(result.planRequest).toEqual({ scope: "weekend" });
+    expect(result.failed).toEqual([]);
+    expect(result.applied).toEqual([]);
+  });
+
   it("keeps the reply honest when nothing was applied", () => {
     const reply = composeAssistantReply("Done, removed it.", 1, { applied: [], failed: ["I couldn't find that taste"], user: null });
     expect(reply).toContain("couldn't make that change");

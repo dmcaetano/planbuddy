@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.7.0 "Spider-Man": add people/pets on Memory, smarter Buddy chat
+
+Memory page now has an add person/pet form and a remove button (owner protected). Chat acts on stated facts ("I have a dog called Luke" adds the pet) and no longer claims it can build plans: new `new_plan` action signals the client, which starts the Planner worker via Home (`planbuddy:new-plan`). Test added in appAssistant.test.ts.
+
 ## 2026-10-07 - v1.6.4: bound the failure-counter table
 
 omni_bad_sig stays one row per IP (upsert) and is now swept every 500 writes or 30 s: expired windows deleted, then a hard 20,000-row cap evicts oldest first. Counter errors are caught, so a full or broken table can never fail a valid signature or turn a rejection into a 500. 2 new tests.

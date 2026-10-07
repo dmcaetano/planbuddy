@@ -197,6 +197,7 @@ chatRouter.post(
       timeOffProposal: null,
       applied: appResult.applied,
       user: appResult.user,
+      planRequest: appResult.planRequest,
       session: endedSession,
     });
   })

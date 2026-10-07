@@ -311,6 +311,7 @@ export const APP_ACTION_TYPES = [
   "confirm_hunch",
   "dismiss_hunch",
   "remove_hunch",
+  "new_plan",
 ] as const;
 
 /** One flat shape for every settings change Buddy may request; the server validates per type before applying. */
@@ -329,6 +330,7 @@ export const aiAppActionSchema = z.object({
   dayKm: z.number().nullish(),
   weekendKm: z.number().nullish(),
   city: z.string().max(120).nullish(),
+  scope: z.enum(["tonight", "day", "weekend"]).nullish(),
 });
 export type AiAppAction = z.infer<typeof aiAppActionSchema>;
 

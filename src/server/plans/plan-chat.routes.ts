@@ -238,6 +238,7 @@ planChatRouter.post(
       jobKind,
       applied: appResult?.applied ?? [],
       user: appResult?.user ?? null,
+      planRequest: appResult?.planRequest ?? null,
     });
   })
 );

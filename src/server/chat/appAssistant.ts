@@ -36,6 +36,7 @@ export interface AppActionResult {
   applied: AppliedChange[];
   failed: string[];
   user: PublicUser | null;
+  planRequest: { scope: "tonight" | "day" | "weekend" | null } | null;
 }
 
 /** Compact, id-bearing picture of everything Buddy may read or change. Never contains other users' memory. */
@@ -86,6 +87,9 @@ async function applyOne(userId: string, action: AiAppAction, sourceMessage: stri
     out.failed.push(reason);
   };
   switch (action.type) {
+    case "new_plan":
+      out.planRequest = { scope: action.scope ?? null };
+      return;
     case "set_travel": {
       const user = await getUserById(userId);
       const prevDay = radiusForScale("day_off", user);
@@ -253,7 +257,7 @@ async function applyOne(userId: string, action: AiAppAction, sourceMessage: stri
 
 /** Applies model-requested settings changes. Every id is re-checked against this user's own rows before anything is written. */
 export async function applyAppActions(userId: string, actions: AiAppAction[], sourceMessage: string): Promise<AppActionResult> {
-  const out: AppActionResult = { applied: [], failed: [], user: null };
+  const out: AppActionResult = { applied: [], failed: [], user: null, planRequest: null };
   for (const action of actions) {
     try {
       await applyOne(userId, action, sourceMessage, out);
@@ -268,7 +272,7 @@ export async function applyAppActions(userId: string, actions: AiAppAction[], so
 export function composeAssistantReply(modelReply: string, requested: number, result: AppActionResult): string {
   if (requested === 0) return modelReply;
   const failures = result.failed.length ? ` I couldn't do this: ${result.failed.join("; ")}.` : "";
-  if (result.applied.length === 0) return `I couldn't make that change.${failures}`.trim();
+  if (result.applied.length === 0 && !result.planRequest) return `I couldn't make that change.${failures}`.trim();
   return `${modelReply}${failures}`.trim();
 }
 

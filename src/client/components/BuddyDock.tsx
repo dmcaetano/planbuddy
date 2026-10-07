@@ -5,6 +5,7 @@ import { api, ApiError } from "../api/client";
 import type { ChatMessage, ChatSession } from "../api/types";
 import { useGeneration } from "../state/GenerationContext";
 import { usePlanFocus } from "../state/PlanFocusContext";
+import { requestNewPlan, type NewPlanScope } from "../lib/newPlan";
 import PlanEditChat from "./PlanEditChat";
 import RelationshipProposalChips, { type RelationshipProposal } from "./RelationshipProposalChips";
 import TimeOffProposalChips from "./TimeOffProposalChips";
@@ -13,7 +14,7 @@ import { useAuth } from "../state/AuthContext";
 import type { PublicUser } from "../api/types";
 import type { TimeOffProposal } from "@shared/momentTypes";
 
-function MemoryBuddyThread() {
+function MemoryBuddyThread({ onPlanRequest }: { onPlanRequest: (scope: NewPlanScope) => void }) {
   const [session, setSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -38,11 +39,12 @@ function MemoryBuddyThread() {
     setInput(""); setSending(true); setError(null); setProposal(null); setTimeOffProposal(null); setApplied(null);
     setMessages((current) => [...current, { id: `local-${Date.now()}`, sessionId: session.id, role: "user", content, createdAt: new Date().toISOString() }]);
     try {
-      const data = await api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage; session: ChatSession; relationshipProposal?: RelationshipProposal | null; timeOffProposal?: TimeOffProposal | null; applied?: AppliedChange[]; user?: PublicUser | null }>(`/chat/session/${session.id}/messages`, { content });
+      const data = await api.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage; session: ChatSession; relationshipProposal?: RelationshipProposal | null; timeOffProposal?: TimeOffProposal | null; applied?: AppliedChange[]; user?: PublicUser | null; planRequest?: { scope: NewPlanScope } | null }>(`/chat/session/${session.id}/messages`, { content });
       setMessages((current) => [...current.slice(0, -1), data.userMessage, data.assistantMessage]);
       setSession(data.session);
       setProposal(data.relationshipProposal ? { id: data.assistantMessage.id, value: data.relationshipProposal } : null);
       setTimeOffProposal(data.timeOffProposal ? { id: data.assistantMessage.id, value: data.timeOffProposal } : null);
+      if (data.planRequest) onPlanRequest(data.planRequest.scope);
       if (data.applied?.length) {
         setApplied({ id: data.assistantMessage.id, changes: data.applied });
         announceAppChange(data.user, auth.setUser);
@@ -82,11 +84,7 @@ export default function BuddyDock() {
   const activeJob = generation.job && (generation.job.status === "queued" || generation.job.status === "running") ? generation.job : null;
   function newPlan() {
     setOpen(false);
-    if (location.pathname === "/") window.dispatchEvent(new Event("planbuddy:new-plan"));
-    else {
-      sessionStorage.setItem("planbuddy:new-plan", "1");
-      navigate("/");
-    }
+    requestNewPlan(null, location.pathname === "/", navigate);
   }
   const completedElsewhere = generation.job?.status === "succeeded" && location.pathname !== "/plan";
 
@@ -101,7 +99,7 @@ export default function BuddyDock() {
         <span><strong>{activeJob.stageDetail || activeJob.stageLabel || "Building your plan"}</strong><small>{Math.round(activeJob.progressPct)}% · keeps working while you browse</small></span>
       </button>}
       {completedElsewhere && <button type="button" className="buddy-job-status buddy-job-status--ready" onClick={() => navigate("/plan")}><Sparkles size={17} /><span><strong>Your plan is ready</strong><small>Open it to see the change.</small></span></button>}
-      {planInView ? <PlanEditChat compact threadSpecId={planInView.specId} candidate={planInView.candidate} onRevision={() => undefined} onLocked={(planId) => window.dispatchEvent(new CustomEvent("planbuddy:locked", { detail: { planId } }))} /> : <MemoryBuddyThread />}
+      {planInView ? <PlanEditChat compact threadSpecId={planInView.specId} candidate={planInView.candidate} onRevision={() => undefined} onLocked={(planId) => window.dispatchEvent(new CustomEvent("planbuddy:locked", { detail: { planId } }))} /> : <MemoryBuddyThread onPlanRequest={(scope) => { setOpen(false); requestNewPlan(scope, location.pathname === "/", navigate); }} />}
       <Link className="buddy-panel__full-chat" to="/chat" onClick={() => setOpen(false)}><MessageCircle size={15} /> Open full chat</Link>
     </section>}
     <button type="button" className="buddy-fab buddy-fab--plan" onClick={newPlan} disabled={Boolean(activeJob)} aria-label="New plan" title="New plan"><RefreshCw size={20} /></button>

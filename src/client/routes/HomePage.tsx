@@ -88,14 +88,14 @@ export default function HomePage() {
    * (a refresh on focus); "full" shows the skeleton; "afterJob" is the follow-up to a moment job and
    * treats a second "generating" answer as a failure instead of looping.
    */
-  const loadMoment = useCallback(async (mode: "full" | "silent" | "afterJob" = "full", fresh = false) => {
+  const loadMoment = useCallback(async (mode: "full" | "silent" | "afterJob" = "full", fresh = false, kind?: MomentKind) => {
     const seq = ++requestSeqRef.current;
     if (mode !== "silent") {
       setPhase("loading");
       setError(null);
     }
     try {
-      const data = await api.post<MomentResponse>("/moment", { localDateTime: formatLocalDateTime(new Date()), ...(fresh ? { fresh: true } : {}) });
+      const data = await api.post<MomentResponse>("/moment", { localDateTime: formatLocalDateTime(new Date()), ...(fresh ? { fresh: true } : {}), ...(kind ? { kind } : {}) });
       if (!mountedRef.current || seq !== requestSeqRef.current) return;
       loadedAtRef.current = Date.now();
       keyRef.current = data.moment.key;
@@ -156,9 +156,9 @@ export default function HomePage() {
     // proposal when it finishes, so asking for the moment now would only compete with it.
     const running = generationRef.current.job;
     const generationInFlight = Boolean(running) && (running!.status === "queued" || running!.status === "running") && running!.kind === "generate";
-    const wantsFresh = sessionStorage.getItem("planbuddy:new-plan") === "1";
+    const wanted = sessionStorage.getItem("planbuddy:new-plan");
     sessionStorage.removeItem("planbuddy:new-plan");
-    if (!generationInFlight) void loadMoment("full", wantsFresh);
+    if (!generationInFlight) void loadMoment("full", Boolean(wanted), wanted === "tonight" || wanted === "day" || wanted === "weekend" ? wanted : undefined);
     api.get<{ participants: Participant[] }>("/participants")
       .then((data) => {
         if (mountedRef.current) setParticipants(data.participants);
@@ -169,7 +169,11 @@ export default function HomePage() {
   }, [loadMoment]);
 
   useEffect(() => {
-    const onNewPlan = () => { generationRef.current.dismiss(); void loadMoment("full", true); };
+    const onNewPlan = (event: Event) => {
+      const scope = (event as CustomEvent<{ scope?: MomentKind | null }>).detail?.scope ?? undefined;
+      generationRef.current.dismiss();
+      void loadMoment("full", true, scope);
+    };
     window.addEventListener("planbuddy:new-plan", onNewPlan);
     return () => window.removeEventListener("planbuddy:new-plan", onNewPlan);
   }, [loadMoment]);

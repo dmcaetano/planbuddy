@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { requestNewPlan, type NewPlanScope } from "../lib/newPlan";
 import { Bot, Check, Copy, Send, Sparkles, User } from "lucide-react";
 import type { Candidate, FeatureSummary, PipelineResponse, PlanChatMessage } from "../api/types";
 import { api, ApiError } from "../api/client";
@@ -16,6 +18,7 @@ interface ActionResponse {
   share: { token: string } | null;
   invite: { token: string } | null;
   applied?: AppliedChange[];
+  planRequest?: { scope: NewPlanScope } | null;
   user?: PublicUser | null;
 }
 
@@ -41,6 +44,7 @@ export default function PlanEditChat({
 }) {
   const generation = useGeneration();
   const auth = useAuth();
+  const navigate = useNavigate();
   const [appliedByMessage, setAppliedByMessage] = useState<Record<string, AppliedChange[]>>({});
   const [messages, setMessages] = useState<PlanChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -80,6 +84,7 @@ export default function PlanEditChat({
       if (data.jobId && generation.job?.jobId !== data.jobId) {
         generation.trackJob(data.jobId, data.jobKind === "regenerate" ? "regenerate" : "edit", data.jobSpecId ?? threadSpecId);
       }
+      if (data.planRequest) requestNewPlan(data.planRequest.scope, false, navigate);
       if (data.applied?.length) {
         setAppliedByMessage((current) => ({ ...current, [data.assistantMessage.id]: data.applied! }));
         announceAppChange(data.user, auth.setUser);

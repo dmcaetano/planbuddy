@@ -30,6 +30,34 @@ export default function MemoryPage() {
   const [editingHunchId, setEditingHunchId] = useState<string | null>(null);
   const [hunchDraft, setHunchDraft] = useState({ text: "", polarity: "love" as "love" | "avoid", participantId: "" });
 
+  const [newName, setNewName] = useState("");
+  const [newKind, setNewKind] = useState<"person" | "pet">("person");
+  const [addingPerson, setAddingPerson] = useState(false);
+
+  async function addPerson() {
+    const name = newName.trim();
+    if (!name || addingPerson) return;
+    setAddingPerson(true);
+    try {
+      const data = await api.post<{ participant: Participant }>("/participants", { name, kind: newKind });
+      setParticipants((prev) => [...prev, data.participant]);
+      setNewName("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't add that.");
+    } finally { setAddingPerson(false); }
+  }
+
+  async function removePerson(person: Participant) {
+    if (!window.confirm(`Remove ${person.name}? Their constraints and tastes go with them.`)) return;
+    try {
+      await api.delete(`/participants/${person.id}`);
+      setParticipants((prev) => prev.filter((x) => x.id !== person.id));
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't remove that.");
+    }
+  }
+
   async function loadAll() {
     const [p, c, t, h] = await Promise.all([
       api.get<{ participants: Participant[] }>("/participants"),
@@ -222,9 +250,18 @@ export default function MemoryPage() {
                 participant={p}
                 onSaved={(updated) => setParticipants((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))}
               />
+              <button type="button" className="icon-btn" aria-label={`Remove ${p.name}`} onClick={() => void removePerson(p)}><Trash2 size={16} /></button>
             </div>
           ))}
         </div>
+        <form className="row-gap" style={{ marginTop: 12 }} onSubmit={(event) => { event.preventDefault(); void addPerson(); }}>
+          <input className="input grow" aria-label="Name" placeholder="Add a person or pet" value={newName} onChange={(e) => setNewName(e.target.value)} />
+          <select className="select" aria-label="Person or pet" value={newKind} onChange={(e) => setNewKind(e.target.value as "person" | "pet")}>
+            <option value="person">Person</option>
+            <option value="pet">Pet</option>
+          </select>
+          <button type="submit" className="btn btn-secondary" aria-label="Add person or pet" disabled={!newName.trim() || addingPerson}><Plus size={16} /></button>
+        </form>
       </div>
 
       <TimeOffSection />
