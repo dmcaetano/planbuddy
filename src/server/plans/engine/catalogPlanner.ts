@@ -293,7 +293,7 @@ function extendRoute(
   const home = { lat: ctx.homeBaseLat, lng: ctx.homeBaseLng };
   const recent = recentNameSet(ctx);
   const seed = hashSeed(ctx.seed);
-  const maxLegKm = walkingLegLimit(ctx);
+  const maxLegKm = Math.min(walkingLegLimit(ctx), 3);
   const loves = preferenceTokens(ctx, "love");
   const avoids = preferenceTokens(ctx, "avoid");
   const used = new Set([choice.pre.id, choice.meal.id, choice.post.id]);
@@ -317,18 +317,19 @@ function extendRoute(
   let from = choice.post;
   let sundayStarted = false;
   const sequence: Array<"stop" | "meal" | "sunday-stop" | "sunday-meal"> =
-    kind === "weekend" ? ["stop", "sunday-stop", "sunday-meal", "stop"]
+    kind === "weekend" ? ["stop", "sunday-stop", "sunday-meal", "sunday-stop"]
     : kind === "day" ? ["stop", "meal"]
     : ["stop"];
   for (const role of sequence) {
     if (beats.length >= target) break;
     const sunday = role.startsWith("sunday");
     const isMeal = role.endsWith("meal");
-    if (sunday && !sundayStarted) { cursor = 10 * 60 + 30; sundayStarted = true; }
-    const found = nextNear(from, isMeal ? mealPool : stopPool, 0.1) ?? (sunday ? nextNear(choice.meal, isMeal ? mealPool : stopPool, 0.1) : null);
+    const sundayOpening = sunday && !sundayStarted;
+    if (sundayOpening) { cursor = 10 * 60 + 30; sundayStarted = true; from = choice.meal; }
+    const found = nextNear(from, isMeal ? mealPool : stopPool, 0.1);
     if (!found) continue;
     const leg = travelLeg(found.km, transport);
-    let start = ceil5(cursor + leg.travelMinutes);
+    let start = sundayOpening ? cursor : ceil5(cursor + leg.travelMinutes);
     let beat: AiCandidate["beats"][number];
     if (isMeal) {
       const dinner = !sunday;

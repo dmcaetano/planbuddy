@@ -114,6 +114,12 @@ describe("dynamic plan length", () => {
     expect(weekend.beats.length).toBeGreaterThan(3);
     expect(weekend.beats.some((beat) => beat.title.startsWith("Sunday"))).toBe(true);
     expect(new Set(names(weekend.beats)).size).toBe(weekend.beats.length);
+    const minutes = (beat: { startTime?: string | null }) => { const [h, m] = (beat.startTime ?? "0:0").split(":").map(Number); return h * 60 + m; };
+    for (const day of ["Saturday", "Sunday"]) {
+      const times = weekend.beats.filter((beat) => beat.title.startsWith(day)).map(minutes);
+      expect(times).toEqual([...times].sort((x, y) => x - y));
+    }
+    expect(weekend.beats.findIndex((beat) => beat.title.startsWith("Sunday"))).toBeGreaterThan(weekend.beats.map((beat) => beat.title).lastIndexOf(weekend.beats.filter((beat) => beat.title.startsWith("Saturday")).at(-1)!.title) - 1);
     const tonight = buildCatalogCandidate(context({ scale: "day_off", moodContext: "dinner", moment: { kind: "tonight", startTime: "18:00", mealFirst: false, mealStart: "19:30", romantic: false } }), dense)!;
     expect(tonight.beats).toHaveLength(3);
   });

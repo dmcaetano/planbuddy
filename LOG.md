@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.9.1: weekend extras stay walkable and in order
+
+Extra stops are capped at 3 km from the previous stop; Sunday opens near Saturday's meal at 10:30, so Saturday items are never listed after Sunday ones.
+
 ## 2026-10-07 - v1.9.0 "Goku": plans are no longer locked to three stops
 
 Plan length now follows the time covered: tonight 3, afternoon 4, a day 5 (ending in dinner), a weekend 7 (Saturday and Sunday labelled). Extra stops come from the real catalogue within walking distance of the previous one; short catalogues just yield fewer. Schema allows up to 10 beats, quality gate 3-10, prompts say 3-8 sized to the time. Retime of an already-saved 4+ beat plan falls back to a fresh proposal (retime.ts still 3-beat). Tests in catalogPlanner.test.ts.
