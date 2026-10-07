@@ -1,9 +1,9 @@
 import { z } from "zod";
 import type { GenerateContext } from "../../ai/demoAi.js";
-import { callAiToolLoop, type AgentTool } from "../../ai/deepseek.js";
+import { callAiToolLoop, type AgentTool, type AgentToolResult } from "../../ai/deepseek.js";
 import { logger } from "../../logger.js";
-import type { ResolvedVenue } from "../../resolver/placeResolver.js";
-import { routePickIssue, searchRestaurants, stopsNearVenue } from "./catalogPlanner.js";
+import { searchPlacesLive, type ResolvedVenue } from "../../resolver/placeResolver.js";
+import { distanceKm, routePickIssue, searchRestaurants, stopsNearVenue } from "./catalogPlanner.js";
 
 const submitSchema = z.object({
   mealId: z.string().min(1),
@@ -16,7 +16,7 @@ export type AgentRoutePick = z.infer<typeof submitSchema>;
 
 const SYSTEM_PROMPT = [
   "You are the planner for PlanBuddy. You build ONE real outing route for a group: one restaurant plus two different nearby non-food stops.",
-  "You have tools. Use them: read the group's profile and history first, search the real venue catalogue for restaurants, look up the walkable stops around the restaurants you like, test a candidate route with check_route, then finish with submit_route.",
+  "You have tools. Use them: read the group's profile and history first, search the real venue catalogue for restaurants (and run live_search_places so today's OpenStreetMap data backs your choice, especially for specific cuisines or when results look thin), look up the walkable stops around the restaurants you like, test a candidate route with check_route, then finish with submit_route.",
   "You may only use venue ids returned by the tools. Never invent a place or an id; the server rejects anything else.",
   "Do real work before committing: search with several different queries that reflect the loved tastes and the occasion, compare a few restaurants, and read their stop lists. Do not take the first result.",
   "Prefer places a local would recommend over chains, tourist traps, food courts and hotel bars. Match loved tastes and the occasion; never break the avoid tastes or constraints. Keep the restaurant reasonably close to home unless the request asks for a trip.",
@@ -53,6 +53,21 @@ const TOOLS: AgentTool[] = [
         limit: { type: "integer", description: "Default 8, max 15" },
         offset: { type: "integer", description: "Skip this many results to page further" },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "live_search_places",
+    description: "Search OpenStreetMap RIGHT NOW (today's data) for places the cached catalogue may lack or have stale. kind 'restaurant' searches around home (or around center_id) by cuisine/name, up to 12 km; kind 'stop' finds parks, viewpoints, museums up to 3 km around center_id. New places are added to the catalogue with ids you can use in check_route and submit_route.",
+    parameters: {
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: ["restaurant", "stop"] },
+        query: { type: "string", description: "Cuisine or name word, e.g. 'seafood', 'sushi', 'jardim'" },
+        center_id: { type: "string", description: "Venue id to search around; defaults to home" },
+        radius_km: { type: "number" },
+      },
+      required: ["kind"],
       additionalProperties: false,
     },
   },
@@ -138,6 +153,42 @@ export async function pickRouteWithAgent(
 ): Promise<AgentRoutePick | null> {
   if (ctx.homeBaseLat == null || ctx.homeBaseLng == null) return null;
   const names = new Map(venues.map((venue) => [venue.id, venue.name]));
+  let liveCalls = 0;
+  let liveEmpty = 0;
+  const known = new Set(venues.map((venue) => venue.id));
+  const searchLiveInto = async (
+    kind: "restaurant" | "stop",
+    origin: { lat: number; lng: number },
+    args: Record<string, unknown>
+  ): Promise<AgentToolResult> => {
+    if (liveCalls >= 5 || liveEmpty >= 2) {
+      return { output: { error: "live search is unavailable or used up; rely on search_restaurants and get_stops_near" } };
+    }
+    liveCalls += 1;
+    const found = await searchPlacesLive({
+      lat: origin.lat,
+      lng: origin.lng,
+      radiusKm: typeof args.radius_km === "number" ? args.radius_km : kind === "restaurant" ? 8 : 1.5,
+      kind,
+      query: str(args.query),
+    });
+    if (found.length === 0) liveEmpty += 1;
+    let added = 0;
+    for (const venue of found) {
+      if (known.has(venue.id)) continue;
+      known.add(venue.id);
+      venues.push(venue);
+      added += 1;
+    }
+    return {
+      output: {
+        found: found.length,
+        newlyAdded: added,
+        places: found.slice(0, 15).map((v) => ({ id: v.id, name: v.name, kind: v.subcategory, tags: v.tags.slice(0, 5), kmFromHome: Math.round(distanceKm(v, { lat: ctx.homeBaseLat as number, lng: ctx.homeBaseLng as number }) * 10) / 10 })),
+      },
+      narration: `Live search today: ${str(args.query) ?? kind}`,
+    };
+  };
   const nameOf = (id: unknown) => (typeof id === "string" ? names.get(id) ?? "that place" : "that place");
   try {
     const { done, steps } = await callAiToolLoop({
@@ -164,6 +215,12 @@ export async function pickRouteWithAgent(
             });
             return { output: result, narration: query ? `Searching restaurants: ${query}` : "Searching restaurants near you" };
           }
+          case "live_search_places": {
+            const kind = args.kind === "stop" ? "stop" : "restaurant";
+            const center = venues.find((venue) => venue.id === args.center_id);
+            const origin = center ?? { lat: ctx.homeBaseLat as number, lng: ctx.homeBaseLng as number };
+            return searchLiveInto(kind, origin, args);
+          }
           case "get_stops_near": {
             const result = stopsNearVenue(ctx, venues, String(args.restaurant_id ?? ""), {
               query: str(args.query),
@@ -180,6 +237,7 @@ export async function pickRouteWithAgent(
               firstStopId: String(args.firstStopId ?? ""),
               secondStopId: String(args.secondStopId ?? ""),
             });
+            if (issue) logger.info("Plan agent route check failed", { issue });
             return { output: issue ? { ok: false, issue } : { ok: true }, narration: `Checking the route through ${nameOf(args.mealId)}` };
           }
           case "submit_route": {

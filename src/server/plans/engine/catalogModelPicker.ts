@@ -135,13 +135,14 @@ const defaultDeps: CatalogSelectionDeps = {
 /** Model-chosen route when available and valid, otherwise the deterministic catalogue route. */
 export async function selectCatalogMatch(
   ctx: GenerateContext,
-  venues: ResolvedVenue[],
+  venuePool: ResolvedVenue[],
   report?: ProgressReporter,
   deps: CatalogSelectionDeps = defaultDeps
 ): Promise<CatalogMatch | null> {
   if (deps.modelAvailable()) {
     try {
       await report?.("composing_plan", `Choosing the best ${mealKind(ctx) === "a meal" ? "meal" : mealKind(ctx)} spot near you`);
+      const venues = [...venuePool];
       const shortlist = buildCatalogShortlist(ctx, venues);
       if (shortlist.meals.length > 0) {
         await report?.("composing_plan", `Weighing ${shortlist.meals.length} ${mealKind(ctx) === "a meal" ? "restaurants" : `${mealKind(ctx)} spots`} near you`);
@@ -162,5 +163,5 @@ export async function selectCatalogMatch(
       logger.warn("Model route selection errored; falling back to the deterministic catalogue route", { error: String(error) });
     }
   }
-  return buildCatalogCandidateWithMatch(ctx, venues);
+  return buildCatalogCandidateWithMatch(ctx, venuePool);
 }

@@ -288,3 +288,44 @@ export async function warmPlaceCatalog(lat: number, lng: number, radiusKm: numbe
   }
   await refreshCatalog(key, lat, lng, radiusKm);
 }
+
+export interface LivePlaceSearch {
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  kind: "restaurant" | "stop";
+  query?: string;
+}
+
+/** Targeted, small-radius OSM query run at request time (seconds, not the minutes the 60 km catalogue needs). */
+export async function searchPlacesLive(search: LivePlaceSearch): Promise<ResolvedVenue[]> {
+  if (isTest) return [];
+  const word = (search.query ?? "").toLowerCase().replace(/[^\p{L}\p{N} -]/gu, "").trim().slice(0, 40);
+  const radiusM = Math.round(Math.max(0.3, Math.min(search.kind === "restaurant" ? 12 : 3, search.radiusKm)) * 1000);
+  const around = `around:${radiusM},${search.lat.toFixed(5)},${search.lng.toFixed(5)}`;
+  const food = `["name"]["amenity"~"restaurant|cafe|biergarten|food_court"]`;
+  const body = search.kind === "restaurant"
+    ? word
+      ? `nwr(${around})${food}["cuisine"~"${word}",i];nwr(${around})${food}["name"~"${word}",i];`
+      : `nwr(${around})${food};`
+    : `nwr(${around})["name"]["leisure"~"park|garden"];nwr(${around})["name"]["tourism"~"attraction|museum|viewpoint|gallery"];` +
+      (word ? `nwr(${around})["name"]["name"~"${word}",i]["tourism"];` : "");
+  const query = `[out:json][timeout:15];(${body});out center tags 120;`;
+  for (const endpoint of OVERPASS_URLS) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8_000);
+    try {
+      const url = new URL(endpoint);
+      url.searchParams.set("data", query);
+      const response = await fetch(url, { headers: { "User-Agent": "PlanBuddy/1.2 place discovery" }, signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json() as { elements?: OverpassElement[] };
+      return parseOverpassElements(data.elements ?? []);
+    } catch (error) {
+      logger.warn("Live place search mirror failed", { endpoint: new URL(endpoint).hostname, error: String(error) });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return [];
+}

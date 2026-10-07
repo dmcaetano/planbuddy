@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.11.0 "Itachi": the agent searches the live map on the day
+
+New agent tool live_search_places: a small-radius OpenStreetMap query at request time (restaurants by cuisine/name up to 12 km, stops up to 3 km), merged into the catalogue for that plan so ids validate like any other. Capped at 5 calls per plan, stops after 2 empty results (public Overpass mirrors return HTTP 500/504 often), 8 s per mirror. Agent step limit raised to 14. The 60 km cached catalogue stays as the fast base because a full area query takes over 30 s and has been failing on the mirrors since 2026-10-06.
+
 ## 2026-10-07 - v1.10.1: the bundled Lisbon snapshot no longer counts as fresh
 
 The place catalogue is OpenStreetMap data cached in Postgres (7-day TTL, background refresh). The bundled Lisbon JSON (July 2026) only seeds a cold cache, but it was stamped as fetched "now", so it stood for a week. It is now stamped as stale and a live OSM refresh starts straight away. OSM has no closure data, so a closed venue can still appear until its OSM entry is fixed.
