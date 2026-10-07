@@ -204,18 +204,18 @@ export async function readLisbonBootstrap(lat: number, lng: number): Promise<Res
   }
 }
 
-async function storeCatalog(key: string, lat: number, lng: number, radiusKm: number, venues: ResolvedVenue[]): Promise<void> {
+async function storeCatalog(key: string, lat: number, lng: number, radiusKm: number, venues: ResolvedVenue[], seeded = false): Promise<void> {
   const db = await getDb();
   await db.query(
     `INSERT INTO place_catalog_cache (cache_key, center_lat, center_lng, radius_km, payload, fetched_at)
-     VALUES ($1, $2, $3, $4, $5, now())
+     VALUES ($1, $2, $3, $4, $5, CASE WHEN $6::boolean THEN to_timestamp(0) ELSE now() END)
      ON CONFLICT (cache_key) DO UPDATE SET
        center_lat = EXCLUDED.center_lat,
        center_lng = EXCLUDED.center_lng,
        radius_km = EXCLUDED.radius_km,
        payload = EXCLUDED.payload,
-       fetched_at = now()`,
-    [key, lat, lng, radiusKm, stringifyJsonForDb(venues)]
+       fetched_at = CASE WHEN $6::boolean THEN to_timestamp(0) ELSE now() END`,
+    [key, lat, lng, radiusKm, stringifyJsonForDb(venues), seeded]
   );
 }
 
@@ -259,7 +259,10 @@ export async function resolvePlaces(lat: number, lng: number, radiusKm: number):
     }
     const bootstrap = await readLisbonBootstrap(lat, lng);
     if (bootstrap.length >= MIN_USEFUL_VENUES) {
-      await storeCatalog(key, lat, lng, catalogRadiusKm, bootstrap);
+      await storeCatalog(key, lat, lng, catalogRadiusKm, bootstrap, true);
+      void refreshCatalog(key, lat, lng, catalogRadiusKm).catch((error) =>
+        logger.warn("Live refresh after seeding failed", { key, error: String(error) })
+      );
       logger.info("Seeded place catalog from bundled Lisbon snapshot", { key, venueCount: bootstrap.length });
       return { mode: "resolved", venues: bootstrap };
     }
@@ -279,7 +282,7 @@ export async function warmPlaceCatalog(lat: number, lng: number, radiusKm: numbe
   if (cached?.fresh && cached.venues.length >= MIN_USEFUL_VENUES) return;
   const bootstrap = await readLisbonBootstrap(lat, lng);
   if (bootstrap.length >= MIN_USEFUL_VENUES) {
-    await storeCatalog(key, lat, lng, radiusKm, bootstrap);
+    await storeCatalog(key, lat, lng, radiusKm, bootstrap, true);
     logger.info("Seeded place catalog from bundled Lisbon snapshot", { key, venueCount: bootstrap.length });
     return;
   }

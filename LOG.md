@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.10.1: the bundled Lisbon snapshot no longer counts as fresh
+
+The place catalogue is OpenStreetMap data cached in Postgres (7-day TTL, background refresh). The bundled Lisbon JSON (July 2026) only seeds a cold cache, but it was stamped as fetched "now", so it stood for a week. It is now stamped as stale and a live OSM refresh starts straight away. OSM has no closure data, so a closed venue can still appear until its OSM entry is fixed.
+
 ## 2026-10-07 - v1.10.0 "Kakashi": the plan maker reasons and uses tools
 
 Plans felt dumb because the planner was a one-shot, reasoning-off call over a fixed shortlist. It is now a DeepSeek tool-calling agent with reasoning on: it reads the profile and history, searches the 11k-place catalogue with several queries, inspects walkable stops, checks the route against server rules and submits. Fallbacks unchanged.
