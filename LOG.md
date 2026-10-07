@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.6.1: Buddy Contract security fixes
+
+Fixed prompt injection from hub text, signature replay (omni_seen), unscoped tombstone deletes, plaintext link secrets, hub URL/secret exfil, error leakage and body validation. 10 new tests in omniContract.test.ts; lint, typecheck, build and all test files green file by file.
+
 ## 2026-10-07 - v1.6.0 "Naruto": Buddy Contract v1 (OmniBuddy)
 
 Added /api/buddy/{health,card,act,suggest,link}, signed requests (HMAC over ts.body), memory push to the hub and the other-Buddies prompt block. Safety/health memories never family-visible. Link route answers `{ok:false}` 401 to cookie-less callers while keeping the same-origin guard for cookie-bearing ones (a classifier refused removing the guard, correctly). Tests: omniContract.test.ts (10), memory/appAssistant/moment/auth/plan + unit/contract suites green file by file; OmniBuddy contract-check conformant against a local server.

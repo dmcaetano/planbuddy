@@ -5,10 +5,12 @@ import { sweepExpiredChatMessages } from "./chat/retention.js";
 import { sweepInterruptedJobs } from "./plans/jobs.js";
 import { logger } from "./logger.js";
 import { currentAiMode } from "./ai/index.js";
+import { sealLegacyLinks } from "./omni/repo.js";
 import { warmPlaceCatalog } from "./resolver/placeResolver.js";
 
 async function main() {
   await runMigrations();
+  await sealLegacyLinks().catch((err) => logger.warn("OmniBuddy legacy link sealing failed", { error: String(err) }));
 
   const app = createApp();
   app.listen(env.PORT, () => {
