@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.9.2: Sunday keeps its own morning clock
+
+enrich.ts forced every beat to start after the previous one ended, so Sunday 10:30 was pushed to Saturday evening. Beat-time normalisation now restarts at each Saturday/Sunday boundary.
+
 ## 2026-10-07 - v1.9.1: weekend extras stay walkable and in order
 
 Extra stops are capped at 3 km from the previous stop; Sunday opens near Saturday's meal at 10:30, so Saturday items are never listed after Sunday ones.

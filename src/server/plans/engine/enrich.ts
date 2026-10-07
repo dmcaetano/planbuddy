@@ -151,7 +151,10 @@ function formatClockMinutes(value: number): string {
 
 function normalizeBeatStartTimes(beats: AiCandidate["beats"]): AiCandidate["beats"] {
   let previousEnd: number | null = null;
+  let previousDay = "";
   return beats.map((beat) => {
+    const day = /^(Saturday|Sunday): /.exec(beat.title)?.[1] ?? previousDay;
+    if (day !== previousDay) { previousEnd = null; previousDay = day; }
     const statedStart = parseClockMinutes(beat.startTime);
     const earliestStart = previousEnd == null ? null : previousEnd + (beat.travelMinutes ?? 0);
     const start = statedStart == null ? earliestStart : earliestStart == null ? statedStart : Math.max(statedStart, earliestStart);
