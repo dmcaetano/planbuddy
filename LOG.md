@@ -424,3 +424,6 @@ When adding provider timeouts, budget for the fallback chain end-to-end,
 not per-call in isolation — a "resilience" cap that is tighter than the
 provider's real latency under load just converts slow successes into
 failures.
+
+## 2026-10-07 v1.8.0 Batman
+- Buddy Contract v1 addendum: POST /api/buddy/connect (HMAC key = OMNI_CONNECT_SECRET, replay + skew + throttle, hub-verified accounts only, existing unverified account => manual_required). Migration 0016 adds users.hub_verified. 7 tests, signature check mutation-tested.

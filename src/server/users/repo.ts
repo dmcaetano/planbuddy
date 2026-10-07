@@ -89,3 +89,21 @@ export async function setTravelPreferences(userId: string, travelDayKm: number, 
   );
   return toPublic(rows[0]);
 }
+
+/** Account lookup for the hub connect flow: id plus whether the hub (not self-signup) vouched for the email. */
+export async function getUserForConnect(email: string): Promise<{ id: string; hubVerified: boolean } | null> {
+  const db = await getDb();
+  const { rows } = await db.query<{ id: string; hub_verified: boolean }>("SELECT id, hub_verified FROM users WHERE email = $1", [email]);
+  return rows[0] ? { id: rows[0].id, hubVerified: rows[0].hub_verified } : null;
+}
+
+/** Creates a hub-verified account. Returns null when the email was taken meanwhile (unique violation). */
+export async function createHubVerifiedUser(email: string, passwordHash: string): Promise<string | null> {
+  const db = await getDb();
+  const id = newId();
+  const { rows } = await db.query<{ id: string }>(
+    "INSERT INTO users (id, email, password_hash, hub_verified) VALUES ($1,$2,$3,true) ON CONFLICT (email) DO NOTHING RETURNING id",
+    [id, email, passwordHash]
+  );
+  return rows[0]?.id ?? null;
+}

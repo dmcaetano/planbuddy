@@ -8,8 +8,12 @@ import { logger } from "../logger.js";
 import { attachUser, requireAuth, requireSameOrigin } from "../auth/middleware.js";
 import { createTaste, deleteTaste } from "../memory/tastes.repo.js";
 import { buildCard, lockCurrentPlan, unlockPlan, type Loc } from "./card.js";
-import { CONTRACT_VERSION, WANTS_PREFIX, completeLink, hubBase, sanitizeHubText, scheduleSync, syncToHub, verifySignature } from "./hub.js";
+import crypto from "node:crypto";
+import { CONTRACT_VERSION, WANTS_PREFIX, completeLink, connectKey, hubBase, sanitizeHubText, scheduleSync, syncToHub, verifySignature } from "./hub.js";
 import { claimSignature, claimUndo, countBadSignature, createUndo, deleteLink, getLinkById, getLinkForUser, saveLink, type OmniLink } from "./repo.js";
+import { createHubVerifiedUser, getUserForConnect } from "../users/repo.js";
+import { hashPassword } from "../auth/passwords.js";
+import { seedOwnerParticipant } from "../participants/repo.js";
 import { suggestFor } from "./suggest.js";
 
 function readVersion(): string {
@@ -257,5 +261,84 @@ buddyRouter.post(
     const type = str(ent.type, 24);
     const entity = { type: ENTITY_TYPES.has(type) ? type : undefined, canonical: str(ent.canonical, 121) };
     res.json({ candidates: await suggestFor(req.omniLink!.userId, entity, locOf(b.locale)) });
+  })
+);
+
+// ------------------------------------------------------------------- connect (hub -> Buddy, automatic link)
+// Contract v1 addendum. Authenticated only by the hub's HMAC (key = OMNI_CONNECT_SECRET); same
+// skew, constant-time compare, replay claim and bad-signature damper as every other signed endpoint.
+async function requireConnectSigned(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const now = Date.now();
+    const key = connectKey();
+    if (!key) {
+      res.status(503).json({ error: "connect not configured" });
+      return;
+    }
+    const sig = req.get("X-Omni-Signature");
+    if (!verifySignature(key, req.get("X-Omni-Timestamp"), sig, req.rawBody ?? "", now, SKEW_MS)) {
+      res.status((await noteBadSignature(clientIp(req), now)) ? 429 : 401).json({ error: "bad signature" });
+      return;
+    }
+    if (!(await claimSignature("connect", String(sig).toLowerCase(), now, SKEW_MS))) {
+      res.status(401).json({ error: "request already used" });
+      return;
+    }
+    next();
+  } catch (e) {
+    next(e);
+  }
+}
+
+buddyRouter.post(
+  "/connect",
+  requireConnectSigned,
+  asyncHandler(async (req, res) => {
+    const b = bodyObject(req.body);
+    if (b.email_verified !== true) {
+      res.status(409).json({ ok: false, reason: "not_verified" });
+      return;
+    }
+    const base = hubBase();
+    // the hub URL must be the registry one; the body value is only checked against it, never used
+    const claimed = typeof b.hub_url === "string" ? b.hub_url.trim().replace(/\/$/, "") : "";
+    if (!base || (claimed && claimed !== base)) {
+      res.status(400).json({ ok: false, reason: "bad_hub" });
+      return;
+    }
+    const code = typeof b.code === "string" ? b.code.trim() : "";
+    const email = typeof b.email === "string" ? b.email.trim().toLowerCase() : "";
+    if (!/^[A-Za-z0-9_-]{4,64}$/.test(code) || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res.status(400).json({ ok: false, reason: "bad_request" });
+      return;
+    }
+    let userId: string;
+    const existing = await getUserForConnect(email);
+    if (existing) {
+      // account-takeover guard: PlanBuddy never verified self-registered emails, so only hub-vouched accounts qualify
+      if (!existing.hubVerified) {
+        res.status(409).json({ ok: false, reason: "manual_required" });
+        return;
+      }
+      userId = existing.id;
+    } else {
+      // no usable password: a random unguessable value nobody holds
+      const created = await createHubVerifiedUser(email, await hashPassword(crypto.randomBytes(32).toString("hex")));
+      if (!created) {
+        // lost a race with a self-signup of the same email: treat as unverified
+        res.status(409).json({ ok: false, reason: "manual_required" });
+        return;
+      }
+      await seedOwnerParticipant(created);
+      userId = created;
+    }
+    const r = await completeLink(base, code, userId);
+    if ("error" in r) {
+      res.status(400).json({ ok: false, reason: "code_rejected" });
+      return;
+    }
+    await saveLink({ userId, linkId: r.link_id, hubToken: r.token, signingKey: r.signing_key, hubUrl: base });
+    void syncToHub(userId);
+    res.json({ ok: true });
   })
 );

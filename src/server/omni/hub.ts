@@ -58,6 +58,11 @@ export function hubBase(): string | null {
   return ok ? u.replace(/\/$/, "") : null;
 }
 
+/** Key for the hub's server-to-server connect call: OMNI_CONNECT_SECRET used directly; null when unconfigured. */
+export function connectKey(): string | null {
+  return env.OMNI_CONNECT_SECRET ?? null;
+}
+
 /** The hub address a stored link may be used with: only the configured one. Link secrets are never sent elsewhere. */
 export function usableLinkBase(link: OmniLink): string | null {
   const base = hubBase();

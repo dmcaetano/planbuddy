@@ -39,6 +39,8 @@ const envSchema = z.object({
   // OmniBuddy hub (Buddy Contract v1). The hub URL is the only thing to configure: the per-link
   // signing key and hub token are issued by the hub at link time and stored in omni_links.
   OMNIBUDDY_HUB_URL: z.string().url().optional(),
+  // Buddy Contract v1 addendum: used directly as the HMAC key for POST /api/buddy/connect. Absent = connect answers 503.
+  OMNI_CONNECT_SECRET: z.string().min(16).optional(),
   PLANBUDDY_PUBLIC_URL: z.string().url().default("https://planbuddy.onrender.com"),
   PLANBUDDY_TZ: z.string().default("Europe/Lisbon"),
 });

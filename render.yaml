@@ -29,5 +29,7 @@ services:
         sync: false
       - key: OMNIBUDDY_HUB_URL
         sync: false
+      - key: OMNI_CONNECT_SECRET
+        sync: false
       - key: SESSION_SECRET
         generateValue: true
