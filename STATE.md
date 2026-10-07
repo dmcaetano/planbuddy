@@ -3,6 +3,8 @@
 **SDLC class:** SOLO
 
 ## Status
+v1.5.1: the New plan button now floats beside the Buddy chat button on every page (removed from the Home header); from another page it opens Home and builds a fresh plan. Verified live at 390px. Family ledger row added (every Buddy gets one).
+
 v1.5.0 "Trunks": zero-click philosophy (the goal behind max-one-click). A "New plan" button sits in the Home header in every state (ready, locked, error, loading); it posts `fresh:true` to /api/moment, which skips reuse, the locked cover and the per-spec ceiling and builds a new proposal. Home shows a plan with no taps; New plan is the escape hatch. Home was user-confirmed to have been set to Faro (the wrong-city report was a data issue).
 
 v1.4.3 "Vegeta": wrong-city fix + planner/chat separation. Reuse of a stored moment plan now requires the same home base (rounded to 2 decimals, in the inputs fingerprint) and a travel estimate within 2x the radius, so a plan built for another city is never replayed. Buddy chat no longer plans: its snapshot has a read-only `planner` block (active worker job + last 3 plans) and the prompt says plans are built/edited only by the background Planner worker (jobs queue). The plan-lane chat already enqueued worker jobs. Not proven: why one production account kept a Faro plan (cannot read his data); an old phone build (v1.3.1) may also be cached.
