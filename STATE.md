@@ -3,6 +3,8 @@
 **SDLC class:** SOLO
 
 ## Status
+v1.11.0-v1.11.1 "Itachi": agent tool live_search_places queries OpenStreetMap on the day of the request (small radius, merged into the plan's venue pool, max 5 calls, stops after 2 empty). Cached 60 km catalogue stays as the fast base: full-area Overpass refresh takes 30 s+ and has failed on all public mirrors since 2026-10-06 (HTTP 500/504), so the catalogue is the July snapshot until a reliable source exists. Live-verified: agent submitted a valid route in 13 steps/45 s. Open: Overpass reliability (own mirror or paid places API).
+
 v1.10.0 "Kakashi": the plan maker is now a reasoning DeepSeek agent with tools (get_profile, get_recent_plans, search_restaurants, get_stops_near, check_route, submit_route) in src/server/plans/engine/routeAgent.ts + callAiToolLoop in ai/deepseek.ts. Every submit is re-validated by the server (resolveRoutePicks), so it still cannot invent a place. Failure falls back to the single-shot picker, then the deterministic route. Non-catalogue path (generateCandidates) now also uses reasoning (was reasoning off). Env: AI_AGENT_ENABLED (default true), AGENT_MODEL_ID, AI_AGENT_TIMEOUT_MS (90s), AI_AGENT_MAX_STEPS (10). Known: tests/integration/omniContract "offers to lock" fails on a clean HEAD too (pre-existing).
 
 v1.6.4: bounded the bad-signature table (periodic purge + hard 20k-row cap, oldest-first eviction, one row per IP; counter failures never affect requests). v1.6.3: persistent atomic per-IP failure counter; single-clock replay expiry.
