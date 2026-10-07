@@ -67,7 +67,7 @@ export function formatVenueDetail(placeNames: string[]): string {
  * request fall through to the concrete route instead of reaching the user. */
 export function quickPlanQualityIssue(response: AiGenerateResponse, ctx: GenerateContext): string | null {
   const candidate = response.candidates[0];
-  if (!candidate || candidate.beats.length !== 3) return "missing three-beat candidate";
+  if (!candidate || candidate.beats.length < 3 || candidate.beats.length > 10) return "missing multi-beat candidate";
   const places = candidate.beats.map((beat) => beat.place);
   if (places.some((place) => !place?.name || !place.sourceUrl)) return "missing named Maps-ready place";
   const placeNames = places.map((place) => normalizedPlaceName(place!.name));

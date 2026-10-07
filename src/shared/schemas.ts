@@ -251,7 +251,7 @@ export const aiCandidateSchema = z.object({
   rationale: z.string().min(1).max(600),
   category: z.string().min(1).max(60),
   indoor: z.boolean(),
-  beats: z.array(aiBeatSchema).min(1).max(3),
+  beats: z.array(aiBeatSchema).min(1).max(10),
   walkingDistanceKm: z.number().min(0).max(200).nullable().optional(),
   walkingMinutes: z.number().int().min(0).max(1440).nullable().optional(),
   estimatedCost: z.string().max(120).nullable().optional(),

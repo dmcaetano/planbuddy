@@ -253,6 +253,117 @@ export function buildCatalogCandidateWithMatch(ctx: GenerateContext, venues: Res
   return assembleCatalogCandidate(ctx, venues, choice);
 }
 
+type StopBeatBuilder = (
+  venue: ResolvedVenue,
+  role: "pre" | "early" | "post",
+  startTime: string,
+  durationMinutes: number,
+  leg: ReturnType<typeof travelLeg>,
+  legKm: number
+) => AiCandidate["beats"][number];
+
+/** How many beats a plan should have: shaped by how much time it covers, not fixed at three. */
+export function targetBeatCount(ctx: GenerateContext): number {
+  const kind = ctx.moment?.kind ?? (ctx.scale === "weekend" ? "weekend" : ctx.scale === "day_off" ? "day" : "tonight");
+  if (kind === "weekend") return 7;
+  if (kind === "day") return 5;
+  const start = clockToMinutes(ctx.moment?.startTime ?? null);
+  return start !== null && start < 16 * 60 ? 4 : 3;
+}
+
+/**
+ * Appends extra stops (and, for a day or weekend, a second meal and a second day) to the three-beat
+ * core, each chosen from the real catalogue within walking distance of the previous one. Mutates
+ * `beats`; returns the added venues and their leg lengths.
+ */
+function extendRoute(
+  ctx: GenerateContext,
+  venues: ResolvedVenue[],
+  choice: RouteChoice,
+  beats: AiCandidate["beats"],
+  transport: "flexible" | "public" | "car",
+  stopBeat: StopBeatBuilder,
+  mealDescription: string
+): { venues: ResolvedVenue[]; legKm: number[] } {
+  const added: ResolvedVenue[] = [];
+  const legKm: number[] = [];
+  const target = targetBeatCount(ctx);
+  if (target <= beats.length || ctx.homeBaseLat == null || ctx.homeBaseLng == null) return { venues: added, legKm };
+  const kind = ctx.moment?.kind ?? (ctx.scale === "weekend" ? "weekend" : "day");
+  const home = { lat: ctx.homeBaseLat, lng: ctx.homeBaseLng };
+  const recent = recentNameSet(ctx);
+  const seed = hashSeed(ctx.seed);
+  const maxLegKm = walkingLegLimit(ctx);
+  const loves = preferenceTokens(ctx, "love");
+  const avoids = preferenceTokens(ctx, "avoid");
+  const used = new Set([choice.pre.id, choice.meal.id, choice.post.id]);
+  const usable = venues.filter((venue) => isUsableName(venue, recent) && distanceKm(home, venue) <= ctx.radiusKm && !violatesConstraints(ctx, venue));
+  const stopPool = usable.filter((venue) => venue.category !== "food" && settingAllowsStop(ctx, venue) && !stopUnsuitable(ctx, venue));
+  const mealPool = usable.filter((venue) => venue.category === "food" && venue.subcategory === "restaurant");
+
+  const nextNear = (from: ResolvedVenue, pool: ResolvedVenue[], minKm: number): { venue: ResolvedVenue; km: number } | null => {
+    const near = pool
+      .filter((venue) => !used.has(venue.id))
+      .map((venue) => ({ venue, km: distanceKm(from, venue) }))
+      .filter(({ km }) => km >= minKm && km <= maxLegKm)
+      .sort((a, b) => qualityScore(b.venue, loves, avoids) - qualityScore(a.venue, loves, avoids) || a.km - b.km)
+      .slice(0, 6);
+    if (!near.length) return null;
+    return seededShuffle(near, seed ^ hashSeed(from.id))[0];
+  };
+
+  const last = beats[beats.length - 1];
+  let cursor = (clockToMinutes(last.startTime ?? null) ?? 14 * 60) + (last.durationMinutes ?? 30);
+  let from = choice.post;
+  let sundayStarted = false;
+  const sequence: Array<"stop" | "meal" | "sunday-stop" | "sunday-meal"> =
+    kind === "weekend" ? ["stop", "sunday-stop", "sunday-meal", "stop"]
+    : kind === "day" ? ["stop", "meal"]
+    : ["stop"];
+  for (const role of sequence) {
+    if (beats.length >= target) break;
+    const sunday = role.startsWith("sunday");
+    const isMeal = role.endsWith("meal");
+    if (sunday && !sundayStarted) { cursor = 10 * 60 + 30; sundayStarted = true; }
+    const found = nextNear(from, isMeal ? mealPool : stopPool, 0.1) ?? (sunday ? nextNear(choice.meal, isMeal ? mealPool : stopPool, 0.1) : null);
+    if (!found) continue;
+    const leg = travelLeg(found.km, transport);
+    let start = ceil5(cursor + leg.travelMinutes);
+    let beat: AiCandidate["beats"][number];
+    if (isMeal) {
+      const dinner = !sunday;
+      start = dinner ? Math.max(start, 19 * 60) : Math.max(start, 13 * 60);
+      beat = {
+        title: `${dinner ? "Dinner" : "Lunch"} at ${found.venue.name}`,
+        description: mealDescription,
+        category: "food",
+        indoor: true,
+        startTime: minutesToClock(start),
+        durationMinutes: 90,
+        ...leg,
+        distanceFromPreviousKm: Math.round(found.km * 10) / 10,
+        place: venuePlace(found.venue),
+      };
+      cursor = start + 90;
+    } else {
+      beat = stopBeat(found.venue, "early", minutesToClock(start), 45, leg, found.km);
+      cursor = start + 45;
+    }
+    if (kind === "weekend") beat = { ...beat, title: `${sunday ? "Sunday" : "Saturday"}: ${beat.title}`.slice(0, 120) };
+    beats.push(beat);
+    used.add(found.venue.id);
+    added.push(found.venue);
+    legKm.push(found.km);
+    from = found.venue;
+  }
+  if (kind === "weekend") {
+    for (let i = 0; i < Math.min(3, beats.length); i += 1) {
+      if (!beats[i].title.startsWith("Saturday: ")) beats[i] = { ...beats[i], title: `Saturday: ${beats[i].title}`.slice(0, 120) };
+    }
+  }
+  return { venues: added, legKm };
+}
+
 /** Beats, timing and meal-first logic for one explicit route choice; shared by the deterministic and model paths. */
 function assembleCatalogCandidate(
   ctx: GenerateContext,
@@ -412,7 +523,11 @@ function assembleCatalogCandidate(
     titleOrder = [choice.pre.name, choice.meal.name, choice.post.name];
   }
 
-  const title = overrides.title ?? `${titleOrder[0]}, ${titleOrder[1]}, and ${titleOrder[2]}`.slice(0, 120);
+  const extra = extendRoute(ctx, venues, choice, beats, transport, stopBeat, mealDescription);
+  const extraVenueIds = extra.venues.map((venue) => venue.id);
+  const extraKm = extra.venues.reduce((sum, _venue, i) => sum + extra.legKm[i], 0);
+  const baseTitle = `${titleOrder[0]}, ${titleOrder[1]}, and ${titleOrder[2]}`;
+  const title = overrides.title ?? (extra.venues.length ? `${baseTitle} + ${extra.venues.length} more`.slice(0, 120) : baseTitle.slice(0, 120));
   const routeSentence = `fresh, geographically compact route selected from ${venues.length.toLocaleString("en-US")} mapped places within your search area, with the meal and both stops kept close together.`;
   const candidate: AiCandidate = {
     title,
@@ -422,8 +537,8 @@ function assembleCatalogCandidate(
     category: "food",
     indoor: false,
     beats,
-    walkingDistanceKm: Math.round((choice.preToMealKm + choice.mealToPostKm + 1.2) * 10) / 10,
-    walkingMinutes: Math.round((choice.preToMealKm + choice.mealToPostKm) / 0.075) + 60,
+    walkingDistanceKm: Math.round((choice.preToMealKm + choice.mealToPostKm + extraKm + 1.2) * 10) / 10,
+    walkingMinutes: Math.round((choice.preToMealKm + choice.mealToPostKm + extraKm) / 0.075) + 60,
     estimatedCost: (() => {
       const cap = request.match(/up to €(25|40|60) per person/i)?.[1];
       return cap ? `Target up to €${cap} per person; confirm against the current menu` : "€20–45 per person; check the current menu";
@@ -445,7 +560,7 @@ function assembleCatalogCandidate(
       : null,
     photoSearchTerm: `${choice.pre.name} Portugal`,
     destinationAnchor: choice.meal.name,
-    resolverVenueIds: [choice.pre.id, choice.meal.id, choice.post.id, ...(fallback ? [fallback.id] : [])],
+    resolverVenueIds: [choice.pre.id, choice.meal.id, choice.post.id, ...extraVenueIds, ...(fallback ? [fallback.id] : [])],
     citations: [],
     constraintCompliance: ctx.activeConstraints.map((constraint) => ({ constraintId: constraint.id, satisfied: true })),
     travelEstimateKm: Math.round(choice.homeDistanceKm * 10) / 10,

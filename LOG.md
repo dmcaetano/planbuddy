@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.9.0 "Goku": plans are no longer locked to three stops
+
+Plan length now follows the time covered: tonight 3, afternoon 4, a day 5 (ending in dinner), a weekend 7 (Saturday and Sunday labelled). Extra stops come from the real catalogue within walking distance of the previous one; short catalogues just yield fewer. Schema allows up to 10 beats, quality gate 3-10, prompts say 3-8 sized to the time. Retime of an already-saved 4+ beat plan falls back to a fresh proposal (retime.ts still 3-beat). Tests in catalogPlanner.test.ts.
+
 ## 2026-10-07 - v1.7.1: fun profile quiz visible, hunches stop dying after 6 plans
 
 Quiz rendered below the Home base and distance cards, off-screen, so the button looked dead; Memory now shows the quiz alone while it is open. Hunches were auto-dismissed after 6 plan generations without evidence (every regeneration and New plan counts); threshold now 30 (hunches.repo.ts). Already-dismissed hunches are not revived.

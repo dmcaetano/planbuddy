@@ -100,3 +100,29 @@ describe("catalog planner", () => {
     expect(km).toBeLessThan(1.8);
   });
 });
+
+describe("dynamic plan length", () => {
+  const dense: ResolvedVenue[] = [];
+  for (let i = 0; i < 14; i += 1) {
+    dense.push(venue(`node/f${i}`, `Tasca ${i}`, "food", 38.722 + i * 0.0012, -9.139 + (i % 3) * 0.0012, "restaurant", ["portuguese"]));
+    dense.push(venue(`node/p${i}`, `Jardim ${i}`, "outdoor", 38.7225 + i * 0.0012, -9.1385 + (i % 4) * 0.001, i % 2 ? "garden" : "viewpoint"));
+  }
+  const names = (beats: { place?: { name: string } | null }[]) => beats.map((beat) => beat.place?.name);
+
+  it("gives a weekend more stops than a tonight plan, without repeating a venue", () => {
+    const weekend = buildCatalogCandidate(context({ scale: "weekend", moodContext: "", moment: { kind: "weekend", startTime: null, mealFirst: false, mealStart: null, romantic: false } }), dense)!;
+    expect(weekend.beats.length).toBeGreaterThan(3);
+    expect(weekend.beats.some((beat) => beat.title.startsWith("Sunday"))).toBe(true);
+    expect(new Set(names(weekend.beats)).size).toBe(weekend.beats.length);
+    const tonight = buildCatalogCandidate(context({ scale: "day_off", moodContext: "dinner", moment: { kind: "tonight", startTime: "18:00", mealFirst: false, mealStart: "19:30", romantic: false } }), dense)!;
+    expect(tonight.beats).toHaveLength(3);
+  });
+
+  it("gives a day off five stops with a dinner, and an afternoon four", () => {
+    const day = buildCatalogCandidate(context({ scale: "day_off", moodContext: "", moment: { kind: "day", startTime: "10:00", mealFirst: false, mealStart: "13:00", romantic: false } }), dense)!;
+    expect(day.beats).toHaveLength(5);
+    expect(day.beats[4].title).toMatch(/^Dinner/);
+    const afternoon = buildCatalogCandidate(context({ scale: "day_off", moodContext: "", moment: { kind: "tonight", startTime: "14:00", mealFirst: false, mealStart: "19:30", romantic: false } }), dense)!;
+    expect(afternoon.beats).toHaveLength(4);
+  });
+});

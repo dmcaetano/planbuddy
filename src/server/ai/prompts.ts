@@ -15,8 +15,8 @@ export function buildGenerateSystemPrompt(ctx?: GenerateContext, fast = false): 
     '"photoSearchTerm": string|null, "destinationAnchor": string|null, "resolverVenueIds": string[],',
     '"citations": [{"factId": string, "quote": string, "source": string}],',
     '"constraintCompliance": [{"constraintId": string, "satisfied": boolean}], "travelEstimateKm": number|null}]}',
-    "Return exactly 1 best candidate with exactly 3 chronological beats. Commit to the strongest fit instead of offering a menu of ideas.",
-    "For Day off/Weekend, each candidate must name a real, current meal/activity venue plus permanent walkable geography. For Getaway/Vacation, set a real destinationAnchor and three useful trip beats.",
+    "Return exactly 1 best candidate with 3 to 8 chronological beats sized to the time available: an afternoon or evening 3-4, a day 4-6, a weekend 6-8 with each beat labelled by day. Never pad to reach a number. Commit to the strongest fit instead of offering a menu of ideas.",
+    "For Day off/Weekend, each candidate must name a real, current meal/activity venue plus permanent walkable geography. For Getaway/Vacation, set a real destinationAnchor and three to five useful trip beats.",
     fast
       ? "Prefer famous permanent geography and established venues you are confident exist. If uncertain about a venue, use a precise venue category in that neighborhood rather than inventing a business."
       : "Never add a named venue, landmark, neighborhood, park, route stop, or source URL that is absent from the supplied dossier.",
@@ -52,8 +52,8 @@ export function buildGenerateSystemPrompt(ctx?: GenerateContext, fast = false): 
   if (ctx?.edit) {
     lines.push(
       "This is an edit of an existing plan. Make the smallest possible change that fully satisfies the request.",
-      "For restaurant or budget edits, replace only the meal beat. Copy the two non-meal place names and factual payloads exactly from the original plan; only adjacent transition time/distance may change.",
-      "For meal-time edits, preserve existing venues whenever viable and coherently retime or reorder the three beats around the requested meal.",
+      "For restaurant or budget edits, replace only the meal beat. Copy every non-meal place name and factual payloads exactly from the original plan; only adjacent transition time/distance may change.",
+      "For meal-time edits, preserve existing venues whenever viable and coherently retime or reorder the beats around the requested meal.",
       "For walking edits, preserve the meal when possible and minimize the walking route. Never silently broaden a single-detail edit into an unrelated new day.",
     );
   }
