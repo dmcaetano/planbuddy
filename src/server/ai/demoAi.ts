@@ -19,6 +19,8 @@ export interface MemoryFact {
 }
 
 export interface GenerateContext {
+  /** OmniBuddy shared-memory block (already formatted, lower authority than everything else here). */
+  otherBuddies?: string;
   scale: Scale;
   startDate?: string;
   endDate?: string;
@@ -350,6 +352,7 @@ export interface ChatContext {
   message: string;
   seed: string;
   snapshot?: string;
+  otherBuddies?: string;
 }
 
 const CONSTRAINT_PHRASES = [

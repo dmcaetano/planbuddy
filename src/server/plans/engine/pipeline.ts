@@ -9,6 +9,7 @@ import { getForecast } from "../../weather/openMeteo.js";
 import { resolvePlaces, type PlaceResolverResult } from "../../resolver/placeResolver.js";
 import { insertPlan, lastSurfacedPlans } from "../plans.repo.js";
 import { insertCandidates, type CandidateInsert } from "../candidates.repo.js";
+import { otherBuddiesBlock } from "../../omni/hub.js";
 import { currentAiMode, generateCandidates, type MemoryFact, type GenerateContext } from "../../ai/index.js";
 import { filterCandidates } from "./filter.js";
 import { scoreCandidates, pickDiverseAlternates, type ParticipantMemory, type ScoredCandidate } from "./scoring.js";
@@ -468,7 +469,9 @@ export async function runGeneration(
       tags: t.text.toLowerCase().split(/\W+/).filter(Boolean),
     }));
 
+  const otherBuddies = await otherBuddiesBlock(userId);
   const genCtx: GenerateContext = {
+    otherBuddies: otherBuddies || undefined,
     scale: spec.scale,
     startDate: spec.startDate,
     endDate: spec.endDate,

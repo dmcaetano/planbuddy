@@ -159,6 +159,8 @@ export function buildGenerateUserPrompt(ctx: GenerateContext, fast = false): str
     lines.push(`EDIT MODE: ${ctx.edit.mode}`);
     lines.push(`ORIGINAL PLAN TO PRESERVE: ${JSON.stringify(ctx.edit.originalPlan)}`);
   }
+  // after all authoritative data: shared memory from the user's other Buddies is lower authority
+  if (ctx.otherBuddies) lines.push(ctx.otherBuddies);
   return lines.join("\n");
 }
 
@@ -236,9 +238,10 @@ export function buildChatSystemPrompt(): string {
   ].join("\n");
 }
 
-export function buildChatUserPrompt(message: string, snapshot?: string): string {
+export function buildChatUserPrompt(message: string, snapshot?: string, otherBuddies?: string): string {
   const state = snapshot ? `APP STATE: ${snapshot}\n` : "";
-  return `${state}User message (verify quotes against this exact text): "${message}"`;
+  const shared = otherBuddies ? `${otherBuddies}\n` : "";
+  return `${state}${shared}User message (verify quotes against this exact text): "${message}"`;
 }
 
 export function buildFeedbackSystemPrompt(): string {

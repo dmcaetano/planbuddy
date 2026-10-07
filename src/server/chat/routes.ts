@@ -1,3 +1,4 @@
+import { otherBuddiesBlock } from "../omni/hub.js";
 import { Router } from "express";
 import { asyncHandler, notFound, validateBody } from "../http.js";
 import { requireAuth } from "../auth/middleware.js";
@@ -116,7 +117,12 @@ chatRouter.post(
     }
 
     const snapshot = await buildAppSnapshot(req.user!.id);
-    const { mode, response } = await chatRespond({ message: req.body.content, seed: userMessage.id, snapshot });
+    const { mode, response } = await chatRespond({
+      message: req.body.content,
+      seed: userMessage.id,
+      snapshot,
+      otherBuddies: (await otherBuddiesBlock(req.user!.id, req.body.content)) || undefined,
+    });
     const appResult = await applyAppActions(req.user!.id, response.actions, req.body.content);
     const assistantMessage = await addMessage(
       session.id,

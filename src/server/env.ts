@@ -36,6 +36,11 @@ const envSchema = z.object({
   // worst case (one timeout retry) stays under the sweep at ~2x this value.
   AI_COMPOSE_TIMEOUT_MS: z.coerce.number().int().min(15000).max(300000).default(210000),
   PLACE_RESOLVER_API_KEY: z.string().optional(),
+  // OmniBuddy hub (Buddy Contract v1). The hub URL is the only thing to configure: the per-link
+  // signing key and hub token are issued by the hub at link time and stored in omni_links.
+  OMNIBUDDY_HUB_URL: z.string().url().optional(),
+  PLANBUDDY_PUBLIC_URL: z.string().url().default("https://planbuddy.onrender.com"),
+  PLANBUDDY_TZ: z.string().default("Europe/Lisbon"),
 });
 
 const parsed = envSchema.safeParse(process.env);

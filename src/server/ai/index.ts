@@ -253,7 +253,7 @@ export async function chatRespond(ctx: ChatContext): Promise<{ mode: AiMode; res
   try {
     const response = await callAiJson(
       buildChatSystemPrompt(),
-      buildChatUserPrompt(ctx.message, ctx.snapshot),
+      buildChatUserPrompt(ctx.message, ctx.snapshot, ctx.otherBuddies),
       aiChatResponseSchema
     );
     return { mode: "deepseek", response };

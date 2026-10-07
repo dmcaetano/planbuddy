@@ -23,6 +23,8 @@ import { planChatRouter } from "./plans/plan-chat.routes.js";
 import { planJobsRouter } from "./plans/jobs.routes.js";
 import { momentRouter } from "./moment/routes.js";
 import { timeOffRouter } from "./timeoff/routes.js";
+import { buddyRouter } from "./omni/routes.js";
+import { scheduleSync } from "./omni/hub.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -39,10 +41,30 @@ export function createApp() {
       credentials: true,
     })
   );
-  app.use(express.json({ limit: "256kb" }));
+  app.use(
+    express.json({
+      limit: "256kb",
+      // the OmniBuddy signature is computed over the exact bytes received
+      verify: (req, _res, buf) => {
+        (req as Request).rawBody = buf.toString("utf8");
+      },
+    })
+  );
   app.use(cookieParser(env.SESSION_SECRET));
+  // Buddy Contract v1: signed hub requests carry no browser headers, so this mounts before the origin guard;
+  // the router applies requireSameOrigin/attachUser itself on its session-only routes.
+  app.use("/api/buddy", buddyRouter);
   app.use(requireSameOrigin);
   app.use(attachUser);
+  // After any successful memory change, push the delta to the hub (debounced; no-op without a link).
+  app.use(/^\/api\/(tastes|constraints|hunches|chat|participants)/, (req, res, next) => {
+    if (req.method !== "GET") {
+      res.on("finish", () => {
+        if (res.statusCode < 400 && req.user) scheduleSync(req.user.id);
+      });
+    }
+    next();
+  });
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });

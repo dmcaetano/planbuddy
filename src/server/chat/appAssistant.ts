@@ -1,3 +1,4 @@
+import { otherBuddiesBlock } from "../omni/hub.js";
 import { createConstraint, deleteConstraint, getConstraint, listConstraints } from "../memory/constraints.repo.js";
 import { createTaste, deleteTaste, getTaste, listTastes } from "../memory/tastes.repo.js";
 import { confirmHunch, deleteHunch, dismissHunch, getHunch, listHunches } from "../memory/hunches.repo.js";
@@ -274,7 +275,7 @@ export function composeAssistantReply(modelReply: string, requested: number, res
 /** Plan-dock entry point: answers or changes anything outside the visible plan, using the same snapshot and action executor as the general chat. */
 export async function answerAsApp(userId: string, message: string, seed: string) {
   const snapshot = await buildAppSnapshot(userId);
-  const { mode, response } = await chatRespond({ message, seed, snapshot });
+  const { mode, response } = await chatRespond({ message, seed, snapshot, otherBuddies: (await otherBuddiesBlock(userId, message)) || undefined });
   const result = await applyAppActions(userId, response.actions, message);
   return { mode, reply: composeAssistantReply(response.reply, response.actions.length, result), result };
 }
