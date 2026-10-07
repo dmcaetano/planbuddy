@@ -398,6 +398,9 @@ export async function callAiToolLoop(options: AgentLoopOptions): Promise<{ done:
   let nudged = false;
   try {
     for (let step = 1; step <= maxSteps; step += 1) {
+      if (step === maxSteps - 3) {
+        messages.push({ role: "user", content: "Only 3 steps are left. Stop searching: choose from what you already found, call check_route, then submit_route." });
+      }
       if (step === maxSteps) {
         messages.push({ role: "user", content: "This is your last step. Finish now with the finishing tool using the best valid option you have found." });
       }
@@ -457,6 +460,7 @@ export async function callAiToolLoop(options: AgentLoopOptions): Promise<{ done:
           continue;
         }
         let result: AgentToolResult;
+        logger.info("Agent tool call", { step, tool: name, args: JSON.stringify(args).slice(0, 160) });
         try {
           result = await options.run(name, args);
         } catch (err) {

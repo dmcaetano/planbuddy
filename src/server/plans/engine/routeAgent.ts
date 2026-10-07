@@ -21,7 +21,7 @@ const SYSTEM_PROMPT = [
   "Do real work before committing: search with several different queries that reflect the loved tastes and the occasion, compare a few restaurants, and read their stop lists. Do not take the first result.",
   "Prefer places a local would recommend over chains, tourist traps, food courts and hotel bars. Match loved tastes and the occasion; never break the avoid tastes or constraints. Keep the restaurant reasonably close to home unless the request asks for a trip.",
   "Respect opening hours: after 19:00 avoid museums, galleries, palaces, castles, monuments and churches. Use the weather (indoors when wet or cold).",
-  "Always call check_route on your final choice. If it reports an issue, fix it and check again. Finish by calling submit_route.",
+  "You have a limited number of steps (about 12) and may call several tools in one step: after at most 3-4 searches, pick, then call check_route and submit_route. Always call check_route on your final choice. If it reports an issue, fix it and check again. Finish by calling submit_route.",
   "Write title and why in English even when venue names are Portuguese. title at most 90 characters; why at most 240 characters, ONE sentence naming the actual taste or occasion this route fits.",
 ].join("\n");
 

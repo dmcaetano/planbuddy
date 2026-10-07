@@ -42,7 +42,7 @@ const envSchema = z.object({
   AI_AGENT_ENABLED: z.string().default("true").transform((value) => value.toLowerCase() !== "false"),
   AGENT_MODEL_ID: z.string().optional(),
   AI_AGENT_TIMEOUT_MS: z.coerce.number().int().min(15000).max(240000).default(90000),
-  AI_AGENT_MAX_STEPS: z.coerce.number().int().min(3).max(20).default(14),
+  AI_AGENT_MAX_STEPS: z.coerce.number().int().min(3).max(20).default(16),
   PLACE_RESOLVER_API_KEY: z.string().optional(),
   // OmniBuddy hub (Buddy Contract v1). The hub URL is the only thing to configure: the per-link
   // signing key and hub token are issued by the hub at link time and stored in omni_links.
