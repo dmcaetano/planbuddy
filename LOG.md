@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.6.3: third security pass
+
+Bad-signature counter is now a persistent atomic table (omni_bad_sig, migration 0015) keyed on the trusted proxy hop (req.ip, trust proxy 1) and checked only on the failure path; replay expiry uses one clock (server now + 2x skew + margin) and housekeeping uses the same app clock. 3 new tests; full suite 365 passed.
+
 ## 2026-10-07 - v1.6.2: second security pass
 
 Bad-signature throttle moved after verification and keyed per IP (valid signatures never blocked); replay claim is one atomic insert with expiry from the signature's own timestamp; hub response read is streamed with a byte cap before parsing, push batches capped, signed bodies capped at 16kb before parsing (413). 5 new tests.

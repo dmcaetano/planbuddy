@@ -5,7 +5,7 @@ import { HDR, waitForJob } from "../helpers/planJobs.js";
 import { getDb } from "../../src/server/db/client.js";
 import { localNow } from "../../src/server/omni/card.js";
 import { applyTombstones, buildPushItems, readJsonCapped, formatContextBlock, hubBase, sanitizeHubText, signBody, usableLinkBase, verifySignature } from "../../src/server/omni/hub.js";
-import { getLinkById, saveLink } from "../../src/server/omni/repo.js";
+import { claimSignature, countBadSignature, getLinkById, saveLink } from "../../src/server/omni/repo.js";
 import { env } from "../../src/server/env.js";
 import { createConstraint } from "../../src/server/memory/constraints.repo.js";
 import { createTaste } from "../../src/server/memory/tastes.repo.js";
@@ -340,6 +340,7 @@ describe("security round 2: lockout, replay atomicity, bounds before parsing", (
     const db = await getDb();
     const { rows } = await db.query<{ ms: number }>("SELECT (extract(epoch from expires_at) * 1000)::float8 AS ms FROM omni_seen WHERE signature = $1", [sig]);
     expect(rows[0].ms).toBeGreaterThanOrEqual(Number(ts) + 5 * 60_000);
+    expect(rows[0].ms).toBeGreaterThanOrEqual(Date.now() + 10 * 60_000); // server clock now + 2x skew
   });
 
   it("refuses an oversize signed body before parsing it", async () => {
@@ -364,5 +365,42 @@ describe("security round 2: lockout, replay atomicity, bounds before parsing", (
     expect(await readJsonCapped(mk(['{"a":"', "x".repeat(100), '"}']), 50)).toBeNull(); // streamed past the cap
     expect(await readJsonCapped(mk(["{}"], { "content-length": "999999" }), 50)).toBeNull(); // declared too large
     expect(await readJsonCapped(mk(["not json"]))).toBeNull();
+  });
+});
+
+describe("security round 3: throttle source and persistence, single clock", () => {
+  it("keys the throttle on the trusted proxy hop, so spoofed leading X-Forwarded-For entries cannot rotate it", async () => {
+    const db = await getDb();
+    const bad = (xff: string) => request(app).get("/api/buddy/card").set("X-Forwarded-For", xff).set("X-Omni-Timestamp", String(Date.now())).set("X-Omni-Link", LINK).set("X-Omni-Signature", "1".repeat(64));
+    await bad("1.1.1.1, 192.0.2.55");
+    await bad("2.2.2.2, 192.0.2.55");
+    await bad("3.3.3.3, 192.0.2.55");
+    const { rows } = await db.query<{ ip: string; n: number }>("SELECT ip, n FROM omni_bad_sig WHERE ip LIKE '%192.0.2.55'");
+    expect(rows.length).toBe(1);
+    expect(rows[0].n).toBe(3);
+    const spoofed = await db.query("SELECT 1 FROM omni_bad_sig WHERE ip IN ('1.1.1.1','2.2.2.2','3.3.3.3')");
+    expect(spoofed.rows.length).toBe(0);
+  });
+
+  it("the failure counter is persistent, atomic under concurrency, and resets with its window", async () => {
+    const t0 = Date.now();
+    const ns = await Promise.all(Array.from({ length: 8 }, () => countBadSignature("198.18.0.1", t0, 60_000)));
+    expect([...ns].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(await countBadSignature("198.18.0.1", t0 + 61_000, 60_000)).toBe(1);
+  });
+
+  it("replay rows outlive every timestamp the skew check still accepts, using one clock", async () => {
+    const db = await getDb();
+    const now = Date.now();
+    expect(await claimSignature(LINK, "sig-clock-test", now, 5 * 60_000)).toBe(true);
+    expect(await claimSignature(LINK, "sig-clock-test", now, 5 * 60_000)).toBe(false);
+    const { rows } = await db.query<{ ms: number }>("SELECT (extract(epoch from expires_at) * 1000)::float8 AS ms FROM omni_seen WHERE signature = 'sig-clock-test'");
+    const latestAcceptable = now + 5 * 60_000 /* newest ts */ + 5 * 60_000; /* plus skew */
+    expect(rows[0].ms).toBeGreaterThan(latestAcceptable);
+    // housekeeping on a later server instant removes only rows that are really past expiry
+    await claimSignature(LINK, "sig-clock-test-2", now + 11 * 60_000 + 61_000, 5 * 60_000);
+    await new Promise((r) => setTimeout(r, 100));
+    const gone = await db.query("SELECT 1 FROM omni_seen WHERE signature = 'sig-clock-test'");
+    expect(gone.rows.length).toBe(0);
   });
 });

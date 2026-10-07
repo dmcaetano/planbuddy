@@ -9,7 +9,7 @@ import { attachUser, requireAuth, requireSameOrigin } from "../auth/middleware.j
 import { createTaste, deleteTaste } from "../memory/tastes.repo.js";
 import { buildCard, lockCurrentPlan, unlockPlan, type Loc } from "./card.js";
 import { CONTRACT_VERSION, WANTS_PREFIX, completeLink, hubBase, sanitizeHubText, scheduleSync, syncToHub, verifySignature } from "./hub.js";
-import { claimSignature, claimUndo, createUndo, deleteLink, getLinkById, getLinkForUser, saveLink, type OmniLink } from "./repo.js";
+import { claimSignature, claimUndo, countBadSignature, createUndo, deleteLink, getLinkById, getLinkForUser, saveLink, type OmniLink } from "./repo.js";
 import { suggestFor } from "./suggest.js";
 
 function readVersion(): string {
@@ -47,16 +47,24 @@ const SKEW_MS = 5 * 60_000;
 // lock it out. At most the attacker's own IP gets 429 instead of 401.
 const BAD_LIMIT = 60;
 const BAD_WINDOW_MS = 5 * 60_000;
-const badByIp = new Map<string, { n: number; resetAt: number }>();
-function noteBadSignature(ip: string, now = Date.now()): boolean {
-  if (badByIp.size > 10_000) badByIp.clear();
-  const e = badByIp.get(ip);
-  if (!e || e.resetAt < now) {
-    badByIp.set(ip, { n: 1, resetAt: now + BAD_WINDOW_MS });
-    return false;
+// Source IP: req.ip with `trust proxy` = 1 is the address the platform's proxy appended to X-Forwarded-For, i.e. the
+// right-most trusted hop. Entries an attacker puts at the front of X-Forwarded-For are ignored, so the key cannot be
+// spoofed or rotated by header, and it is never the raw socket (proxy) address.
+const clientIp = (req: Request): string => (req.ip || req.socket.remoteAddress || "unknown").slice(0, 64);
+
+// Once an IP is over the limit it is remembered in memory for the rest of the window, so a flood is answered 429
+// with no further database write; the authoritative counter is the shared table (survives restarts, atomic).
+const blockedUntil = new Map<string, number>();
+async function noteBadSignature(ip: string, now: number): Promise<boolean> {
+  const until = blockedUntil.get(ip);
+  if (until && until > now) return true;
+  const n = await countBadSignature(ip, now, BAD_WINDOW_MS);
+  if (n > BAD_LIMIT) {
+    if (blockedUntil.size > 10_000) blockedUntil.clear();
+    blockedUntil.set(ip, now + BAD_WINDOW_MS);
+    return true;
   }
-  e.n++;
-  return e.n > BAD_LIMIT;
+  return false;
 }
 
 /**
@@ -67,17 +75,17 @@ function noteBadSignature(ip: string, now = Date.now()): boolean {
 async function requireSigned(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const linkId = (req.get("X-Omni-Link") ?? "").slice(0, 128);
+    const now = Date.now(); // the single clock for this request: timestamp validation and replay expiry
     const link = linkId ? await getLinkById(linkId) : null;
     const sig = req.get("X-Omni-Signature");
     const tsHeader = req.get("X-Omni-Timestamp");
-    if (!link || !verifySignature(link.signingKey, tsHeader, sig, req.rawBody ?? "")) {
-      res.status(noteBadSignature(req.ip ?? "?") ? 429 : 401).json({ error: "bad signature" });
+    if (!link || !verifySignature(link.signingKey, tsHeader, sig, req.rawBody ?? "", now, SKEW_MS)) {
+      res.status((await noteBadSignature(clientIp(req), now)) ? 429 : 401).json({ error: "bad signature" });
       return;
     }
     if (req.method !== "GET" && req.method !== "HEAD") {
-      // remembered until the signature's own timestamp can no longer pass the skew check (never shorter)
-      const expiresAt = Math.max(Number(tsHeader) + SKEW_MS + 60_000, Date.now() + SKEW_MS + 60_000);
-      const fresh = await claimSignature(link.linkId, String(sig).toLowerCase(), expiresAt);
+      // remembered past the last moment this timestamp could still pass the skew check, on the same clock
+      const fresh = await claimSignature(link.linkId, String(sig).toLowerCase(), now, SKEW_MS);
       if (!fresh) {
         res.status(401).json({ error: "request already used" });
         return;

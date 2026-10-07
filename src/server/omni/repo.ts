@@ -118,15 +118,34 @@ export async function sealLegacyLinks(): Promise<void> {
 }
 
 /** Remembers a signature until `ttlMs` has passed. Returns false when it was already seen (a replay). */
-export async function claimSignature(linkId: string, signature: string, expiresAtMs: number): Promise<boolean> {
+export async function claimSignature(linkId: string, signature: string, nowMs: number, maxSkewMs: number): Promise<boolean> {
   const db = await getDb();
+  // ONE clock (this server's, the same instant that validated the timestamp). A timestamp is accepted while it is
+  // within +/- maxSkewMs of nowMs, so the latest moment it could still pass is nowMs + 2*maxSkewMs; the row is kept
+  // past that plus a margin, so it can never expire while its timestamp is still acceptable.
+  const expiresAtMs = nowMs + 2 * maxSkewMs + 60_000;
   // one statement: the primary key makes insert-or-reject atomic, so two concurrent copies cannot both win
   const { rows } = await db.query(
     `INSERT INTO omni_seen (signature, link_id, expires_at) VALUES ($1,$2, to_timestamp($3 / 1000.0))
      ON CONFLICT (signature) DO NOTHING RETURNING signature`,
     [signature, linkId, expiresAtMs]
   );
-  // housekeeping is separate and best-effort; it can never un-reject a replay because only expired rows go
-  void db.query("DELETE FROM omni_seen WHERE expires_at < now()").catch(() => undefined);
+  // housekeeping uses the same app clock (never the DB's now()); only rows already past their expiry go
+  void db.query("DELETE FROM omni_seen WHERE expires_at < to_timestamp($1 / 1000.0)", [nowMs]).catch(() => undefined);
   return rows.length > 0;
+}
+
+/** Atomically counts one failed signed request for a source IP; returns the count inside the current window. */
+export async function countBadSignature(ip: string, nowMs: number, windowMs: number): Promise<number> {
+  const db = await getDb();
+  const { rows } = await db.query<{ n: number }>(
+    `INSERT INTO omni_bad_sig (ip, window_start, n) VALUES ($1,$2,1)
+     ON CONFLICT (ip) DO UPDATE SET
+       n = CASE WHEN omni_bad_sig.window_start < $2 - $3 THEN 1 ELSE omni_bad_sig.n + 1 END,
+       window_start = CASE WHEN omni_bad_sig.window_start < $2 - $3 THEN $2 ELSE omni_bad_sig.window_start END
+     RETURNING n`,
+    [ip, nowMs, windowMs]
+  );
+  void db.query("DELETE FROM omni_bad_sig WHERE window_start < $1", [nowMs - windowMs]).catch(() => undefined);
+  return Number(rows[0]?.n ?? 1);
 }

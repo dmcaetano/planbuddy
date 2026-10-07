@@ -3,6 +3,8 @@
 **SDLC class:** SOLO
 
 ## Status
+v1.6.3: third security pass (persistent atomic per-IP failure counter on the trusted proxy hop; replay expiry on a single server clock).
+
 v1.6.2: second security pass (bad-signature throttle per IP and only after verification; atomic replay claim; byte caps before parsing).
 
 v1.6.1: security hardening of the Buddy Contract code (automated review of 3b25d4f). Fixed: (1) hub text in prompts is untrusted data: sanitised (control/bidi chars, delimiters, role markers, override phrases), quoted, capped at 12 lines/2000 chars, block says it is data; the accepted-candidate title is sanitised before it becomes a taste; (2) replay protection: omni_seen table (migration 0014) refuses a second use of any signed POST signature, GET /card stays idempotent, failed-signature rate limit; (3) hub tombstones may only remove the same user's hub-origin 'Wants to try:' tastes, never own tastes or constraints, ids validated and capped; (4) hub token and signing key encrypted at rest (AES-256-GCM, key from SESSION_SECRET; legacy plaintext re-sealed at boot); (5) stored link secrets only ever sent to the configured https OMNIBUDDY_HUB_URL (http localhost only outside production); hub responses size-capped and validated; (6) generic error messages, no hub/internal text leaked, no secrets in logs; (7) strict body validation (link code charset, action/undo/candidate/entity limits), link endpoint rate limit, hex-only signature format. Tests: omniContract.test.ts now 20.
