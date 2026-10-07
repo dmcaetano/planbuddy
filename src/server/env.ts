@@ -35,6 +35,14 @@ const envSchema = z.object({
   // search under provider load routinely needs >90s, so give it real room:
   // worst case (one timeout retry) stays under the sweep at ~2x this value.
   AI_COMPOSE_TIMEOUT_MS: z.coerce.number().int().min(15000).max(300000).default(210000),
+  // The plan agent: DeepSeek with reasoning ON that looks things up through server-side tools
+  // (profile, history, restaurant search, walkable stops, route check) before committing to a route.
+  // It runs inside the background plan job, so it gets real time; any failure falls back to the
+  // single-shot picker and then the deterministic route.
+  AI_AGENT_ENABLED: z.string().default("true").transform((value) => value.toLowerCase() !== "false"),
+  AGENT_MODEL_ID: z.string().optional(),
+  AI_AGENT_TIMEOUT_MS: z.coerce.number().int().min(15000).max(240000).default(90000),
+  AI_AGENT_MAX_STEPS: z.coerce.number().int().min(3).max(16).default(10),
   PLACE_RESOLVER_API_KEY: z.string().optional(),
   // OmniBuddy hub (Buddy Contract v1). The hub URL is the only thing to configure: the per-link
   // signing key and hub token are issued by the hub at link time and stored in omni_links.

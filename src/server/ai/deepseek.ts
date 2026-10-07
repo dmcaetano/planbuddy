@@ -32,6 +32,8 @@ interface AiCallOptions {
   fast?: boolean;
   /** Full plan composition runs a materially larger schema than chat/feedback/etc. and needs more token + time headroom. */
   heavy?: boolean;
+  /** Reasoning ON (medium effort) with a large token budget and the agent time budget: for plan drafting that must be good, not instant. */
+  reason?: boolean;
   /** Internal: set on the single retry after a ReasoningStarvedError to force a short, low-reasoning answer. */
   directAnswer?: boolean;
   /** Internal: set on the single retry after a provider timeout so a slow provider gets exactly one more attempt. */
@@ -51,7 +53,11 @@ const EVENT_REASONING_RETRY = "Almost had it — asking for a cleaner draft";
 const EVENT_TIMEOUT_RETRY = "The kitchen is busy — giving it another minute";
 export const EVENT_VALIDATION_REPAIR = "Polishing the draft";
 
-function emit(options: AiCallOptions, detail: string): void {
+function agentModelId(): string {
+  return env.AGENT_MODEL_ID ?? env.FAST_MODEL_ID;
+}
+
+function emit(options: Pick<AiCallOptions, "onEvent">, detail: string): void {
   try {
     options.onEvent?.(detail);
   } catch (err) {
@@ -86,19 +92,21 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
   // reasoning+content budgets than chat/feedback JSON and need real
   // wall-clock headroom, especially when running as the DeepSeek fallback
   // for a degraded Gemini. Lightweight calls keep the shorter timeout.
-  const timeoutMs = options.fast
+  const timeoutMs = options.reason
+    ? env.AI_AGENT_TIMEOUT_MS
+    : options.fast
     ? env.AI_FAST_TIMEOUT_MS
     : options.webSearch || options.heavy
       ? env.AI_COMPOSE_TIMEOUT_MS
       : env.AI_TIMEOUT_MS;
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const model = options.fast ? env.FAST_MODEL_ID : env.MODEL_ID;
+    const model = options.reason ? agentModelId() : options.fast ? env.FAST_MODEL_ID : env.MODEL_ID;
     // Candidate generation (composition) is materially larger than
     // chat/feedback JSON. Give the fast model enough room for a cold
     // provider start while retaining a hard upper bound so the deterministic
     // fallback can still take over.
-    const maxTokens = options.webSearch ? 12000 : options.fast ? 9000 : options.heavy ? 28000 : 6000;
+    const maxTokens = options.reason ? 16000 : options.webSearch ? 12000 : options.fast ? 9000 : options.heavy ? 28000 : 6000;
     // Reasoning models can silently spend the *entire* completion-token
     // budget on hidden reasoning and emit zero visible content (see
     // ReasoningStarvedError above -- this is exactly what happened in
@@ -111,7 +119,9 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
       ? { enabled: false as const }
       : options.webSearch || options.directAnswer || options.fast
         ? { effort: "low" as const, exclude: true }
-        : { max_tokens: options.heavy ? 8000 : Math.min(2500, Math.floor(maxTokens / 2)) };
+        : options.reason
+          ? { effort: "medium" as const, exclude: true }
+          : { max_tokens: options.heavy ? 8000 : Math.min(2500, Math.floor(maxTokens / 2)) };
     const res = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: {
@@ -122,7 +132,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
         model,
         messages,
         response_format: { type: "json_object" },
-        temperature: options.webSearch ? 0.45 : options.fast ? 0.5 : 0.7,
+        temperature: options.webSearch ? 0.45 : options.fast || options.reason ? 0.5 : 0.7,
         max_tokens: maxTokens,
         reasoning,
         ...(options.webSearch
@@ -142,7 +152,10 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, options:
         ...(options.fast && model.toLowerCase().includes("deepseek")
           ? { provider: { sort: "latency", allow_fallbacks: true } }
           : {}),
-        ...(options.webSearch || options.fast || !model.toLowerCase().includes("deepseek")
+        ...(options.reason
+          ? { provider: { require_parameters: true, allow_fallbacks: true } }
+          : {}),
+        ...(options.webSearch || options.fast || options.reason || !model.toLowerCase().includes("deepseek")
           ? {}
           : {
               provider: {
@@ -242,9 +255,9 @@ export async function callAiJson<T>(
   systemPrompt: string,
   userPrompt: string,
   schema: ZodType<T, ZodTypeDef, unknown>,
-  options: { heavy?: boolean; fast?: boolean; onEvent?: (detail: string) => void } = {}
+  options: { heavy?: boolean; fast?: boolean; reason?: boolean; onEvent?: (detail: string) => void } = {}
 ): Promise<T> {
-  const model = options.fast ? env.FAST_MODEL_ID : env.MODEL_ID;
+  const model = options.reason ? agentModelId() : options.fast ? env.FAST_MODEL_ID : env.MODEL_ID;
   let raw = await callWithLengthRetry(systemPrompt, userPrompt, options);
   let parsed = safeJsonParse(raw.content);
   let result = parsed ? schema.safeParse(parsed) : null;
@@ -322,4 +335,141 @@ export function safeJsonParse(text: string): unknown {
     }
   }
   return null;
+}
+
+export interface AgentTool {
+  name: string;
+  description: string;
+  /** JSON Schema for the arguments object. */
+  parameters: Record<string, unknown>;
+}
+
+export interface AgentToolResult {
+  /** What the model sees. Capped before it is sent. */
+  output: unknown;
+  /** Set by the finishing tool when its input was accepted; ends the loop and is returned to the caller. */
+  done?: unknown;
+  /** One short human sentence for the live progress trail. */
+  narration?: string;
+}
+
+export interface AgentLoopOptions {
+  system: string;
+  user: string;
+  tools: AgentTool[];
+  run: (name: string, args: Record<string, unknown>) => Promise<AgentToolResult> | AgentToolResult;
+  maxSteps?: number;
+  onEvent?: (detail: string) => void;
+}
+
+const TOOL_OUTPUT_CAP = 7000;
+
+interface AgentToolCall {
+  id: string;
+  type?: string;
+  function?: { name?: string; arguments?: string };
+}
+
+function capToolOutput(output: unknown): string {
+  const text = typeof output === "string" ? output : JSON.stringify(output);
+  return text.length > TOOL_OUTPUT_CAP ? `${text.slice(0, TOOL_OUTPUT_CAP)}... [truncated; narrow the query]` : text;
+}
+
+/**
+ * Reasoning + tool-calling loop over OpenRouter. The model may call the supplied read-only tools as
+ * often as it likes (up to maxSteps model turns, one shared wall-clock deadline) and ends by calling
+ * a tool whose result carries `done`. Returns that value, or null when the model never finished.
+ * Throws on provider errors and on the deadline so the caller can fall back.
+ */
+export async function callAiToolLoop(options: AgentLoopOptions): Promise<{ done: unknown | null; steps: number }> {
+  if (!env.OPENROUTER_API_KEY) throw new AiUnavailableError("OPENROUTER_API_KEY not configured");
+  const maxSteps = options.maxSteps ?? env.AI_AGENT_MAX_STEPS;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), env.AI_AGENT_TIMEOUT_MS);
+  const model = agentModelId();
+  const messages: Record<string, unknown>[] = [
+    { role: "system", content: options.system },
+    { role: "user", content: options.user },
+  ];
+  const toolsPayload = options.tools.map((tool) => ({
+    type: "function",
+    function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+  }));
+  let nudged = false;
+  try {
+    for (let step = 1; step <= maxSteps; step += 1) {
+      if (step === maxSteps) {
+        messages.push({ role: "user", content: "This is your last step. Finish now with the finishing tool using the best valid option you have found." });
+      }
+      const res = await fetch(OPENROUTER_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${env.OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages,
+          tools: toolsPayload,
+          tool_choice: "auto",
+          temperature: 0.5,
+          max_tokens: 12000,
+          reasoning: { effort: "medium" },
+          provider: { require_parameters: true, allow_fallbacks: true },
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`OpenRouter error ${res.status}: ${body.slice(0, 300)}`);
+      }
+      const data = (await res.json()) as {
+        choices?: {
+          finish_reason?: string;
+          message?: {
+            content?: string | null;
+            tool_calls?: AgentToolCall[];
+            reasoning?: string;
+            reasoning_details?: unknown;
+          };
+        }[];
+      };
+      const message = data.choices?.[0]?.message;
+      if (!message) throw new Error("OpenRouter returned no message");
+      const calls = message.tool_calls ?? [];
+      // Reasoning models must get their own reasoning back untouched alongside the tool calls.
+      messages.push({
+        role: "assistant",
+        content: message.content ?? "",
+        ...(calls.length ? { tool_calls: calls } : {}),
+        ...(message.reasoning_details ? { reasoning_details: message.reasoning_details } : {}),
+      });
+      if (calls.length === 0) {
+        if (nudged) return { done: null, steps: step };
+        nudged = true;
+        messages.push({ role: "user", content: "Do not answer in prose. Use the tools, and finish by calling the finishing tool." });
+        continue;
+      }
+      for (const call of calls) {
+        const name = call.function?.name ?? "";
+        let args: Record<string, unknown> = {};
+        try {
+          args = call.function?.arguments ? (JSON.parse(call.function.arguments) as Record<string, unknown>) : {};
+        } catch {
+          messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify({ error: "arguments were not valid JSON" }) });
+          continue;
+        }
+        let result: AgentToolResult;
+        try {
+          result = await options.run(name, args);
+        } catch (err) {
+          logger.warn("Agent tool threw", { tool: name, error: String(err) });
+          result = { output: { error: "the tool failed; try another approach" } };
+        }
+        if (result.narration) emit(options, result.narration);
+        if (result.done !== undefined) return { done: result.done, steps: step };
+        messages.push({ role: "tool", tool_call_id: call.id, content: capToolOutput(result.output) });
+      }
+    }
+    return { done: null, steps: maxSteps };
+  } finally {
+    clearTimeout(timeout);
+  }
 }

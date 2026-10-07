@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.10.0 "Kakashi": the plan maker reasons and uses tools
+
+Plans felt dumb because the planner was a one-shot, reasoning-off call over a fixed shortlist. It is now a DeepSeek tool-calling agent with reasoning on: it reads the profile and history, searches the 11k-place catalogue with several queries, inspects walkable stops, checks the route against server rules and submits. Fallbacks unchanged.
+
 ## 2026-10-07 - v1.9.2: Sunday keeps its own morning clock
 
 enrich.ts forced every beat to start after the previous one ended, so Sunday 10:30 was pushed to Saturday evening. Beat-time normalisation now restarts at each Saturday/Sunday boundary.

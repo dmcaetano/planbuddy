@@ -14,7 +14,7 @@ const HUB = "https://hub.example.com";
 let app: any;
 let seq = 0;
 const realFetch = globalThis.fetch;
-let hubCalls: any[] = [];
+const hubCalls: any[] = [];
 
 function connect(body: unknown, opts: { key?: string; ts?: number; ip?: string } = {}) {
   const raw = JSON.stringify(body);

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { GenerateContext } from "../../ai/demoAi.js";
 import { callAiJson } from "../../ai/deepseek.js";
 import { currentAiMode } from "../../ai/index.js";
+import { env } from "../../env.js";
 import { logger } from "../../logger.js";
 import type { ResolvedVenue } from "../../resolver/placeResolver.js";
 import {
@@ -13,6 +14,7 @@ import {
 } from "./catalogPlanner.js";
 import { clockToMinutes } from "../../../shared/moment.js";
 import type { ProgressReporter } from "./stages.js";
+import { pickRouteWithAgent } from "./routeAgent.js";
 
 /**
  * DeepSeek proposes, the server validates (standing project decision). The model only CHOOSES among
@@ -88,8 +90,18 @@ export function buildPickerPrompt(ctx: GenerateContext, shortlist: CatalogShortl
  * Asks the model to choose a route from the shortlist. Returns null on ANY failure (no shortlist,
  * timeout, bad JSON, schema miss, ids that are not in the shortlist or not the restaurant's own stops).
  */
-export async function pickRouteWithModel(ctx: GenerateContext, shortlist: CatalogShortlist): Promise<RoutePick | null> {
+export async function pickRouteWithModel(
+  ctx: GenerateContext,
+  shortlist: CatalogShortlist,
+  venues?: ResolvedVenue[],
+  onEvent?: (detail: string) => void
+): Promise<RoutePick | null> {
   if (shortlist.meals.length === 0) return null;
+  if (venues && env.AI_AGENT_ENABLED) {
+    const agentPick = await pickRouteWithAgent(ctx, venues, onEvent);
+    if (agentPick) return agentPick;
+    onEvent?.("Falling back to a quicker pick");
+  }
   try {
     const pick = await callAiJson(SYSTEM_PROMPT, buildPickerPrompt(ctx, shortlist), routePickSchema, { fast: true });
     const meal = shortlist.meals.find((item) => item.id === pick.mealId);
@@ -107,7 +119,12 @@ export async function pickRouteWithModel(ctx: GenerateContext, shortlist: Catalo
 
 export interface CatalogSelectionDeps {
   modelAvailable: () => boolean;
-  pick: (ctx: GenerateContext, shortlist: CatalogShortlist) => Promise<RoutePick | null>;
+  pick: (
+    ctx: GenerateContext,
+    shortlist: CatalogShortlist,
+    venues?: ResolvedVenue[],
+    onEvent?: (detail: string) => void
+  ) => Promise<RoutePick | null>;
 }
 
 const defaultDeps: CatalogSelectionDeps = {
@@ -129,7 +146,9 @@ export async function selectCatalogMatch(
       if (shortlist.meals.length > 0) {
         await report?.("composing_plan", `Weighing ${shortlist.meals.length} ${mealKind(ctx) === "a meal" ? "restaurants" : `${mealKind(ctx)} spots`} near you`);
       }
-      const pick = await deps.pick(ctx, shortlist);
+      const pick = await deps.pick(ctx, shortlist, venues, (detail) => {
+        void report?.("composing_plan", detail);
+      });
       const match = pick
         ? buildCandidateFromPicks(ctx, venues, pick, { title: pick.title, rationale: pick.why })
         : null;

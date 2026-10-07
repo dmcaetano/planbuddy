@@ -112,7 +112,7 @@ export async function generateCandidates(
       buildGenerateSystemPrompt(ctx, true),
       buildGenerateUserPrompt(ctx, true),
       aiGenerateResponseSchema,
-      { fast: true, onEvent: composingEvent }
+      { reason: true, onEvent: composingEvent }
     );
     const qualityIssue = quickPlanQualityIssue(response, ctx);
     if (qualityIssue) throw new Error(`Fast plan quality gate: ${qualityIssue}`);

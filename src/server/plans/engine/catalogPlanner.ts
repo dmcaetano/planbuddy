@@ -713,36 +713,145 @@ export function buildCatalogShortlist(ctx: GenerateContext, venues: ResolvedVenu
  * Validates a model's picks against the real catalogue and assembles the candidate; null when any
  * check fails (unknown id, wrong kind, too far to walk, recent, generic, constraint-violating).
  */
+function resolveRoutePicks(
+  ctx: GenerateContext,
+  venues: ResolvedVenue[],
+  picks: RoutePicks
+): { choice: RouteChoice } | { issue: string } {
+  if (ctx.homeBaseLat == null || ctx.homeBaseLng == null) return { issue: "the home base is unknown" };
+  const byId = new Map(venues.map((venue) => [venue.id, venue]));
+  const meal = byId.get(picks.mealId);
+  const pre = byId.get(picks.firstStopId);
+  const post = byId.get(picks.secondStopId);
+  if (!meal) return { issue: `mealId ${picks.mealId} is not a venue id from the tools` };
+  if (!pre) return { issue: `firstStopId ${picks.firstStopId} is not a venue id from the tools` };
+  if (!post) return { issue: `secondStopId ${picks.secondStopId} is not a venue id from the tools` };
+  if (new Set([meal.id, pre.id, post.id]).size !== 3) return { issue: "the restaurant and the two stops must be three different venues" };
+  if (meal.category !== "food" || meal.subcategory !== "restaurant") return { issue: `${meal.name} is not a restaurant` };
+  if (pre.category === "food" || post.category === "food") return { issue: "the two stops must be non-food places (parks, viewpoints, sights), not eateries" };
+  const home = { lat: ctx.homeBaseLat, lng: ctx.homeBaseLng };
+  const recent = recentNameSet(ctx);
+  for (const venue of [meal, pre, post]) {
+    if (!isUsableName(venue, recent)) return { issue: `${venue.name} was suggested recently or has a generic name` };
+    if (violatesConstraints(ctx, venue)) return { issue: `${venue.name} conflicts with a hard constraint` };
+  }
+  for (const stop of [pre, post]) {
+    if (!settingAllowsStop(ctx, stop)) return { issue: `${stop.name} does not fit the requested indoor/outdoor setting` };
+    if (stopUnsuitable(ctx, stop)) return { issue: `${stop.name} is not a suitable stop for this time of day (closed, or not worth a walk)` };
+  }
+  const homeDistanceKm = distanceKm(home, meal);
+  if (homeDistanceKm > ctx.radiusKm) return { issue: `${meal.name} is ${roundKm(homeDistanceKm)} km from home, beyond the ${ctx.radiusKm} km limit` };
+  const maxLegKm = walkingLegLimit(ctx);
+  const preToMealKm = distanceKm(pre, meal);
+  const mealToPostKm = distanceKm(meal, post);
+  if (preToMealKm > maxLegKm) return { issue: `${pre.name} is ${roundKm(preToMealKm)} km from the restaurant; walking legs must be at most ${maxLegKm} km` };
+  if (mealToPostKm > maxLegKm) return { issue: `${post.name} is ${roundKm(mealToPostKm)} km from the restaurant; walking legs must be at most ${maxLegKm} km` };
+  if (preToMealKm < MIN_STOP_TO_MEAL_KM || mealToPostKm < MIN_STOP_TO_MEAL_KM) return { issue: "a stop is on top of the restaurant; choose stops that are a real walk away" };
+  if (distanceKm(pre, post) < MIN_STOP_GAP_KM) return { issue: "the two stops are too close together; choose two different places" };
+  return { choice: { meal, pre, post, homeDistanceKm, preToMealKm, mealToPostKm, score: 0 } };
+}
+
+/** Why a set of picks cannot become a plan, in words a model can act on; null when it is valid. */
+export function routePickIssue(ctx: GenerateContext, venues: ResolvedVenue[], picks: RoutePicks): string | null {
+  const resolved = resolveRoutePicks(ctx, venues, picks);
+  return "issue" in resolved ? resolved.issue : null;
+}
+
 export function buildCandidateFromPicks(
   ctx: GenerateContext,
   venues: ResolvedVenue[],
   picks: RoutePicks,
   overrides: { title?: string; rationale?: string } = {}
 ): CatalogMatch | null {
-  if (ctx.homeBaseLat == null || ctx.homeBaseLng == null) return null;
-  const byId = new Map(venues.map((venue) => [venue.id, venue]));
-  const meal = byId.get(picks.mealId);
-  const pre = byId.get(picks.firstStopId);
-  const post = byId.get(picks.secondStopId);
-  if (!meal || !pre || !post) return null;
-  if (new Set([meal.id, pre.id, post.id]).size !== 3) return null;
-  if (meal.category !== "food" || meal.subcategory !== "restaurant") return null;
-  if (pre.category === "food" || post.category === "food") return null;
+  const resolved = resolveRoutePicks(ctx, venues, picks);
+  if ("issue" in resolved) return null;
+  return assembleCatalogCandidate(ctx, venues, resolved.choice, overrides);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Read-only lookups for the route agent. Same filters as the shortlist, but queried on demand.
+// ---------------------------------------------------------------------------------------------
+
+export interface RestaurantSearchOptions {
+  query?: string;
+  maxHomeKm?: number;
+  limit?: number;
+  offset?: number;
+}
+
+function queryTokens(query: string | undefined): string[] {
+  return normalized(query ?? "").split(" ").filter((token) => token.length > 1);
+}
+
+export function searchRestaurants(ctx: GenerateContext, venues: ResolvedVenue[], options: RestaurantSearchOptions = {}) {
+  if (ctx.homeBaseLat == null || ctx.homeBaseLng == null) return { total: 0, results: [] };
   const home = { lat: ctx.homeBaseLat, lng: ctx.homeBaseLng };
   const recent = recentNameSet(ctx);
-  for (const venue of [meal, pre, post]) {
-    if (!isUsableName(venue, recent) || violatesConstraints(ctx, venue)) return null;
-  }
-  if (!settingAllowsStop(ctx, pre) || !settingAllowsStop(ctx, post)) return null;
-  if (stopUnsuitable(ctx, pre) || stopUnsuitable(ctx, post)) return null;
-  const homeDistanceKm = distanceKm(home, meal);
-  if (homeDistanceKm > ctx.radiusKm) return null;
+  const loves = preferenceTokens(ctx, "love");
+  const avoids = preferenceTokens(ctx, "avoid");
+  const tokens = queryTokens(options.query);
+  const maxKm = Math.min(options.maxHomeKm ?? ctx.radiusKm, ctx.radiusKm);
+  const limit = Math.max(1, Math.min(options.limit ?? 15, 30));
+  const offset = Math.max(0, options.offset ?? 0);
+  const matches = venues
+    .filter((venue) => venue.category === "food" && venue.subcategory === "restaurant" && isUsableName(venue, recent) && !violatesConstraints(ctx, venue))
+    .map((venue) => ({ venue, homeKm: distanceKm(home, venue) }))
+    .filter(({ homeKm }) => homeKm <= maxKm)
+    .map((item) => {
+      const text = venueText(item.venue);
+      const hits = tokens.filter((token) => text.includes(token)).length;
+      return { ...item, hits, score: qualityScore(item.venue, loves, avoids) + hits * 8 - item.homeKm * 0.15 };
+    })
+    .filter((item) => tokens.length === 0 || item.hits > 0)
+    .sort((a, b) => b.score - a.score);
+  return {
+    total: matches.length,
+    results: matches.slice(offset, offset + limit).map(({ venue, homeKm }) => ({
+      id: venue.id,
+      name: venue.name,
+      kind: venue.subcategory.replaceAll("_", " "),
+      tags: venue.tags.filter((tag) => tag !== venue.subcategory).slice(0, 6),
+      homeKm: roundKm(homeKm),
+    })),
+  };
+}
+
+export interface StopSearchOptions {
+  query?: string;
+  limit?: number;
+}
+
+/** Walkable non-food stops around one restaurant, best first, with the same suitability filters as a plan. */
+export function stopsNearVenue(ctx: GenerateContext, venues: ResolvedVenue[], venueId: string, options: StopSearchOptions = {}) {
+  const meal = venues.find((venue) => venue.id === venueId);
+  if (!meal || ctx.homeBaseLat == null || ctx.homeBaseLng == null) return null;
+  const home = { lat: ctx.homeBaseLat, lng: ctx.homeBaseLng };
+  const recent = recentNameSet(ctx);
+  const loves = preferenceTokens(ctx, "love");
+  const avoids = preferenceTokens(ctx, "avoid");
+  const tokens = queryTokens(options.query);
   const maxLegKm = walkingLegLimit(ctx);
-  const preToMealKm = distanceKm(pre, meal);
-  const mealToPostKm = distanceKm(meal, post);
-  if (preToMealKm > maxLegKm || mealToPostKm > maxLegKm) return null;
-  if (preToMealKm < MIN_STOP_TO_MEAL_KM || mealToPostKm < MIN_STOP_TO_MEAL_KM) return null;
-  if (distanceKm(pre, post) < MIN_STOP_GAP_KM) return null;
-  const choice: RouteChoice = { meal, pre, post, homeDistanceKm, preToMealKm, mealToPostKm, score: 0 };
-  return assembleCatalogCandidate(ctx, venues, choice, overrides);
+  const limit = Math.max(1, Math.min(options.limit ?? 12, 24));
+  const stops = venues
+    .filter((venue) => venue.category !== "food" && isUsableName(venue, recent) && !violatesConstraints(ctx, venue) && settingAllowsStop(ctx, venue) && !stopUnsuitable(ctx, venue))
+    .map((venue) => ({ venue, km: distanceKm(venue, meal) }))
+    .filter(({ km }) => km >= MIN_STOP_TO_MEAL_KM && km <= maxLegKm)
+    .map((item) => {
+      const hits = tokens.filter((token) => venueText(item.venue).includes(token)).length;
+      return { ...item, hits, score: qualityScore(item.venue, loves, avoids) + hits * 8 - item.km };
+    })
+    .filter((item) => tokens.length === 0 || item.hits > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+  return {
+    restaurant: { id: meal.id, name: meal.name, homeKm: roundKm(distanceKm(home, meal)) },
+    maxWalkKm: maxLegKm,
+    stops: stops.map(({ venue, km }) => ({
+      id: venue.id,
+      name: venue.name,
+      kind: venue.subcategory.replaceAll("_", " "),
+      tags: venue.tags.filter((tag) => tag !== venue.subcategory).slice(0, 5),
+      kmFromRestaurant: roundKm(km),
+    })),
+  };
 }

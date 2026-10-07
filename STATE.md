@@ -3,6 +3,8 @@
 **SDLC class:** SOLO
 
 ## Status
+v1.10.0 "Kakashi": the plan maker is now a reasoning DeepSeek agent with tools (get_profile, get_recent_plans, search_restaurants, get_stops_near, check_route, submit_route) in src/server/plans/engine/routeAgent.ts + callAiToolLoop in ai/deepseek.ts. Every submit is re-validated by the server (resolveRoutePicks), so it still cannot invent a place. Failure falls back to the single-shot picker, then the deterministic route. Non-catalogue path (generateCandidates) now also uses reasoning (was reasoning off). Env: AI_AGENT_ENABLED (default true), AGENT_MODEL_ID, AI_AGENT_TIMEOUT_MS (90s), AI_AGENT_MAX_STEPS (10). Known: tests/integration/omniContract "offers to lock" fails on a clean HEAD too (pre-existing).
+
 v1.6.4: bounded the bad-signature table (periodic purge + hard 20k-row cap, oldest-first eviction, one row per IP; counter failures never affect requests). v1.6.3: persistent atomic per-IP failure counter; single-clock replay expiry.
 
 v1.6.2: second security pass (bad-signature throttle per IP and only after verification; atomic replay claim; byte caps before parsing).
