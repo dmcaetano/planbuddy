@@ -4,7 +4,7 @@ import type { Hunch, HunchEvidence, HunchStatus, TastePolarity } from "../../sha
 import { createTaste } from "./tastes.repo.js";
 
 const DECAY_DAYS = 90;
-const DECAY_PLAN_COUNT = 6;
+const DECAY_PLAN_COUNT = 30;
 const PROMOTION_EVIDENCE_THRESHOLD = 3;
 export const HUNCH_MAX_CONTRIBUTION = 0.15;
 

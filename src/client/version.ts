@@ -1,2 +1,2 @@
 /** The version pill text shown on Home and Customize. Bumped at release, together with package.json. */
-export const VERSION_PILL = "v1.7.0 · Spider-Man";
+export const VERSION_PILL = "v1.8.0 · Batman";

@@ -1,5 +1,9 @@
 # PlanBuddy — Log
 
+## 2026-10-07 - v1.7.1: fun profile quiz visible, hunches stop dying after 6 plans
+
+Quiz rendered below the Home base and distance cards, off-screen, so the button looked dead; Memory now shows the quiz alone while it is open. Hunches were auto-dismissed after 6 plan generations without evidence (every regeneration and New plan counts); threshold now 30 (hunches.repo.ts). Already-dismissed hunches are not revived.
+
 ## 2026-10-07 - v1.7.0 "Spider-Man": add people/pets on Memory, smarter Buddy chat
 
 Memory page now has an add person/pet form and a remove button (owner protected). Chat acts on stated facts ("I have a dog called Luke" adds the pet) and no longer claims it can build plans: new `new_plan` action signals the client, which starts the Planner worker via Home (`planbuddy:new-plan`). Test added in appAssistant.test.ts.

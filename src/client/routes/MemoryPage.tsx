@@ -171,7 +171,7 @@ export default function MemoryPage() {
 
   return (
     <div className="stack">
-      <div>
+      {!showQuiz && <div>
         <div className="eyebrow">Memory</div>
         <h1>What PlanBuddy knows</h1>
         <div className="row-gap mb-2">
@@ -181,9 +181,9 @@ export default function MemoryPage() {
           </button>
         </div>
         <p>Every constraint, taste, and hunch is visible and editable — nothing learns silently.</p>
-      </div>
+      </div>}
 
-      <div className="card home-base-card">
+      {!showQuiz && <div className="card home-base-card">
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div className="eyebrow">Home base</div>
@@ -212,9 +212,9 @@ export default function MemoryPage() {
             />
           </div>
         )}
-      </div>
+      </div>}
 
-      {auth.user?.homeBaseLabel && <TravelDistanceCard />}
+      {!showQuiz && auth.user?.homeBaseLabel && <TravelDistanceCard />}
 
       {error && <div className="error-banner">{error}</div>}
 
