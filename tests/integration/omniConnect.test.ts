@@ -114,3 +114,55 @@ describe("POST /api/buddy/connect", () => {
     expect(hubCalls.length).toBe(before);
   });
 });
+
+describe("POST /api/buddy/connect with login (v1.1 addendum)", () => {
+  it("bad_login: wrong password, unknown email and no login object all 401 the same way, nothing linked, no account created", async () => {
+    const agent = request.agent(app);
+    await agent.post("/api/auth/signup").set(HDR, "1").send({ email: "haslogin@example.com", password: "correct-password-1" });
+    const before = hubCalls.length;
+
+    const wrongPass = await connect(body({ email: "haslogin@example.com", login: { email: "haslogin@example.com", password: "nope-wrong" } }));
+    expect(wrongPass.status).toBe(401);
+    expect(wrongPass.body).toEqual({ ok: false, reason: "bad_login" });
+
+    const unknown = await connect(body({ email: "haslogin@example.com", login: { email: "nobody-here@example.com", password: "whatever123" } }));
+    expect(unknown.status).toBe(401);
+    expect(unknown.body).toEqual({ ok: false, reason: "bad_login" });
+
+    const db = await getDb();
+    const { rows } = await db.query<any>("SELECT COUNT(*)::int AS n FROM users WHERE email = 'nobody-here@example.com'");
+    expect(rows[0].n).toBe(0);
+    expect(hubCalls.length).toBe(before);
+  });
+
+  it("success: right login for a pre-existing, non-hub-verified account links THAT account, even though it is not hub-verified", async () => {
+    const agent = request.agent(app);
+    const signup = await agent.post("/api/auth/signup").set(HDR, "1").send({ email: "preexisting@example.com", password: "correct-password-2" });
+    const before = hubCalls.length;
+
+    const res = await connect(body({ email: "whatever-hub-sees@example.com", code: "LOGINOK1", login: { email: "PreExisting@Example.com", password: "correct-password-2" } }));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(hubCalls.length).toBe(before + 1);
+    expect(hubCalls[hubCalls.length - 1].body.external_user_id).toBe(signup.body.user.id);
+    expect(await getLinkForUser(signup.body.user.id)).toBeTruthy();
+
+    const db = await getDb();
+    const { rows } = await db.query<any>("SELECT COUNT(*)::int AS n FROM users WHERE email = 'preexisting@example.com'");
+    expect(rows[0].n).toBe(1);
+  });
+
+  it("too_many_attempts: the 6th failed login in the window is 429, not 401, and never calls the hub", async () => {
+    const email = "throttleme@example.com";
+    await request.agent(app).post("/api/auth/signup").set(HDR, "1").send({ email, password: "the-real-password-3" });
+    for (let i = 0; i < 5; i++) {
+      const r = await connect(body({ email: "whoever@example.com", code: `THR0TTLE${i}`, login: { email, password: "wrong-every-time" } }));
+      expect(r.status).toBe(401);
+    }
+    const before = hubCalls.length;
+    const blocked = await connect(body({ email: "whoever@example.com", code: "THR0TTLEX", login: { email, password: "wrong-every-time" } }));
+    expect(blocked.status).toBe(429);
+    expect(blocked.body).toEqual({ ok: false, reason: "too_many_attempts" });
+    expect(hubCalls.length).toBe(before);
+  });
+});

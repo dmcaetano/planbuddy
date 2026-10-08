@@ -10,9 +10,22 @@ import { createTaste, deleteTaste } from "../memory/tastes.repo.js";
 import { buildCard, lockCurrentPlan, unlockPlan, type Loc } from "./card.js";
 import crypto from "node:crypto";
 import { CONTRACT_VERSION, WANTS_PREFIX, completeLink, connectKey, hubBase, sanitizeHubText, scheduleSync, syncToHub, verifySignature } from "./hub.js";
-import { claimSignature, claimUndo, countBadSignature, createUndo, deleteLink, getLinkById, getLinkForUser, saveLink, type OmniLink } from "./repo.js";
-import { createHubVerifiedUser, getUserForConnect } from "../users/repo.js";
-import { hashPassword } from "../auth/passwords.js";
+import {
+  claimSignature,
+  claimUndo,
+  clearConnectLoginFailures,
+  countBadSignature,
+  createUndo,
+  deleteLink,
+  getConnectLoginFailures,
+  getLinkById,
+  getLinkForUser,
+  recordConnectLoginFailure,
+  saveLink,
+  type OmniLink,
+} from "./repo.js";
+import { createHubVerifiedUser, getUserByEmail, getUserForConnect } from "../users/repo.js";
+import { hashPassword, verifyPassword } from "../auth/passwords.js";
 import { seedOwnerParticipant } from "../participants/repo.js";
 import { suggestFor } from "./suggest.js";
 
@@ -312,6 +325,48 @@ buddyRouter.post(
       res.status(400).json({ ok: false, reason: "bad_request" });
       return;
     }
+    // v1.1 addendum: the hub asked the user for that Buddy's own email+password and forwards them, so an existing
+    // non-hub account can still be linked. Checked with PlanBuddy's OWN normal /login password function; never
+    // creates an account; same 401 reason for "no such account", "wrong password" and "no password" (no enumeration).
+    const loginRaw = bodyObject(b.login);
+    const hasLogin = b.login !== undefined && b.login !== null;
+    if (hasLogin) {
+      const loginEmail = typeof loginRaw.email === "string" ? loginRaw.email.trim().toLowerCase() : "";
+      const loginPassword = typeof loginRaw.password === "string" ? loginRaw.password : "";
+      const LOGIN_WINDOW_MS = 15 * 60_000;
+      const LOGIN_MAX_ATTEMPTS = 5;
+      if (!loginEmail || loginEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail) || !loginPassword || loginPassword.length > 256) {
+        res.status(401).json({ ok: false, reason: "bad_login" });
+        return;
+      }
+      const now = Date.now();
+      const fails = await getConnectLoginFailures(loginEmail, now, LOGIN_WINDOW_MS);
+      if (fails >= LOGIN_MAX_ATTEMPTS) {
+        res.status(429).json({ ok: false, reason: "too_many_attempts" });
+        return;
+      }
+      const account = await getUserByEmail(loginEmail);
+      // a dummy hash is verified even when the account does not exist, so a missing account and a wrong
+      // password take the same amount of time and never let a caller tell them apart
+      const DUMMY_HASH = "$2a$12$Vet7Lv6s9LasKTZcrjHE7O2UTZWgKIUHza46PdT5xCsb9DQqsYiA.";
+      const passOk = await verifyPassword(loginPassword, account?.passwordHash ?? DUMMY_HASH);
+      if (!account || !passOk) {
+        await recordConnectLoginFailure(loginEmail, now, LOGIN_WINDOW_MS);
+        res.status(401).json({ ok: false, reason: "bad_login" });
+        return;
+      }
+      await clearConnectLoginFailures(loginEmail);
+      const r = await completeLink(base, code, account.id);
+      if ("error" in r) {
+        res.status(400).json({ ok: false, reason: "code_rejected" });
+        return;
+      }
+      await saveLink({ userId: account.id, linkId: r.link_id, hubToken: r.token, signingKey: r.signing_key, hubUrl: base });
+      void syncToHub(account.id);
+      res.json({ ok: true });
+      return;
+    }
+
     let userId: string;
     const existing = await getUserForConnect(email);
     if (existing) {

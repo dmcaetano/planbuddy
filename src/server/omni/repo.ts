@@ -159,6 +159,57 @@ export async function sweepBadSignatures(nowMs: number, windowMs: number, maxRow
  * current window. The table is kept bounded by a periodic sweep (every 500 writes or 30 s), so rotating source IPs
  * cannot grow it without limit.
  */
+export const CONNECT_LOGIN_FAIL_MAX_ROWS = 20_000;
+let loginFailWritesSinceSweep = 0;
+let loginFailLastSweepAt = 0;
+
+/** Bounds omni_connect_login_fail the same way sweepBadSignatures bounds omni_bad_sig: drop expired windows, then evict oldest-first. */
+export async function sweepConnectLoginFailures(nowMs: number, windowMs: number, maxRows = CONNECT_LOGIN_FAIL_MAX_ROWS): Promise<void> {
+  const db = await getDb();
+  await db.query("DELETE FROM omni_connect_login_fail WHERE window_start < $1", [nowMs - windowMs]);
+  await db.query(
+    `DELETE FROM omni_connect_login_fail WHERE email IN (
+       SELECT email FROM omni_connect_login_fail ORDER BY window_start DESC OFFSET $1
+     )`,
+    [maxRows]
+  );
+}
+
+/** Failed-attempt count for a login.email within the current window, without recording anything (peek only). */
+export async function getConnectLoginFailures(email: string, nowMs: number, windowMs: number): Promise<number> {
+  const db = await getDb();
+  const { rows } = await db.query<{ window_start: string; n: number }>("SELECT window_start, n FROM omni_connect_login_fail WHERE email = $1", [email]);
+  const row = rows[0];
+  if (!row || Number(row.window_start) < nowMs - windowMs) return 0;
+  return Number(row.n);
+}
+
+/** Atomically records one failed connect-with-login attempt for this email (upsert: one row per email); returns the new count. */
+export async function recordConnectLoginFailure(email: string, nowMs: number, windowMs: number): Promise<number> {
+  const db = await getDb();
+  const { rows } = await db.query<{ n: number }>(
+    `INSERT INTO omni_connect_login_fail (email, window_start, n) VALUES ($1,$2,1)
+     ON CONFLICT (email) DO UPDATE SET
+       n = CASE WHEN omni_connect_login_fail.window_start < $2 - $3 THEN 1 ELSE omni_connect_login_fail.n + 1 END,
+       window_start = CASE WHEN omni_connect_login_fail.window_start < $2 - $3 THEN $2 ELSE omni_connect_login_fail.window_start END
+     RETURNING n`,
+    [email, nowMs, windowMs]
+  );
+  loginFailWritesSinceSweep++;
+  if (loginFailWritesSinceSweep >= SWEEP_EVERY_WRITES || nowMs - loginFailLastSweepAt >= SWEEP_EVERY_MS) {
+    loginFailWritesSinceSweep = 0;
+    loginFailLastSweepAt = nowMs;
+    void sweepConnectLoginFailures(nowMs, windowMs).catch(() => undefined);
+  }
+  return Number(rows[0]?.n ?? 1);
+}
+
+/** Clears the failure counter for an email, e.g. after a successful connect-with-login. */
+export async function clearConnectLoginFailures(email: string): Promise<void> {
+  const db = await getDb();
+  await db.query("DELETE FROM omni_connect_login_fail WHERE email = $1", [email]);
+}
+
 export async function countBadSignature(ip: string, nowMs: number, windowMs: number): Promise<number> {
   const db = await getDb();
   const { rows } = await db.query<{ n: number }>(

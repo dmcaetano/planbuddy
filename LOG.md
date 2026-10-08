@@ -1,5 +1,13 @@
 # PlanBuddy — Log
 
+## 2026-10-08 - v1.12.0 "Thor": connect-with-login (Buddy Contract v1.1 addendum)
+
+POST /api/buddy/connect gained the OmniBuddy hub's "ask for that Buddy's own login" fallback: when the hub cannot auto-link (an existing account it never verified), it now asks the user for PlanBuddy's own email+password and forwards them in `login: {email, password}`. PlanBuddy verifies with its own `/login` password check (`verifyPassword`, `src/server/auth/passwords.ts`), never creates an account on this path, and links that account directly. Same 401 `bad_login` for wrong password / unknown email / malformed login (no account enumeration; a dummy bcrypt hash keeps timing constant when the account doesn't exist). Per-login.email throttle: 5 failures / 15 min -> 429 `too_many_attempts` (new table `omni_connect_login_fail`, migration 0017, same bounded-sweep design as the existing `omni_bad_sig` IP throttle). Password is never logged, stored or echoed back.
+
+3 new tests in `tests/integration/omniConnect.test.ts` (bad_login, success-with-login on a pre-existing non-hub-verified account, too_many_attempts); full suite green.
+
+Live-verified against the real OmniBuddy hub (test account) end-to-end: wrong password -> 401 bad_login; fresh link code + right password -> 200 ok:true and hub `/api/buddies` shows planbuddy "linked"; the manual "paste an OMNI- code" path (no login) still works unchanged.
+
 ## 2026-10-07 - v1.11.0 "Itachi": the agent searches the live map on the day
 
 New agent tool live_search_places: a small-radius OpenStreetMap query at request time (restaurants by cuisine/name up to 12 km, stops up to 3 km), merged into the catalogue for that plan so ids validate like any other. Capped at 5 calls per plan, stops after 2 empty results (public Overpass mirrors return HTTP 500/504 often), 8 s per mirror. Agent step limit raised to 14. The 60 km cached catalogue stays as the fast base because a full area query takes over 30 s and has been failing on the mirrors since 2026-10-06.
