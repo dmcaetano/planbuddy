@@ -33,6 +33,29 @@ export function createApp() {
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
 
+  // Cloudflare Worker cutover (2026-10): a browser page navigation lands
+  // here only if it is NOT already on the Worker's own domain, so send it
+  // there — exactly UnGlutened's server.js pattern for the same cutover.
+  // Never redirects /api/* or /healthz (so this Render process keeps
+  // answering API calls — e.g. from anything still pointed at it directly
+  // — and the Worker's own healthz/polling never gets bounced); only GET
+  // requests that accept text/html (an actual page load, not an asset
+  // fetch/XHR/fetch()) are redirected.
+  app.use((req, res, next) => {
+    if (
+      isProduction &&
+      env.PLANBUDDY_WORKER_URL &&
+      req.method === "GET" &&
+      !req.path.startsWith("/api") &&
+      req.path !== "/healthz" &&
+      (req.headers.accept ?? "").includes("text/html")
+    ) {
+      res.redirect(302, `${env.PLANBUDDY_WORKER_URL}${req.originalUrl}`);
+      return;
+    }
+    next();
+  });
+
   app.use(
     cors({
       // Production is a same-origin app; exposing credentialed CORS to

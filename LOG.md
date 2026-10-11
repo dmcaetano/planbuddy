@@ -1,5 +1,52 @@
 # PlanBuddy — Log
 
+## 2026-10-11 - v1.12.1 "Thor" (infra): Cloudflare Worker cutover
+
+Ported the live app from Render (Node/Express, one long-lived process) to a
+Cloudflare Worker `planbuddy` on the Workers Free plan, across 8 phases
+(`sdlc/005-cloudflare-worker/plan.md`): Worker skeleton + Neon driver +
+auth; every CRUD/read route module; a Workflow for plan generation; the
+two sweeps as Cron Triggers; the Buddy Contract; moment/chat/shares
+(ported ahead of cutover once it became clear leaving them 404 would
+break the live one-click home-page UX); a DB-backed rate limiter (fixing
+a real bypass an automated security review caught — the Worker's
+per-isolate in-memory limiter shared nothing across isolates); and
+finally this cutover: Render now 302-redirects browser page loads to the
+Worker while continuing to answer `/api/*` and `/healthz` directly, and
+is not suspended or deleted.
+
+Two live findings worth remembering: (1) Neon's HTTP `neon()` driver
+silently ignores a libpq `options=-c search_path=...` hint — `Pool`
+over WebSocket honors it, so that's what db/client.ts uses; (2) a Pool
+must never be cached across Worker requests ("Cannot perform I/O on
+behalf of a different request"), and a single unit of work that makes
+many DB calls (one Workflow step, one plan generation) must pool its
+OWN connection via `withPooledDb()` or it burns one subrequest per
+query and can trip the 50-subrequest/invocation Workers Free limit —
+exactly what happened on the first real generation attempt, fixed in
+the same session.
+
+Not ported: `/api/plan-specs/:id/chat(-action)` (the in-plan "Edit this
+plan with Buddy" composer) — needs the Workflow's generate step
+extended to carry an edit directive, not done yet. Everything else was
+live-verified against the real Neon DB with disposable test accounts
+created and deleted in-session, including one real end-to-end plan
+generation, a real Buddy Contract signed request/replay check, and the
+rate limiter's 429 at the 21st request in 60 seconds.
+
+Full Node suite (43 files / 431 tests) and 22 new Worker-native
+fetch-handler tests all green.
+
+### Lesson
+Importing an Express `Router()`-based file into a Worker bundle doesn't
+just add weight — it can crash the Worker outright at module-eval time
+(body-parser/iconv-lite called `require_streams` that doesn't exist in
+workerd), with no indication from a successful `wrangler deploy --dry-run`
+build. The fix pattern that worked every time: extract the pure business
+logic into a sibling file with zero Express imports, leave the original
+file as a thin Express wrapper, and have the Worker only ever import the
+extracted file.
+
 ## 2026-10-08 - v1.12.0 "Thor": connect-with-login (Buddy Contract v1.1 addendum)
 
 POST /api/buddy/connect gained the OmniBuddy hub's "ask for that Buddy's own login" fallback: when the hub cannot auto-link (an existing account it never verified), it now asks the user for PlanBuddy's own email+password and forwards them in `login: {email, password}`. PlanBuddy verifies with its own `/login` password check (`verifyPassword`, `src/server/auth/passwords.ts`), never creates an account on this path, and links that account directly. Same 401 `bad_login` for wrong password / unknown email / malformed login (no account enumeration; a dummy bcrypt hash keeps timing constant when the account doesn't exist). Per-login.email throttle: 5 failures / 15 min -> 429 `too_many_attempts` (new table `omni_connect_login_fail`, migration 0017, same bounded-sweep design as the existing `omni_bad_sig` IP throttle). Password is never logged, stored or echoed back.
