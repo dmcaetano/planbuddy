@@ -18,24 +18,17 @@ import { HttpError } from "../server/http.js";
 import { AiUnavailableError } from "../server/ai/deepseek.js";
 import { sweepExpiredChatMessages } from "../server/chat/retention.js";
 import { sweepInterruptedJobs } from "../server/plans/jobs.js";
+import { buddyRouter } from "./buddy.routes.js";
+import { syncToHub } from "../server/omni/hub.js";
 import type { WorkerBindings } from "./bindings.js";
 export { PlanGenerationWorkflow } from "./workflows/planGeneration.js";
 
-// Cloudflare Worker port (sdlc/005-cloudflare-worker/plan.md). Through
-// phase 3: Worker skeleton + assets + Neon driver + auth + every CRUD/read
-// route module that does NOT touch the plan-generation engine (which needs
-// a Workflow — phase 4) or the Buddy Contract (phase 6, most
-// security-sensitive, ported last). Still 404 here, by design, until their
-// phase lands: /api/plan-specs, /api/plan-specs (chat), /api/moment,
-// /api/chat, /api/shares (all reach generateCandidates/gatherPlanContext,
-// the same multi-step AI+Overpass pipeline phase 4 wraps in step.do()
-// calls), and /api/buddy (phase 6). The hub-push side effect that the
-// Express build ran after tastes/constraints/hunches/chat/participants
-// mutations (omni/hub.ts scheduleSync) is ALSO deferred to phase 6: it
-// debounces with a bare `setTimeout` 3s after the response, which does not
-// survive past a Worker request's lifetime (needs a waitUntil/Queue
-// redesign, not a direct port) — so those mutations work normally here,
-// just without yet notifying a linked OmniBuddy hub.
+// Cloudflare Worker port (sdlc/005-cloudflare-worker/plan.md). Still 404
+// here, by design: /api/moment, /api/chat, /api/plan-specs's chat
+// sub-routes, /api/shares — all reach generateCandidates/
+// gatherPlanContext, the same multi-step AI+Overpass pipeline phase 4
+// wraps in a Workflow, and porting them without that wrapping would
+// recreate the exact subrequest/CPU-limit risk the Workflow exists to fix.
 const app = new Hono<{ Bindings: WorkerBindings }>();
 
 app.use(
@@ -46,11 +39,34 @@ app.use(
   })
 );
 
-app.get("/healthz", (c) => c.json({ ok: true, phase: 4 }));
+app.get("/healthz", (c) => c.json({ ok: true, phase: 6 }));
 app.get("/api/health", (c) => c.json({ ok: true }));
+
+// Buddy Contract: HMAC-signed requests carry no browser cookies/headers, so
+// this mounts BEFORE the same-origin guard and applies its own guards per
+// route (requireSigned / requireConnectSigned / requireSameOrigin+
+// attachUser on the session-only /link, /unlink) — same ordering as the
+// Express build's app.use("/api/buddy", buddyRouter) before
+// app.use(requireSameOrigin).
+app.route("/api/buddy", buddyRouter);
 
 app.use("/api/*", requireSameOrigin);
 app.use("/api/*", attachUser);
+
+// Phase 6: push to a linked OmniBuddy hub after any successful mutation on
+// these routers — ported from the Express build's scheduleSync (debounced
+// 3s setTimeout, which cannot survive past this request in a Worker) to an
+// immediate `waitUntil(syncToHub(...))`: strictly more eager (one hub push
+// per mutation instead of the last one in a 3s burst), never less correct,
+// and syncToHub already fails soft and has its own 8s fetch timeout, well
+// inside waitUntil's ~30s post-response ceiling.
+app.use(/^\/api\/(tastes|constraints|hunches|chat|participants)/, async (c, next) => {
+  await next();
+  if (c.req.method !== "GET" && c.res.status < 400) {
+    const user = c.get("user");
+    if (user) c.executionCtx?.waitUntil(syncToHub(user.id));
+  }
+});
 
 app.route("/api/auth", authRouter);
 app.route("/api/participants", participantsRouter);

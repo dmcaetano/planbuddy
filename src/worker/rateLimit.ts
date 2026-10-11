@@ -38,3 +38,33 @@ function makeLimiter(windowMs: number, limit: number, message: string) {
 export const authRateLimiter = makeLimiter(15 * 60 * 1000, 20, "Too many attempts, please try again later.");
 export const aiRateLimiter = makeLimiter(60 * 1000, 20, "Too many AI requests, please slow down.");
 export const publicTokenRateLimiter = makeLimiter(15 * 60 * 1000, 120, "Not found");
+
+/**
+ * Same shape as makeLimiter but answers `{ok:false, error}` instead of
+ * `{error}` — the Buddy Contract's own response shape (used by POST
+ * /api/buddy/link, matching the Express build's dedicated `linkLimiter`).
+ */
+export function makeOkFalseLimiter(windowMs: number, limit: number, message: string) {
+  const buckets = new Map<string, Bucket>();
+  return async function limiter(c: Context, next: Next): Promise<Response | void> {
+    const ip = c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for") ?? "unknown";
+    const now = Date.now();
+    const existing = buckets.get(ip);
+    if (!existing || existing.resetAt < now) {
+      buckets.set(ip, { count: 1, resetAt: now + windowMs });
+    } else {
+      existing.count += 1;
+      if (existing.count > limit) {
+        return c.json({ ok: false, error: message }, 429);
+      }
+    }
+    if (buckets.size > 5000) {
+      for (const [key, bucket] of buckets) {
+        if (bucket.resetAt < now) buckets.delete(key);
+      }
+    }
+    await next();
+  };
+}
+
+export const omniLinkRateLimiter = makeOkFalseLimiter(10 * 60 * 1000, 20, "Too many attempts. Wait a few minutes and try again.");
