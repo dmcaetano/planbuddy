@@ -21,6 +21,7 @@ import { HttpError } from "../server/http.js";
 import { AiUnavailableError } from "../server/ai/deepseek.js";
 import { sweepExpiredChatMessages } from "../server/chat/retention.js";
 import { sweepInterruptedJobs } from "../server/plans/jobs.js";
+import { sweepRateLimitWindows } from "./rateLimit.js";
 import { buddyRouter } from "./buddy.routes.js";
 import { syncToHub } from "../server/omni/hub.js";
 import type { WorkerBindings } from "./bindings.js";
@@ -114,6 +115,8 @@ async function scheduled(event: { cron: string }): Promise<void> {
   if (event.cron === "*/5 * * * *") {
     const count = await sweepInterruptedJobs();
     logger.info("Cron: interrupted-job sweep", { sweptCount: count });
+    const rateLimitRows = await sweepRateLimitWindows();
+    logger.info("Cron: rate-limit window sweep", { deletedCount: rateLimitRows });
     return;
   }
   if (event.cron === "0 */6 * * *") {
