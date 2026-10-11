@@ -14,5 +14,12 @@
   },
   "observability": {
     "enabled": true
-  }
+  },
+  "workflows": [
+    {
+      "name": "planbuddy-plan-generation",
+      "binding": "PLAN_GENERATION",
+      "class_name": "PlanGenerationWorkflow"
+    }
+  ]
 }

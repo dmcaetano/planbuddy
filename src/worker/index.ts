@@ -11,8 +11,13 @@ import { friendsRouter } from "./friends.routes.js";
 import { timeOffRouter } from "./timeoff.routes.js";
 import { historyRouter } from "./history.routes.js";
 import { planJobsRouter } from "./jobs.routes.js";
+import { planSpecsRouter } from "./planSpecs.routes.js";
 import { isProduction } from "../server/env.js";
 import { logger } from "../server/logger.js";
+import { HttpError } from "../server/http.js";
+import { AiUnavailableError } from "../server/ai/deepseek.js";
+import type { WorkerBindings } from "./bindings.js";
+export { PlanGenerationWorkflow } from "./workflows/planGeneration.js";
 
 // Cloudflare Worker port (sdlc/005-cloudflare-worker/plan.md). Through
 // phase 3: Worker skeleton + assets + Neon driver + auth + every CRUD/read
@@ -29,7 +34,7 @@ import { logger } from "../server/logger.js";
 // survive past a Worker request's lifetime (needs a waitUntil/Queue
 // redesign, not a direct port) — so those mutations work normally here,
 // just without yet notifying a linked OmniBuddy hub.
-const app = new Hono();
+const app = new Hono<{ Bindings: WorkerBindings }>();
 
 app.use(
   "*",
@@ -39,7 +44,7 @@ app.use(
   })
 );
 
-app.get("/healthz", (c) => c.json({ ok: true, phase: 3 }));
+app.get("/healthz", (c) => c.json({ ok: true, phase: 4 }));
 app.get("/api/health", (c) => c.json({ ok: true }));
 
 app.use("/api/*", requireSameOrigin);
@@ -55,8 +60,15 @@ app.route("/api/plan-jobs", planJobsRouter);
 app.route("/api/time-off", timeOffRouter);
 app.route("/api/history", historyRouter);
 app.route("/api/friends", friendsRouter);
+app.route("/api/plan-specs", planSpecsRouter);
 
 app.onError((err, c) => {
+  if (err instanceof AiUnavailableError) {
+    return c.json({ error: "Grounded planning is temporarily unavailable. Please try again." }, 503);
+  }
+  if (err instanceof HttpError) {
+    return c.json({ error: err.message }, err.status as never);
+  }
   logger.error("Unhandled worker error", { error: err instanceof Error ? err.stack ?? err.message : String(err) });
   return c.json({ error: "Internal server error" }, 500);
 });

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { Pool } from "@neondatabase/serverless";
 import { PGlite } from "@electric-sql/pglite";
 import { env } from "../env.js";
@@ -57,21 +58,60 @@ function neonConnectionString(): string {
   return `${raw}${raw.includes("?") ? "&" : "?"}options=${searchPathOption}`;
 }
 
+// A plan generation run makes dozens of DB queries (memory, weather cache,
+// resolver/place lookups, candidate inserts...) through many independent
+// repo files, each calling getDb() on its own. Opening-and-closing one
+// WebSocket PER QUERY (the phase-2 fix, correct for a single request that
+// makes 1-3 queries) burns one "subrequest" per query — live-verified to
+// trip Workers Free's 50-subrequests-per-invocation limit partway through
+// one real plan generation ("Error: Too many subrequests by single Worker
+// invocation", from `wrangler workflows instances describe`). The fix:
+// an AsyncLocalStorage-scoped Pool that every nested getDb() call within
+// the SAME call tree reuses — opened once at the top of a bounded unit of
+// work (one Workflow step), closed once at the end. This is safe in a way
+// module-scope caching was NOT (see createNeonPool's history below): the
+// Pool never outlives the single async call tree that created it, so it is
+// never touched from a different request/step's I/O context.
+const poolContext = new AsyncLocalStorage<Pool>();
+
+/**
+ * Runs `fn` with every getDb()-backed query inside it sharing ONE Neon
+ * Pool connection (closed when `fn` settles), instead of opening a fresh
+ * one per query. Use this to wrap any single bounded unit of work that is
+ * known to make many DB calls (a Workflow step.do() body, a batch script) —
+ * ordinary one-off HTTP route handlers don't need it, since 1-3 queries per
+ * request stays well under the subrequest budget either way.
+ */
+export async function withPooledDb<T>(fn: () => Promise<T>): Promise<T> {
+  if (!env.DATABASE_URL) return fn(); // PGlite path: already a single shared instance, nothing to pool.
+  const pool = new Pool({ connectionString: neonConnectionString() });
+  try {
+    return await poolContext.run(pool, fn);
+  } finally {
+    await pool.end();
+  }
+}
+
 async function createNeonPool(): Promise<DbClient> {
   const connectionString = neonConnectionString();
   if (!schemaEnsured) {
-    const setupPool = new Pool({ connectionString });
+    const setupPool = poolContext.getStore() ?? new Pool({ connectionString });
     await setupPool.query(`CREATE SCHEMA IF NOT EXISTS ${env.DB_SCHEMA}`);
-    await setupPool.end();
+    if (!poolContext.getStore()) await setupPool.end();
     schemaEnsured = true;
   }
   return {
     kind: "postgres",
     async query<T>(text: string, params?: unknown[]) {
-      // One Pool (one WebSocket) per call, closed before returning: every
-      // repo function calls getDb() independently with no shared
-      // request-scoped handle, and leaving sockets open past this call
-      // would leak across however many of these run in one request.
+      const scopedPool = poolContext.getStore();
+      if (scopedPool) {
+        // Inside withPooledDb: reuse the one Pool for the whole call tree — no new subrequest per query.
+        const result = await scopedPool.query(text, (params ?? []) as unknown[]);
+        return { rows: result.rows as T[] };
+      }
+      // Outside withPooledDb: one Pool (one WebSocket) per call, closed
+      // before returning — correct and cheap for the common case of 1-3
+      // queries in an ordinary HTTP route handler.
       const pool = new Pool({ connectionString });
       try {
         const result = await pool.query(text, (params ?? []) as unknown[]);
