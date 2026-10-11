@@ -6,19 +6,13 @@ import { candidateReactionSchema, planSpecCreateSchema, notThisSchema } from "..
 import { createPlanSpec, getPlanSpec, incrementGenerationCount } from "./specs.repo.js";
 import { getCandidate, listCandidatesForSpec } from "./candidates.repo.js";
 import { insertPlan } from "./plans.repo.js";
-import {
-  activeConstraintsView,
-  gatherPlanContext,
-  placeProvenanceView,
-  runGeneration,
-  type PipelineResult,
-} from "./engine/pipeline.js";
+import { activeConstraintsView, gatherPlanContext, placeProvenanceView, runGeneration } from "./engine/pipeline.js";
 import { recordHunchEvidence } from "../memory/hunches.repo.js";
 import { z } from "zod";
-import type { Candidate } from "../../shared/types.js";
 import { planningParticipantIdsAreAuthorized } from "../friends/repo.js";
 import { applyCandidateReaction } from "./reactions.service.js";
 import { enqueueGenerationJob } from "./jobs.js";
+import { planView, candidateGroundingSources, pipelineResponse } from "./pipelineResponse.js";
 import { MAX_GENERATIONS_PER_SPEC } from "./limits.js";
 
 export const planSpecsRouter = Router();
@@ -33,39 +27,7 @@ const planSpecCreateWithIdempotency = planSpecCreateSchema.extend({
   idempotencyKey: idempotencyKeySchema,
 });
 
-export function planView(candidate: Candidate, context: PipelineResult["context"], viewerUserId: string) {
-  return {
-    candidate,
-    weather: context.weather,
-    placeProvenance: placeProvenanceView(context.resolver, context.groundingSources),
-    activeConstraints: activeConstraintsView(context.scopedConstraints, viewerUserId),
-  };
-}
-
-function candidateGroundingSources(candidate: Candidate) {
-  const sources = [
-    ...candidate.beats.flatMap((beat) =>
-      beat.place?.sourceUrl ? [{ url: beat.place.sourceUrl, title: beat.place.sourceLabel }] : []
-    ),
-    ...(candidate.fallback?.place?.sourceUrl
-      ? [{ url: candidate.fallback.place.sourceUrl, title: candidate.fallback.place.sourceLabel }]
-      : []),
-  ];
-  return Array.from(new Map(sources.map((source) => [source.url, source])).values());
-}
-
-export function pipelineResponse(spec: Awaited<ReturnType<typeof createPlanSpec>>, result: PipelineResult, viewerUserId: string) {
-  return {
-    spec,
-    aiMode: result.aiMode,
-    deadEnd: result.deadEnd,
-    deadEndReasons: result.deadEndReasons,
-    winner: result.winner ? planView(result.winner, result.context, viewerUserId) : null,
-    alternates: result.alternates.map((c) => planView(c, result.context, viewerUserId)),
-    generationsUsed: spec.generationCount,
-    generationsRemaining: Math.max(0, MAX_GENERATIONS_PER_SPEC - spec.generationCount),
-  };
-}
+export { planView, pipelineResponse };
 
 planSpecsRouter.post(
   "/",

@@ -57,9 +57,15 @@ describe("worker: healthz + auth", () => {
     expect(res.status).toBe(403);
   });
 
-  it("a route not yet ported to the Worker 404s (moment is still Node/Render-only)", async () => {
+  it("an entirely unregistered API path 404s", async () => {
+    const agent = new WorkerAgent(worker);
+    const res = await agent.get("/api/not-a-real-route");
+    expect(res.status).toBe(404);
+  });
+
+  it("moment IS ported to the Worker and requires auth (GET with no session -> 401)", async () => {
     const agent = new WorkerAgent(worker);
     const res = await agent.get("/api/moment");
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(401);
   });
 });

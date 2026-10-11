@@ -12,6 +12,9 @@ import { timeOffRouter } from "./timeoff.routes.js";
 import { historyRouter } from "./history.routes.js";
 import { planJobsRouter } from "./jobs.routes.js";
 import { planSpecsRouter } from "./planSpecs.routes.js";
+import { momentRouter } from "./moment.routes.js";
+import { chatRouter } from "./chat.routes.js";
+import { sharesRouter } from "./shares.routes.js";
 import { isProduction } from "../server/env.js";
 import { logger } from "../server/logger.js";
 import { HttpError } from "../server/http.js";
@@ -24,11 +27,10 @@ import type { WorkerBindings } from "./bindings.js";
 export { PlanGenerationWorkflow } from "./workflows/planGeneration.js";
 
 // Cloudflare Worker port (sdlc/005-cloudflare-worker/plan.md). Still 404
-// here, by design: /api/moment, /api/chat, /api/plan-specs's chat
-// sub-routes, /api/shares — all reach generateCandidates/
-// gatherPlanContext, the same multi-step AI+Overpass pipeline phase 4
-// wraps in a Workflow, and porting them without that wrapping would
-// recreate the exact subrequest/CPU-limit risk the Workflow exists to fix.
+// here, by design: /api/plan-specs's chat sub-routes (the "Edit this plan
+// with Buddy" composer on an already-generated plan) — that one also
+// needs the same Workflow-dispatch treatment moment/chat got, not done
+// yet. Everything else is ported.
 const app = new Hono<{ Bindings: WorkerBindings }>();
 
 app.use(
@@ -39,7 +41,7 @@ app.use(
   })
 );
 
-app.get("/healthz", (c) => c.json({ ok: true, phase: 6 }));
+app.get("/healthz", (c) => c.json({ ok: true, phase: 8 }));
 app.get("/api/health", (c) => c.json({ ok: true }));
 
 // Buddy Contract: HMAC-signed requests carry no browser cookies/headers, so
@@ -83,6 +85,9 @@ app.route("/api/time-off", timeOffRouter);
 app.route("/api/history", historyRouter);
 app.route("/api/friends", friendsRouter);
 app.route("/api/plan-specs", planSpecsRouter);
+app.route("/api/moment", momentRouter);
+app.route("/api/chat", chatRouter);
+app.route("/api/shares", sharesRouter);
 
 app.onError((err, c) => {
   if (err instanceof AiUnavailableError) {
