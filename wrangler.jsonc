@@ -21,5 +21,11 @@
       "binding": "PLAN_GENERATION",
       "class_name": "PlanGenerationWorkflow"
     }
-  ]
+  ],
+  "triggers": {
+    "crons": [
+      "*/5 * * * *",
+      "0 */6 * * *"
+    ]
+  }
 }

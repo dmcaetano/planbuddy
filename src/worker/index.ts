@@ -16,6 +16,8 @@ import { isProduction } from "../server/env.js";
 import { logger } from "../server/logger.js";
 import { HttpError } from "../server/http.js";
 import { AiUnavailableError } from "../server/ai/deepseek.js";
+import { sweepExpiredChatMessages } from "../server/chat/retention.js";
+import { sweepInterruptedJobs } from "../server/plans/jobs.js";
 import type { WorkerBindings } from "./bindings.js";
 export { PlanGenerationWorkflow } from "./workflows/planGeneration.js";
 
@@ -73,4 +75,31 @@ app.onError((err, c) => {
   return c.json({ error: "Internal server error" }, 500);
 });
 
-export default app;
+// Phase 5: the two setInterval sweeps index.ts (Node/Render) ran at boot
+// become Cron Triggers ("*/5 * * * *" and "0 */6 * * *" in wrangler.jsonc).
+// Both sweeps are pure DB operations (age-based UPDATE/DELETE), so they are
+// identical regardless of which backend executed the original job/session —
+// no Workflow-specific "re-create the instance" step is needed: a job stuck
+// in queued/running past the cutoff is just marked 'failed' here exactly as
+// sweepInterruptedJobs already did for the Node build, whether the stuck
+// Workflow instance is still silently running (it will fail its own
+// complete/fail step harmlessly once it notices the row is no longer
+// 'running' — see completeJob's guard) or already gone.
+async function scheduled(event: { cron: string }): Promise<void> {
+  if (event.cron === "*/5 * * * *") {
+    const count = await sweepInterruptedJobs();
+    logger.info("Cron: interrupted-job sweep", { sweptCount: count });
+    return;
+  }
+  if (event.cron === "0 */6 * * *") {
+    const count = await sweepExpiredChatMessages();
+    logger.info("Cron: chat retention sweep", { deletedCount: count });
+    return;
+  }
+  logger.warn("Cron fired with an unrecognized schedule", { cron: event.cron });
+}
+
+export default {
+  fetch: app.fetch,
+  scheduled,
+};
