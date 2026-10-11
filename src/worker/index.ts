@@ -15,6 +15,7 @@ import { planSpecsRouter } from "./planSpecs.routes.js";
 import { momentRouter } from "./moment.routes.js";
 import { chatRouter } from "./chat.routes.js";
 import { sharesRouter } from "./shares.routes.js";
+import { planChatRouter } from "./planChat.routes.js";
 import { isProduction } from "../server/env.js";
 import { logger } from "../server/logger.js";
 import { HttpError } from "../server/http.js";
@@ -27,11 +28,12 @@ import { syncToHub } from "../server/omni/hub.js";
 import type { WorkerBindings } from "./bindings.js";
 export { PlanGenerationWorkflow } from "./workflows/planGeneration.js";
 
-// Cloudflare Worker port (sdlc/005-cloudflare-worker/plan.md). Still 404
-// here, by design: /api/plan-specs's chat sub-routes (the "Edit this plan
-// with Buddy" composer on an already-generated plan) — that one also
-// needs the same Workflow-dispatch treatment moment/chat got, not done
-// yet. Everything else is ported.
+// Cloudflare Worker port (sdlc/005-cloudflare-worker/plan.md). All route
+// modules are now ported, including /api/plan-specs's chat sub-routes
+// (the "Edit this plan with Buddy" composer), which needed
+// PlanGenerationParams extended with an optional `edit` directive so its
+// "show_another"/"edit" actions can dispatch the same Workflow
+// plan-specs/moment use.
 const app = new Hono<{ Bindings: WorkerBindings }>();
 
 app.use(
@@ -42,7 +44,7 @@ app.use(
   })
 );
 
-app.get("/healthz", (c) => c.json({ ok: true, phase: 8 }));
+app.get("/healthz", (c) => c.json({ ok: true, phase: 8, complete: true }));
 app.get("/api/health", (c) => c.json({ ok: true }));
 
 // Buddy Contract: HMAC-signed requests carry no browser cookies/headers, so
@@ -86,6 +88,7 @@ app.route("/api/time-off", timeOffRouter);
 app.route("/api/history", historyRouter);
 app.route("/api/friends", friendsRouter);
 app.route("/api/plan-specs", planSpecsRouter);
+app.route("/api/plan-specs", planChatRouter);
 app.route("/api/moment", momentRouter);
 app.route("/api/chat", chatRouter);
 app.route("/api/shares", sharesRouter);

@@ -1,5 +1,46 @@
 # PlanBuddy — Log
 
+## 2026-10-11 - v1.12.2 "Thor" (infra): plan-chat composer ported (regression fix)
+
+Reported right after the cutover went live: browsers now redirect to the
+Worker, and `/api/plan-specs/:id/chat` + `/chat-action` (the "Edit this
+plan with Buddy" composer) were still 404 there — a real loss of plan-
+editing for anyone hitting the Worker. Ported the same way as moment/
+chat: extracted the business logic into `plan-chat.service.ts` (zero
+express imports; `plan-chat.routes.ts` is now a thin Express wrapper),
+and extended the PlanGenerationWorkflow's params with an optional `edit`
+directive (carries the original candidate's id, not the full object,
+since Workflow params must be JSON-serializable; the generate step
+re-fetches it).
+
+Caught on the first live test: the edit itself worked (job succeeded,
+plan's meal stop actually changed), but the chat thread never got its
+narrated "I changed the meal stop and kept the two other stops..."
+follow-up — because that line was written by jobs.ts's `execute` closure
+on the Node path, and the Workflow's generate step is generic (shared
+with plan-specs/moment, neither of which has a chat thread to write to).
+Fixed by adding a `planChatFollowUp` field to the Workflow's params; once
+generation succeeds, the Workflow itself writes the completion message,
+parameterised by which plan-chat action (show_another/edit) and edit
+mode asked for it.
+
+Live-verified end to end on the real Worker: generated a plan (33s),
+asked the composer twice to change the restaurant — both got a 202 +
+background job (2s and 6s to complete, the deterministic edit-
+preservation path rather than a full recompose), the candidate's meal
+stop changed both times, and the second time the chat thread correctly
+showed the narrated completion message. Test account and data deleted
+after. Full Node suite (44/433) and Worker tests still green.
+
+### Lesson
+A Workflow step that's reused across several callers (plan-specs,
+moment, plan-chat) will silently drop whatever side effect only ONE of
+those callers needed, if that side effect lived in the Node-only
+`execute` closure instead of the shared step itself. Porting "the
+generation call" is not the same as porting "everything the generation
+call used to trigger" — worth explicitly diffing against the full
+original handler, not just the part that obviously maps to runGeneration.
+
 ## 2026-10-11 - v1.12.1 "Thor" (infra): Cloudflare Worker cutover
 
 Ported the live app from Render (Node/Express, one long-lived process) to a

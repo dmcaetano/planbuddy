@@ -1,9 +1,11 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { claimJob, persistStage, completeJob, failJob, sanitizeError } from "../../server/plans/jobs.js";
 import { getPlanSpec, incrementGenerationCount } from "../../server/plans/specs.repo.js";
-import { runGeneration } from "../../server/plans/engine/pipeline.js";
+import { getCandidate } from "../../server/plans/candidates.repo.js";
+import { runGeneration, type PlanEditDirective } from "../../server/plans/engine/pipeline.js";
 import { pipelineResponse } from "../planSpecs.shared.js";
 import { withPooledDb } from "../../server/db/client.js";
+import { addPlanChatMessage } from "../../server/plans/plan-chat.repo.js";
 import { MAX_GENERATIONS_PER_SPEC } from "../../server/plans/limits.js";
 import type { StageKey } from "../../server/plans/engine/stages.js";
 
@@ -15,6 +17,32 @@ export interface PlanGenerationParams {
   attempt: number;
   /** "regenerate" pre-checks the MAX_GENERATIONS_PER_SPEC cap before running; "create"/"tweak" never do (fresh spec, count 0). */
   capCheck: boolean;
+  /**
+   * Plan-chat's "edit" action (runGeneration's 4th argument,
+   * PlanEditDirective). Workflow params must stay JSON-serializable, so
+   * this carries the original candidate's id, not the full Candidate
+   * object — the generate step re-fetches it from the DB. Omitted for
+   * plain create/regenerate/tweak (plan-specs, moment).
+   */
+  edit?: {
+    request: string;
+    mode: PlanEditDirective["mode"];
+    originalCandidateId: string;
+  };
+  /**
+   * Plan-chat's "show_another"/"edit" actions each follow a successful
+   * generation with their own narrated chat message (e.g. "I changed the
+   * meal stop..."), written by jobs.ts's runDetached `execute` closure on
+   * the Node path. The Workflow's generate step is generic (shared with
+   * plan-specs/moment, which have no chat thread), so that follow-up is
+   * carried here instead and written once generation succeeds.
+   */
+  planChatFollowUp?: {
+    threadSpecId: string;
+    candidateId: string;
+    kind: "show_another" | "edit";
+    editMode?: PlanEditDirective["mode"];
+  };
 }
 
 /**
@@ -50,7 +78,7 @@ export interface PlanGenerationParams {
  */
 export class PlanGenerationWorkflow extends WorkflowEntrypoint<unknown, PlanGenerationParams> {
   async run(event: WorkflowEvent<PlanGenerationParams>, step: WorkflowStep) {
-    const { jobId, userId, specId, attempt, capCheck } = event.payload;
+    const { jobId, userId, specId, attempt, capCheck, edit, planChatFollowUp } = event.payload;
 
     const claimed = await step.do("claim", async () => claimJob(jobId));
     if (!claimed) return; // already claimed/terminal — shouldn't happen, mirrors runDetached's guard
@@ -99,11 +127,49 @@ export class PlanGenerationWorkflow extends WorkflowEntrypoint<unknown, PlanGene
               };
             }
 
-            const pipelineResult = await runGeneration(userId, spec, attempt, undefined, report);
+            let editDirective: PlanEditDirective | undefined;
+            if (edit) {
+              const originalCandidate = await getCandidate(edit.originalCandidateId);
+              if (!originalCandidate) {
+                throw new Error("Original candidate not found for edit (deleted between enqueue and run?)");
+              }
+              editDirective = { request: edit.request, mode: edit.mode, originalCandidate };
+            }
+
+            const pipelineResult = await runGeneration(userId, spec, attempt, editDirective, report);
             const count = await incrementGenerationCount(spec.id);
             return pipelineResponse({ ...spec, generationCount: count }, pipelineResult, userId);
           })
       );
+      if (planChatFollowUp) {
+        await step.do("plan-chat-follow-up", { retries: { limit: 2, delay: "5 seconds" } }, async () => {
+          const hasWinner = Boolean((result as { winner?: unknown }).winner);
+          const text =
+            planChatFollowUp.kind === "show_another"
+              ? hasWinner
+                ? "I found another grounded option. Your previous version is still available."
+                : "I couldn't find another option that cleared every constraint."
+              : hasWinner
+                ? `${
+                    planChatFollowUp.editMode === "restaurant" || planChatFollowUp.editMode === "budget"
+                      ? "I changed the meal stop and kept the two other stops."
+                      : planChatFollowUp.editMode === "meal_time"
+                        ? "I reorganized the timing around the new meal time and kept the existing venues where viable."
+                        : "I made the smallest grounded revision I could."
+                  } The original remains one tap away.`
+                : "I couldn't make that change without breaking a constraint or the route, so I left your plan untouched.";
+          await addPlanChatMessage(
+            userId,
+            planChatFollowUp.threadSpecId,
+            planChatFollowUp.candidateId,
+            "assistant",
+            text,
+            planChatFollowUp.kind === "show_another"
+              ? { action: "show_another", completed: true }
+              : { action: "edit", editMode: planChatFollowUp.editMode ?? null, completed: true }
+          );
+        });
+      }
       await step.do("complete", { retries: { limit: 2, delay: "5 seconds" } }, async () => completeJob(jobId, result));
     } catch (err) {
       const { code, message } = sanitizeError(err);
