@@ -60,13 +60,17 @@ app.use("/api/*", attachUser);
 // per mutation instead of the last one in a 3s burst), never less correct,
 // and syncToHub already fails soft and has its own 8s fetch timeout, well
 // inside waitUntil's ~30s post-response ceiling.
-app.use(/^\/api\/(tastes|constraints|hunches|chat|participants)/, async (c, next) => {
+async function syncAfterMutation(c: import("hono").Context, next: import("hono").Next): Promise<void> {
   await next();
   if (c.req.method !== "GET" && c.res.status < 400) {
     const user = c.get("user");
     if (user) c.executionCtx?.waitUntil(syncToHub(user.id));
   }
-});
+}
+for (const base of ["/api/tastes", "/api/constraints", "/api/hunches", "/api/chat", "/api/participants"]) {
+  app.use(base, syncAfterMutation);
+  app.use(`${base}/*`, syncAfterMutation);
+}
 
 app.route("/api/auth", authRouter);
 app.route("/api/participants", participantsRouter);
