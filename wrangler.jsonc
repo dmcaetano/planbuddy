@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "planbuddy",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2025-10-01",
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
+  "vars": {
+    "NODE_ENV": "production",
+    "DB_SCHEMA": "planbuddy"
+  },
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "workflows": [
+    {
+      "name": "planbuddy-plan-generation",
+      "binding": "PLAN_GENERATION",
+      "class_name": "PlanGenerationWorkflow"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "*/5 * * * *",
+      "0 */6 * * *"
+    ]
+  }
+}

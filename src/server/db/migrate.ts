@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { getDb, __dirnameForMigrations } from "./client.js";
+import { getDb, dirnameForMigrations } from "./client.js";
 import { logger } from "../logger.js";
 
 export async function runMigrations(): Promise<void> {
@@ -13,7 +13,7 @@ export async function runMigrations(): Promise<void> {
     )`
   );
 
-  const dir = path.join(__dirnameForMigrations, "migrations");
+  const dir = path.join(dirnameForMigrations(), "migrations");
   const files = fs
     .readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))

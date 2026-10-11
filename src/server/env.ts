@@ -51,6 +51,12 @@ const envSchema = z.object({
   OMNI_CONNECT_SECRET: z.string().min(16).optional(),
   PLANBUDDY_PUBLIC_URL: z.string().url().default("https://planbuddy.onrender.com"),
   PLANBUDDY_TZ: z.string().default("Europe/Lisbon"),
+  // Cloudflare Worker cutover (2026-10): browser page navigations on this
+  // Render app are 302'd here instead (see app.ts); /api/* and /healthz
+  // are never redirected, so this Render process keeps serving them for
+  // any client still pointed at it. Set to "" to disable the redirect
+  // (e.g. local dev) without touching code.
+  PLANBUDDY_WORKER_URL: z.string().default("https://planbuddy.dmc-apps.workers.dev"),
 });
 
 const parsed = envSchema.safeParse(process.env);

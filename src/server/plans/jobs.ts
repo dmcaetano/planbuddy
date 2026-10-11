@@ -128,7 +128,7 @@ async function createJobRow(input: {
   return rows[0];
 }
 
-async function claimJob(id: string): Promise<boolean> {
+export async function claimJob(id: string): Promise<boolean> {
   const db = await getDb();
   const { rows } = await db.query<{ id: string }>(
     `UPDATE plan_generation_jobs SET status = 'running', updated_at = now()
@@ -144,7 +144,7 @@ async function claimJob(id: string): Promise<boolean> {
  * update, where the caller passes the same stage it already reported) so a
  * detail-only narration update can never reset or clobber the stage.
  */
-async function persistStage(id: string, stage: StageKey, detail: string | null): Promise<void> {
+export async function persistStage(id: string, stage: StageKey, detail: string | null): Promise<void> {
   const db = await getDb();
   await db.query(
     `UPDATE plan_generation_jobs SET stage = $2, progress_pct = $3, stage_detail = $4, updated_at = now() WHERE id = $1`,
@@ -152,7 +152,7 @@ async function persistStage(id: string, stage: StageKey, detail: string | null):
   );
 }
 
-async function completeJob(id: string, result: unknown): Promise<void> {
+export async function completeJob(id: string, result: unknown): Promise<void> {
   const db = await getDb();
   // Only transition a job that is still 'running' — if the sweep already
   // failed it out (interrupted-job cutoff) while the executor kept working,
@@ -169,7 +169,7 @@ async function completeJob(id: string, result: unknown): Promise<void> {
   }
 }
 
-async function failJob(id: string, errorCode: string, errorMessage: string): Promise<void> {
+export async function failJob(id: string, errorCode: string, errorMessage: string): Promise<void> {
   const db = await getDb();
   await db.query(
     `UPDATE plan_generation_jobs
@@ -184,7 +184,7 @@ async function failJob(id: string, errorCode: string, errorMessage: string): Pro
  * pair — never leaking stack traces, provider payloads, or API keys back to
  * the client via the job row.
  */
-function sanitizeError(err: unknown): { code: string; message: string } {
+export function sanitizeError(err: unknown): { code: string; message: string } {
   if (err instanceof AiUnavailableError) {
     return { code: "provider_error", message: "Grounded planning is temporarily unavailable. Please try again." };
   }
@@ -249,12 +249,18 @@ async function runDetached(jobId: string, execute: (report: ProgressReporter) =>
  * await the executor). Handles idempotency-key dedupe and the "already has
  * an active job" short-circuit before creating a new row.
  */
-export async function enqueueGenerationJob(params: {
+/**
+ * Idempotency-key dedupe + "already has an active job" short-circuit +
+ * row creation, WITHOUT starting any executor. Shared by the Node/Render
+ * path (enqueueGenerationJob below, which detaches an in-process executor
+ * after this) and the Cloudflare Worker path (which starts a Workflow
+ * instance after this instead — see src/worker/workflows/planGeneration.ts).
+ */
+export async function enqueueJobRow(params: {
   userId: string;
   operation: JobOperation;
   idempotencyKey?: string | null;
   requestPayload: unknown;
-  execute: (report: ProgressReporter) => Promise<unknown>;
 }): Promise<{ jobId: string; existing: boolean }> {
   const idempotencyKey = params.idempotencyKey?.trim() || null;
 
@@ -291,12 +297,30 @@ export async function enqueueGenerationJob(params: {
     throw err;
   }
 
-  // Fire-and-forget: never await this in the request handler. Errors are
-  // fully contained inside runDetached (terminalized on the job row), so an
-  // unhandled rejection here can never reach the process.
-  void runDetached(job.id, params.execute);
-
   return { jobId: job.id, existing: false };
+}
+
+/**
+ * Enqueues a generation job for a user and starts it detached (does not
+ * await the executor). Node/Render path only — the Cloudflare Worker uses
+ * enqueueJobRow + a Workflow instance instead, since a bare detached
+ * promise does not survive past a Worker request's lifetime.
+ */
+export async function enqueueGenerationJob(params: {
+  userId: string;
+  operation: JobOperation;
+  idempotencyKey?: string | null;
+  requestPayload: unknown;
+  execute: (report: ProgressReporter) => Promise<unknown>;
+}): Promise<{ jobId: string; existing: boolean }> {
+  const { jobId, existing } = await enqueueJobRow(params);
+  if (!existing) {
+    // Fire-and-forget: never await this in the request handler. Errors are
+    // fully contained inside runDetached (terminalized on the job row), so
+    // an unhandled rejection here can never reach the process.
+    void runDetached(jobId, params.execute);
+  }
+  return { jobId, existing };
 }
 
 const INTERRUPTED_AFTER_MS = 10 * 60 * 1000;

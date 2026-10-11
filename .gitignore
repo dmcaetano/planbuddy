@@ -4,6 +4,7 @@ dist-server/
 .data/
 .env
 .env.local
+.wrangler/
 *.log
 npm-debug.log*
 coverage/

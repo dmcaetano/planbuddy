@@ -175,7 +175,7 @@ sequenceDiagram
 | AI | Gemini 3.5 Flash + Google Search for plans; DeepSeek V4 Flash via OpenRouter for chat/feedback and composition fallback |
 | Context | Open-Meteo weather, Google Maps URLs, Wikimedia Commons images |
 | Auth | Email/password, Argon2id or bcrypt, opaque signed-cookie sessions |
-| Hosting | Render web service in Frankfurt; Neon database in Frankfurt |
+| Hosting | Cloudflare Worker `planbuddy` (Workers Free: Hono router, `[assets]` SPA, a Workflow for plan generation, Cron Triggers for the two sweeps) is the live app since the 2026-10 cutover; Render web service in Frankfurt stays up as a 302 redirector for any browser still pointed at the old domain and keeps serving `/api/*` directly if hit. Neon database in Frankfurt, shared by both. |
 | QA | Vitest, Supertest, Playwright mobile Chrome |
 
 ## Repo map
