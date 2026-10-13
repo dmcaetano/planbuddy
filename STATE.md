@@ -218,3 +218,9 @@ Source of truth: `~/.claude/skills/buddy-chat/references/family-ledger.md` (your
 - **Max 1 click is DONE (1.2.0): it is the model for the others** (ledger row exists). TODO: chat from L0-1 to L1-2 (server persona + data block + CURRENT STATE, markdown rendering, validated actions with Undo, rate limit); expose quote-or-demote (`memory/quoteVerify.ts`) as the shared implementation; EN + PT-PT; PWA; delete account + export; stop the silent fallback to demo AI; migrate constraints/tastes/hunches/feedback to the unified tables.
 
 - 2026-10-07: v1.8.0 adds POST /api/buddy/connect (automatic OmniBuddy link by email). Env OMNI_CONNECT_SECRET (503 if unset).
+
+<!-- playbook-retrofit:start -->
+## Playbook retrofit (2026-10-13)
+
+- [ ] **10 open rows (0 high)** for this project in the Playbook ledger: `Dropbox\Obsidian\Work\wiki\playbook\LEDGER.md` (filter by project name). Pages: auth-identity, background-jobs, chat-agent, data-layer, deploy-release, llm-hosted. Do the high rows first when working here; mark each row `done vX.Y.Z (date)` in the ledger.
+<!-- playbook-retrofit:end -->
